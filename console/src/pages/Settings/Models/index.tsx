@@ -521,6 +521,7 @@ function ModelsPage() {
                               onSaved={refreshProvidersSilently}
                               onOpenConfig={handleOpenConfig}
                               onOpenModels={handleOpenModels}
+                              onOpenRealtimeVoice={handleOpenRealtimeVoice}
                             />
                           ))}
                           {renderProviderCards(cloudConfiguredUngrouped)}
