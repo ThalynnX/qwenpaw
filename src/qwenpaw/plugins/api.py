@@ -1536,6 +1536,8 @@ class PluginApi:  # pylint: disable=too-many-public-methods
                 get_workspace_skill_manifest_path,
                 default_workspace_manifest,
                 mutate_json,
+                rel_path_of,
+                resolve_skill_dir,
             )
             from ..agents.skill_system.registry import (
                 reconcile_workspace_manifest,
@@ -1550,10 +1552,13 @@ class PluginApi:  # pylint: disable=too-many-public-methods
             ws_skills_dir.mkdir(parents=True, exist_ok=True)
 
             for skill_name in skill_names:
-                copy_skill_dir(
-                    skills_dir / skill_name,
-                    ws_skills_dir / skill_name,
-                )
+                src_dir = resolve_skill_dir(skills_dir, skill_name)
+                if src_dir is None:
+                    continue
+                rel = rel_path_of(skills_dir, src_dir) or skill_name
+                target = ws_skills_dir / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                copy_skill_dir(src_dir, target)
 
             reconcile_workspace_manifest(workspace_dir)
 
