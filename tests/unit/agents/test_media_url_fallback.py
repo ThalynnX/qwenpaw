@@ -107,7 +107,11 @@ def media_agent(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize(
     "error_message",
-    [_URL_ERROR, _URL_ERROR + " This model is text-only."],
+    [
+        _URL_ERROR,
+        _URL_ERROR + " This model is text-only.",
+        _URL_ERROR + " Invalid image data.",
+    ],
 )
 async def test_invalid_media_url_retries_without_mutating_history(
     media_agent,

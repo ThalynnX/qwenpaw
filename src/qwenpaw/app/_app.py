@@ -455,6 +455,17 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
     except Exception:
         logger.warning("Bridge token priming failed", exc_info=True)
 
+    # Resolving the process timezone can run subprocess probes (POSIX
+    # `timedatectl`), so warm the cache off the event loop here rather than
+    # letting the first chat-history request pay for it. Best-effort: the
+    # cache is populated lazily anyway.
+    try:
+        from .chats.utils import _process_local_tz
+
+        await asyncio.to_thread(_process_local_tz)
+    except Exception:
+        logger.debug("Timezone prewarm skipped", exc_info=True)
+
     fast_elapsed = time.time() - startup_start_time
     logger.info(
         f"Server ready in {fast_elapsed:.3f}s (agents loading in background)",
@@ -657,6 +668,28 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
             except Exception:
                 logger.warning(
                     "Skill Pool automation skipped on startup",
+                    exc_info=True,
+                )
+
+            # ---- Orphan skill staging dirs ----
+            # Best-effort housekeeping: a leaked stage dir is harmless, so
+            # cleanup must never gate startup on temp-dir I/O.
+            try:
+                from ..agents.skill_system import (
+                    cleanup_orphan_skill_stages,
+                )
+
+                removed = await asyncio.to_thread(
+                    cleanup_orphan_skill_stages,
+                )
+                if removed:
+                    logger.info(
+                        "Removed %d orphan skill staging dir(s)",
+                        removed,
+                    )
+            except Exception:
+                logger.warning(
+                    "Orphan skill staging cleanup skipped",
                     exc_info=True,
                 )
 

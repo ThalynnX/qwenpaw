@@ -27,7 +27,7 @@ from agentscope.formatter import (
     FormatterBase,
     OpenAIChatFormatter,
 )
-from agentscope.message import Base64Source, TextBlock
+from agentscope.message import Base64Source, Msg, TextBlock
 from agentscope.model import ChatModelBase
 
 try:
@@ -69,6 +69,7 @@ from ..utils.image_resize import (
 )
 from ..utils.logging import sanitize_log_value
 from ..utils.media_paths import (
+    media_basename,
     file_url_to_path as _file_url_to_path,
     local_media_path as _local_media_path,
 )
@@ -1268,6 +1269,18 @@ def _is_block_dropped_by_formatter(
     return True
 
 
+def _effective_thinking_omit_ids(formatter: "FormatterBase") -> set[str]:
+    """Share active reasoning omissions between wire relay and counting."""
+    if getattr(formatter, "_qwenpaw_require_reasoning_content", False) or not (
+        getattr(formatter, "relay_reasoning_content", True)
+    ):
+        return set()
+    return {
+        str(item)
+        for item in getattr(formatter, "_qwenpaw_omit_thinking_ids", set())
+    }
+
+
 def _reasoning_by_assistant_segment(
     blocks: list[Any],
     formatter: "FormatterBase",
@@ -1288,20 +1301,7 @@ def _reasoning_by_assistant_segment(
     aligned: list[str | None] = []
     reasoning_parts: list[str] = []
     segment_survives = False
-    omitted_ids = {
-        str(item)
-        for item in getattr(
-            formatter,
-            "_qwenpaw_omit_thinking_ids",
-            set(),
-        )
-    }
-    if getattr(formatter, "_qwenpaw_require_reasoning_content", False):
-        # Some OpenAI-compatible providers require the exact reasoning text
-        # from every previous assistant tool-call turn. Once that capability
-        # is known, a stale request-time fold must never replace the original
-        # content with either omission or a placeholder.
-        omitted_ids.clear()
+    omitted_ids = _effective_thinking_omit_ids(formatter)
 
     for block in blocks:
         block_type = _get(block, "type")
@@ -1435,7 +1435,9 @@ def _fixup_media_list(items: list) -> None:
             )
             filename = (
                 fname_hint
-                or (readable_path.rsplit("/", 1)[-1] if readable_path else "")
+                # Accept both separators, including Windows session paths
+                # processed on a different host platform.
+                or (media_basename(readable_path) if readable_path else "")
                 or "file"
             )
             items[i] = TextBlock(
@@ -1519,6 +1521,14 @@ def _create_file_block_support_formatter(
     )
     supports_thinking_omission = (
         supports_reasoning_content_relay
+        # Only this relay owns OpenAI-chat reasoning end to end. Native
+        # formatters (e.g. Gemini and DashScope) can emit thinking themselves,
+        # so omitting relay text would not remove their original wire blocks.
+        # TODO: Custom OpenAI formatter subclasses may emit thinking outside
+        # this relay, letting counting omit content still sent on the wire.
+        # Revisit this inheritance check when supporting custom formatters;
+        # their omission behavior is not validated here.
+        and issubclass(base_formatter_class, OpenAIChatFormatter)
         and not requires_exact_reasoning_replay
     )
 
@@ -1565,6 +1575,36 @@ def _create_file_block_support_formatter(
             )
             setattr(self, "_qwenpaw_omit_thinking_ids", accepted_ids)
             return can_omit
+
+        def _prepare_messages_for_token_counting(
+            self,
+            messages: list[Msg],
+        ) -> list[Msg]:
+            """Project accepted omissions without changing replayable input.
+
+            The default counter reads Msg blocks rather than formatter output.
+            Give it a shallow view; provider fallbacks must still receive the
+            original reasoning if their protocol requires exact replay.
+            """
+            if not supports_thinking_omission:
+                return messages
+            omitted_ids = _effective_thinking_omit_ids(self)
+            if not omitted_ids:
+                return messages
+            projected = list(messages)
+            for index, msg in enumerate(messages):
+                content = [
+                    block
+                    for block in msg.content
+                    if not (
+                        block.type == "thinking" and block.id in omitted_ids
+                    )
+                ]
+                if len(content) != len(msg.content):
+                    projected[index] = msg.model_copy(
+                        update={"content": content},
+                    )
+            return projected
 
         def _format_anthropic_data_block(self, block):
             """Route video ``DataBlock``s to our local helper; defer
