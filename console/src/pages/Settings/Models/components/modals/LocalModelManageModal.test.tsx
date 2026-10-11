@@ -30,7 +30,7 @@ vi.mock("react-i18next", () => ({
 // Mock @agentscope-ai/design with Select included
 vi.mock("@agentscope-ai/design", () => {
   const passThrough = ({ children, ...props }: Record<string, unknown>) =>
-    React.createElement("div", props, children as any);
+    React.createElement("div", props, children as React.ReactNode);
 
   const buttonLike = ({
     children,
@@ -41,8 +41,8 @@ vi.mock("@agentscope-ai/design", () => {
     React.createElement(
       "button",
       { onClick, ...props },
-      icon as any,
-      children as any,
+      icon as React.ReactNode,
+      children as React.ReactNode,
     );
 
   const selectLike = ({
@@ -59,7 +59,7 @@ vi.mock("@agentscope-ai/design", () => {
       React.createElement(
         "span",
         { "data-testid": "select-value" },
-        currentLabel as any,
+        currentLabel as React.ReactNode,
       ),
       React.createElement(
         "div",
@@ -85,20 +85,32 @@ vi.mock("@agentscope-ai/design", () => {
     Button: buttonLike,
     Input: Object.assign(
       (props: Record<string, unknown>) =>
-        React.createElement("input", props as any),
+        React.createElement(
+          "input",
+          props as React.InputHTMLAttributes<HTMLInputElement> & {
+            onChange?: (value: number | null) => void;
+          },
+        ),
       {
         TextArea: (props: Record<string, unknown>) =>
-          React.createElement("textarea", props as any),
+          React.createElement(
+            "textarea",
+            props as React.InputHTMLAttributes<HTMLInputElement> & {
+              onChange?: (value: number | null) => void;
+            },
+          ),
         Search: (props: Record<string, unknown>) =>
-          React.createElement("input", { ...props, type: "search" } as any),
+          React.createElement("input", { ...props, type: "search" }),
         Password: (props: Record<string, unknown>) =>
-          React.createElement("input", { ...props, type: "password" } as any),
+          React.createElement("input", { ...props, type: "password" }),
         Group: passThrough,
       },
     ),
     InputNumber: (props: Record<string, unknown>) => {
       const { value, onChange, min, max, step, className, placeholder } =
-        props as any;
+        props as React.InputHTMLAttributes<HTMLInputElement> & {
+          onChange?: (value: number | null) => void;
+        };
       return React.createElement("input", {
         type: "number",
         value: value ?? "",
@@ -180,7 +192,7 @@ vi.mock("../../../../../hooks/useAppMessage", () => ({
 
 // Mock antd Progress
 vi.mock("antd", async () => {
-  const actual = await vi.importActual<any>("antd");
+  const actual = await vi.importActual<typeof import("antd")>("antd");
   return {
     ...actual,
     Progress: (props: Record<string, unknown>) =>
@@ -279,8 +291,9 @@ function setupDefaultMocks() {
     mockModelProgress,
   );
   vi.mocked(api.configureLocalModelSettings).mockResolvedValue({
-    success: true,
-  } as any);
+    status: "success",
+    message: "",
+  });
 }
 
 function renderModal(
@@ -360,13 +373,10 @@ describe("LocalModelManageModal", () => {
 
       renderModal();
 
-      await waitFor(() => {
-        expect(api.listRecommendedLocalModels).toHaveBeenCalled();
-      });
-
-      // the no-recommended-model hint (translation key) must be shown
+      // Wait for all initialization results to be reflected in the UI rather
+      // than merely waiting for the recommendation request to start.
       expect(
-        screen.getByText("models.localNoRecommendedModels"),
+        await screen.findByText("models.localNoRecommendedModels"),
       ).toBeInTheDocument();
     });
 
@@ -381,11 +391,8 @@ describe("LocalModelManageModal", () => {
 
       renderModal();
 
-      await waitFor(() => {
-        expect(api.listRecommendedLocalModels).toHaveBeenCalled();
-      });
-
-      // the no-downloaded-model hint (translation key) must be shown
+      // Wait for the resolved runtime status and model list to be reflected in
+      // the UI, rather than merely waiting for the requests to start.
       expect(
         await screen.findByText("models.localNoDownloadedModelsHint"),
       ).toBeInTheDocument();
@@ -402,7 +409,7 @@ describe("LocalModelManageModal", () => {
 
       // the custom model section title (translation key) must be shown
       expect(
-        screen.getByText("models.localCustomModelTitle"),
+        await screen.findByText("models.localCustomModelTitle"),
       ).toBeInTheDocument();
 
       // the input must be shown
@@ -415,8 +422,9 @@ describe("LocalModelManageModal", () => {
     it("输入 repo ID 后可以下载", async () => {
       const user = userEvent.setup();
       vi.mocked(api.startLocalModelDownload).mockResolvedValue({
-        success: true,
-      } as any);
+        status: "success",
+        message: "",
+      });
 
       renderModal();
 
@@ -464,8 +472,9 @@ describe("LocalModelManageModal", () => {
     it("可以切换下载源", async () => {
       const user = userEvent.setup();
       vi.mocked(api.startLocalModelDownload).mockResolvedValue({
-        success: true,
-      } as any);
+        status: "success",
+        message: "",
+      });
 
       renderModal();
 
@@ -955,9 +964,10 @@ describe("LocalModelManageModal", () => {
 
     it("推荐模型下载按钮触发下载并轮询", async () => {
       const user = userEvent.setup();
-      vi.mocked(api.startLocalModelDownload).mockResolvedValue(
-        undefined as any,
-      );
+      vi.mocked(api.startLocalModelDownload).mockResolvedValue({
+        status: "success",
+        message: "",
+      });
       renderModal();
 
       await waitFor(() =>

@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import logging
+import os
 import re
 import shutil
 import tempfile
@@ -72,6 +73,7 @@ _FLAT_POOL_AUTOMATION_KEYS = (
     "auto_sync_targets",
     "auto_sync_synced_hash",
 )
+_PAWPORT_MARKER = ".qwenpaw-pawport.json"
 
 
 # ---------------------------------------------------------------------------
@@ -741,7 +743,7 @@ def is_ignored_skill_entry(name: str) -> bool:
     skill-dir enumeration (registry scanners, pool / workspace conflict
     checks, zip imports). Add new patterns here when they appear.
     """
-    return name in _IGNORED_SKILL_ARTIFACTS or name.startswith("~")
+    return name in _IGNORED_SKILL_ARTIFACTS or name.startswith((".", "~"))
 
 
 def _extract_and_validate_zip(data: bytes, tmp_dir: Path) -> None:
@@ -1212,6 +1214,7 @@ def import_skill_dir(
     src_dir: Path,
     target_root: Path,
     skill_name: str,
+    pawport_owner: dict[str, Any] | None = None,
 ) -> bool:
     """Import a skill directory to target location.
 
@@ -1229,8 +1232,63 @@ def import_skill_dir(
     target_dir = target_root / skill_name
     if target_dir.exists():
         return False
-    copy_skill_dir(src_dir, target_dir)
+
+    # Do not turn the existence check above into a destructive replacement if
+    # another importer creates the target between the check and the copy.
+    def _ignore(_dir: str, names: list[str]) -> set[str]:
+        return {name for name in names if name in _IGNORED_SKILL_ARTIFACTS}
+
+    target_root.mkdir(parents=True, exist_ok=True)
+    stage_root = Path(
+        tempfile.mkdtemp(prefix=f".{skill_name}.import-", dir=target_root),
+    )
+    stage_dir = stage_root / skill_name
+    try:
+        shutil.copytree(src_dir, stage_dir, ignore=_ignore)
+        if pawport_owner is not None:
+            (stage_dir / _PAWPORT_MARKER).write_text(
+                json.dumps(
+                    {**pawport_owner, "state": "prepared"},
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+        with _file_write_lock(_lock_path_for(target_root / ".import")):
+            if target_dir.exists():
+                return False
+            os.rename(stage_dir, target_dir)
+        return True
+    finally:
+        shutil.rmtree(stage_root, ignore_errors=True)
+
+
+def discard_prepared_pawport_skill(
+    skill_dir: Path,
+    owner: dict[str, Any],
+) -> bool:
+    """Remove only a matching PawPort skill left before manifest commit."""
+    try:
+        marker = json.loads((skill_dir / _PAWPORT_MARKER).read_text())
+    except (OSError, ValueError, TypeError):
+        return False
+    if marker.get("state") != "prepared" or any(
+        marker.get(key) != value for key, value in owner.items()
+    ):
+        return False
+    shutil.rmtree(skill_dir)
     return True
+
+
+def commit_pawport_skill(skill_dir: Path, owner: dict[str, Any]) -> None:
+    """Drop the prepared marker after the workspace manifest is committed."""
+    try:
+        marker = json.loads((skill_dir / _PAWPORT_MARKER).read_text())
+    except (OSError, ValueError, TypeError):
+        return
+    if marker.get("state") == "prepared" and all(
+        marker.get(key) == value for key, value in owner.items()
+    ):
+        (skill_dir / _PAWPORT_MARKER).unlink(missing_ok=True)
 
 
 def write_skill_to_dir(
@@ -1314,3 +1372,65 @@ def staged_skill_dir(skill_name: str) -> Iterator[Path]:
         yield stage_dir
     finally:
         shutil.rmtree(temp_root, ignore_errors=True)
+
+
+# A staged write touches its files continuously while it runs, so a stage dir
+# whose newest entry is older than this has no writer left: the process that
+# created it died mid-copy, or has simply been idle that long. Anything
+# fresher may still be written to — including by another QwenPaw instance
+# sharing the system temp dir — so it is left alone.
+_SKILL_STAGE_ORPHAN_GRACE_SECONDS = 24 * 60 * 60
+
+
+def _newest_entry_mtime(path: Path) -> float | None:
+    """Newest mtime anywhere under ``path`` (the directory included)."""
+    try:
+        newest = path.stat().st_mtime
+    except OSError:
+        return None
+    for root, dirs, files in os.walk(path, onerror=lambda _error: None):
+        for name in [*dirs, *files]:
+            try:
+                mtime = os.stat(os.path.join(root, name)).st_mtime
+            except OSError:
+                continue
+            if mtime > newest:
+                newest = mtime
+    return newest
+
+
+def cleanup_orphan_skill_stages(
+    *,
+    max_age_seconds: float = _SKILL_STAGE_ORPHAN_GRACE_SECONDS,
+) -> int:
+    """Remove staged skill directories left behind by a killed process.
+
+    ``staged_skill_dir`` removes its temp root in ``finally``, so a surviving
+    directory carrying that prefix came from a process that died mid-write —
+    or from an instance that is still writing right now. The two are told
+    apart by age: a directory is only removed once nothing inside it has been
+    touched for ``max_age_seconds``. Checking only the directory's own mtime
+    would be wrong, because copying files *into* the staged skill dir does not
+    bump the parent's mtime; the newest mtime in the whole tree is what
+    reflects a live writer. Returns the number of directories removed.
+    """
+    cutoff = time.time() - max_age_seconds
+    removed = 0
+    # Prefix must match the one used by ``staged_skill_dir`` above.
+    for path in Path(tempfile.gettempdir()).glob("qwenpaw_skill_stage_*"):
+        if not path.is_dir():
+            continue
+        newest = _newest_entry_mtime(path)
+        if newest is None or newest > cutoff:
+            continue
+        shutil.rmtree(path, ignore_errors=True)
+        if path.exists():
+            logger.warning(
+                "Failed to remove orphan skill staging dir %s",
+                path,
+            )
+            continue
+        removed += 1
+    if removed:
+        logger.info("Removed %d orphan skill staging dir(s)", removed)
+    return removed

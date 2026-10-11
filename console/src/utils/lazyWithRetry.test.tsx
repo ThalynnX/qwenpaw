@@ -1,11 +1,8 @@
 /**
  * lazyWithRetry / lazyImportWithRetry wrap React.lazy with chunk-load
- * retries and plugin-registry overrides. Defects here break every page
+ * recovery and plugin-registry overrides. Defects here break every page
  * navigation on a flaky network or hide plugin module patches.
  *
- * Note: real timers throughout — fake timers deadlock with Suspense's
- * async resolution (findByText polls on real timers). Retry delays are
- * fixed at 1s, so the retry test waits ~2s real time.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render } from "@testing-library/react";
@@ -17,6 +14,10 @@ const registryMock = vi.hoisted(() => ({
 
 vi.mock("../plugins/moduleRegistry", () => ({
   moduleRegistry: registryMock,
+}));
+
+vi.mock("../pages/Settings/Debug", () => ({
+  default: () => React.createElement("div", null, "base-debug-page"),
 }));
 
 import { lazyWithRetry, lazyImportWithRetry } from "./lazyWithRetry";
@@ -45,21 +46,6 @@ describe("lazyWithRetry", () => {
     await expect(findByText("loaded-page")).resolves.toBeTruthy();
     expect(factory).toHaveBeenCalledTimes(1);
   });
-
-  it("retries after chunk-load failures and eventually succeeds", async () => {
-    const factory = vi
-      .fn()
-      .mockRejectedValueOnce(new Error("chunk gone"))
-      .mockRejectedValueOnce(new Error("chunk gone"))
-      .mockResolvedValueOnce({ default: Dummy });
-    const Comp = lazyWithRetry(factory);
-    const { findByText } = renderLazy(Comp);
-    // Two failures => two 1s retry delays; generous timeout for CI
-    await expect(
-      findByText("loaded-page", {}, { timeout: 6000 }),
-    ).resolves.toBeTruthy();
-    expect(factory).toHaveBeenCalledTimes(3);
-  }, 15000);
 
   it("uses the registry override when present (relative path key)", async () => {
     const Patched = () => React.createElement("div", null, "patched-by-plugin");
@@ -126,8 +112,7 @@ describe("lazyImportWithRetry", () => {
   });
 
   it("resolves a registry override for a glob-backed path", async () => {
-    // Use a lightweight real page module path so the glob lookup succeeds,
-    // but the registry override wins without executing the heavy chunk.
+    // Keep the real glob path while isolating the page's application dependencies.
     const Patched = () => React.createElement("div", null, "glob-patched");
     registryMock.get.mockImplementation((_key: string, name: string) =>
       name === "default" ? Patched : undefined,

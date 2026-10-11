@@ -34,7 +34,7 @@ Trợ lý AI cá nhân của bạn — triển khai cục bộ hoặc trên đá
 | | |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Không bao giờ quên**                       | Bộ nhớ ba lớp — ngữ cảnh làm việc trực tiếp, lịch sử nguyên văn đầy đủ và cơ sở tri thức cá nhân tự tiến hóa được vận hành bởi [ReMe](https://github.com/agentscope-ai/ReMe). Hội thoại và tài liệu liên tục được chuyển thành bộ nhớ Markdown dễ đọc, chỉnh sửa, tìm kiếm và liên kết với nhau. |
-| **Cục bộ hoặc đám mây, chạy tự do**          | Mô hình QwenPaw-Flash (2B / 4B / 9B) huấn luyện cho tác vụ tác nhân. Runtime QwenPaw Local tích hợp sẵn — không cần API key, không phụ thuộc đám mây. Cũng hỗ trợ Ollama, LM Studio hoặc 14+ nhà cung cấp đám mây.   |
+| **Cục bộ hoặc đám mây, chạy tự do**          | Mô hình QwenPaw-Flash (2B / 4B / 9B / 35B-A3B / 27B) huấn luyện cho tác vụ tác nhân. Runtime QwenPaw Local tích hợp sẵn — không cần API key, không phụ thuộc đám mây. Cũng hỗ trợ Ollama, LM Studio hoặc 14+ nhà cung cấp đám mây.   |
 | **Bảo mật tích hợp sẵn**                     | Sandbox cấp kernel, Tool Guard, File Guard và Skill Scanner. Lệnh nguy hiểm bị chặn trước khi chạy.                                            |
 | **Đa tác nhân & song song**                  | Tạo tác nhân độc lập với bộ nhớ và Skills riêng. Tác nhân con lúc chạy. Agent Communication Protocol (ACP) để điều phối liên hệ thống.                               |
 | **Không gian làm việc tệp**                  | Điều hướng, xem trước, chỉnh sửa, diff, tải lên và tải xuống thống nhất cho tệp dự án và Agent.                                                                             |
@@ -59,6 +59,8 @@ Trợ lý AI cá nhân của bạn — triển khai cục bộ hoặc trên đá
 ---
 
 ## Tin Tức
+
+- [2026-09-10] **v2.2.1** | Bàn làm việc Blueprint của Creator 1.2, định tuyến mô hình theo từng Agent và quản lý môi trường hợp nhất. [Ghi chú phát hành v2.2.1 →](https://qwenpaw.agentscope.io/release-notes#v2.2.1)
 
 - [2026-09-03] **v2.2.0** | QwenPaw Hub đa người dùng tự lưu trữ, QwenPaw Mail, QwenPaw Data nguyên bản, định tuyến mô hình hợp nhất, Creator 1.1 cùng nhiều cải tiến lớn cho Market, Console, Skills, kênh và độ tin cậy. [Ghi chú phát hành v2.2.0 →](https://qwenpaw.agentscope.io/release-notes#v2.2.0)
 
@@ -370,7 +372,7 @@ Các công cụ cần key bổ sung (ví dụ: `TAVILY_API_KEY` cho tìm kiếm 
 
 QwenPaw có thể chạy LLM hoàn toàn trên máy của bạn — không cần API key hoặc dịch vụ đám mây. Xem [tài liệu chính thức](https://qwenpaw.agentscope.io/docs/models) để biết chi tiết.
 
-QwenPaw cũng cung cấp dòng **QwenPaw-Flash** — mô hình 2B / 4B / 9B huấn luyện chuyên biệt cho kịch bản tác nhân, với lượng tử hóa Q4 và Q8. Có sẵn trên [ModelScope](https://www.modelscope.cn/organization/AgentScope?tab=model) và [Hugging Face](https://huggingface.co/agentscope-ai/models).
+QwenPaw cũng cung cấp dòng **QwenPaw-Flash** — mô hình 2B / 4B / 9B / 35B-A3B / 27B huấn luyện chuyên biệt cho kịch bản tác nhân, với lượng tử hóa Q4 và Q8. Có sẵn trên [ModelScope](https://www.modelscope.cn/organization/AgentScope?tab=model) và [Hugging Face](https://huggingface.co/agentscope-ai/models).
 
 | Backend              | Phù hợp nhất cho                                 | Cài đặt                                                              |
 | -------------------- | ---------------------------------------------- | -------------------------------------------------------------------- |
