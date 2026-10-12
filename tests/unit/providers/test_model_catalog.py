@@ -137,6 +137,48 @@ def test_packaged_catalog_snapshot() -> None:
     }
 
 
+@pytest.mark.parametrize(
+    "provider_id",
+    [
+        "dashscope",
+        "aliyun-codingplan",
+        "aliyun-codingplan-intl",
+        "aliyun-tokenplan",
+        "aliyun-tokenplan-intl",
+    ],
+)
+def test_packaged_qwen_input_limits_have_documented_provenance(provider_id):
+    document = model_catalog._read_document(
+        model_catalog.PACKAGED_CATALOG_PATH,
+        (provider_id,),
+    )
+    ids = {
+        "qwen3.8-max",
+        "qwen3.8-max-0902",
+        "qwen3.8-flash",
+        "qwen3.7-max",
+        "qwen3.7-plus",
+        "qwen3.7-flash",
+        "qwen3.6-plus",
+        "qwen3.6-flash",
+        "qwen3.5-plus",
+    }
+    models = [
+        model
+        for model in document.providers[provider_id].models
+        if model.id in ids
+    ]
+    assert models
+    for model in models:
+        assert model.input_token_limit == 983_616
+        assert model.input_token_limit_source == "catalog"
+        origin = model.capability_provenance["input_token_limit"]
+        assert origin["source"] == "documentation"
+        assert origin["reference"].startswith(
+            "https://help.aliyun.com/zh/model-studio/",
+        )
+
+
 def test_catalog_overlays_merge_fields_in_priority_order(
     tmp_path: Path,
 ) -> None:
