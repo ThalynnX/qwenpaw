@@ -287,8 +287,13 @@ class Runtime:
             return
         try:
             envelope = getattr(ctx, "_envelope", None)
+            cancel_reason = self._cancellation_reason(ctx.error)
             if envelope is not None:
-                self._inject_partial_response(agent, envelope)
+                self._inject_partial_response(
+                    agent,
+                    envelope,
+                    cancel_reason=cancel_reason,
+                )
 
             from ..hooks.cron.cron_hook import restore_cron_context
             from ._state_utils import StateProxy
@@ -328,8 +333,10 @@ class Runtime:
                 ),
             )
             logger.info(
-                "cancel-save: persisted interrupted turn (session=%s)",
+                "cancel-save: persisted interrupted turn "
+                "(session=%s reason=%s)",
                 ctx.session_id,
+                cancel_reason or "unknown",
             )
         except asyncio.CancelledError:
             logger.info(
@@ -346,7 +353,12 @@ class Runtime:
 
     # pylint: disable=too-many-branches
     @staticmethod
-    def _inject_partial_response(agent: Any, envelope: Any) -> None:
+    def _inject_partial_response(
+        agent: Any,
+        envelope: Any,
+        *,
+        cancel_reason: str | None = None,
+    ) -> None:
         """Inject accumulated streaming content from *envelope* into the
         agent's context so a cancel-save includes the partial response.
 
@@ -406,14 +418,19 @@ class Runtime:
                 injected = len(blocks)
 
             # --- 2) Close dangling tool calls ---
-            closed = Runtime._close_dangling_tool_calls(agent, envelope)
+            closed = Runtime._close_dangling_tool_calls(
+                agent,
+                envelope,
+                cancel_reason=cancel_reason,
+            )
 
             if injected or closed:
                 logger.info(
                     "cancel-save: injected %d partial block(s), "
-                    "closed %d dangling tool call(s)",
+                    "closed %d dangling tool call(s) reason=%s",
                     injected,
                     closed,
+                    cancel_reason or "unknown",
                 )
         except Exception:
             logger.debug(
@@ -422,7 +439,12 @@ class Runtime:
             )
 
     @staticmethod
-    def _close_dangling_tool_calls(agent: Any, envelope: Any) -> int:
+    def _close_dangling_tool_calls(
+        agent: Any,
+        envelope: Any,
+        *,
+        cancel_reason: str | None = None,
+    ) -> int:
         """Ensure every ``ToolCallBlock`` in the context has a matching
         ``ToolResultBlock``.
 
@@ -470,10 +492,7 @@ class Runtime:
         # Incorporate any partial output accumulated in the envelope.
         envelope_tool_output = envelope.collect_tool_output()
 
-        interruption_msg = (
-            "<system-reminder>The tool call has been interrupted by "
-            "the user.</system-reminder>"
-        )
+        interruption_msg = Runtime._runtime_cancel_message(cancel_reason)
 
         closed = 0
         for call_id, idx in awaiting.items():
@@ -497,6 +516,31 @@ class Runtime:
             closed += 1
 
         return closed
+
+    @staticmethod
+    def _cancellation_reason(error: BaseException | None) -> str | None:
+        """Read the reason attached by ``Task.cancel(reason)``."""
+        if not isinstance(error, asyncio.CancelledError) or not error.args:
+            return None
+        reason = error.args[0]
+        if reason in {"user", "timeout", "agent", "shutdown"}:
+            return str(reason)
+        return None
+
+    @staticmethod
+    def _runtime_cancel_message(cancel_reason: str | None) -> str:
+        """Build an accurate persisted result for a cancelled runtime."""
+        if cancel_reason == "user":
+            detail = "The tool call was cancelled by the user."
+        elif cancel_reason == "timeout":
+            detail = "The tool call was cancelled due to timeout."
+        elif cancel_reason == "agent":
+            detail = "The tool call was cancelled by the agent."
+        elif cancel_reason == "shutdown":
+            detail = "The tool call was interrupted during shutdown."
+        else:
+            detail = "The tool call was interrupted before completion."
+        return f"<system-reminder>{detail}</system-reminder>"
 
     @staticmethod
     def _normalize(request: Any) -> Any:
