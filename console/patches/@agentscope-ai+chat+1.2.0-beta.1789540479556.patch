@@ -1,0 +1,47 @@
+diff --git a/node_modules/@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/Chat/MessageList/UserMessageAnchors/index.js b/node_modules/@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/Chat/MessageList/UserMessageAnchors/index.js
+index f9abe67..e22e601 100644
+--- a/node_modules/@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/Chat/MessageList/UserMessageAnchors/index.js
++++ b/node_modules/@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/Chat/MessageList/UserMessageAnchors/index.js
+@@ -529,6 +529,16 @@ export default function UserMessageAnchors(props) {
+     var root = (_anchorTrackRef$curre3 = anchorTrackRef.current) === null || _anchorTrackRef$curre3 === void 0 ? void 0 : _anchorTrackRef$curre3.closest(".".concat(prefixCls));
+     var scrollEl = root === null || root === void 0 ? void 0 : root.querySelector(".".concat(scrollContainerClassName));
+     var resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateAnchors) : undefined;
++    var cancelAnchorScroll = function cancelAnchorScroll() {
++      scrollSequenceRef.current += 1;
++      activeAnchorLockRef.current = undefined;
++    };
++    var cancelAnchorScrollOnKey = function cancelAnchorScrollOnKey(event) {
++      var scrollKeys = ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '];
++      var target = event.target;
++      if (!scrollKeys.includes(event.key) || target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
++      cancelAnchorScroll();
++    };
+     if (scrollEl) resizeObserver === null || resizeObserver === void 0 || resizeObserver.observe(scrollEl);
+     if (anchorTrackRef.current) resizeObserver === null || resizeObserver === void 0 || resizeObserver.observe(anchorTrackRef.current);
+     var mutationObserver = scrollEl && typeof MutationObserver !== 'undefined' ? new MutationObserver(updateAnchors) : undefined;
+@@ -540,6 +550,14 @@ export default function UserMessageAnchors(props) {
+     scrollEl === null || scrollEl === void 0 || scrollEl.addEventListener('scroll', updateAnchors, {
+       passive: true
+     });
++    scrollEl === null || scrollEl === void 0 || scrollEl.addEventListener('wheel', cancelAnchorScroll, {
++      passive: true
++    });
++    scrollEl === null || scrollEl === void 0 || scrollEl.addEventListener('touchmove', cancelAnchorScroll, {
++      passive: true
++    });
++    scrollEl === null || scrollEl === void 0 || scrollEl.addEventListener('pointerdown', cancelAnchorScroll);
++    scrollEl === null || scrollEl === void 0 || scrollEl.addEventListener('keydown', cancelAnchorScrollOnKey);
+     scrollEl === null || scrollEl === void 0 || scrollEl.addEventListener('load', updateAnchors, true);
+     window.addEventListener('resize', updateAnchors);
+     return function () {
+@@ -547,6 +564,10 @@ export default function UserMessageAnchors(props) {
+       resizeObserver === null || resizeObserver === void 0 || resizeObserver.disconnect();
+       mutationObserver === null || mutationObserver === void 0 || mutationObserver.disconnect();
+       scrollEl === null || scrollEl === void 0 || scrollEl.removeEventListener('scroll', updateAnchors);
++      scrollEl === null || scrollEl === void 0 || scrollEl.removeEventListener('wheel', cancelAnchorScroll);
++      scrollEl === null || scrollEl === void 0 || scrollEl.removeEventListener('touchmove', cancelAnchorScroll);
++      scrollEl === null || scrollEl === void 0 || scrollEl.removeEventListener('pointerdown', cancelAnchorScroll);
++      scrollEl === null || scrollEl === void 0 || scrollEl.removeEventListener('keydown', cancelAnchorScrollOnKey);
+       scrollEl === null || scrollEl === void 0 || scrollEl.removeEventListener('load', updateAnchors, true);
+       window.removeEventListener('resize', updateAnchors);
+     };
