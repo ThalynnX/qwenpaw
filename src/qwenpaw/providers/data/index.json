@@ -90,7 +90,7 @@
     },
     "dashscope": {
       "path": "providers/dashscope.json",
-      "sha256": "b42ad3674c38df83c77c5e8ae9fa0560c44743471c189e0ef8786636ba1144b8",
+      "sha256": "02102db020f8a7dac1e3f3cc877dce1c7d17e830fc277ca661e7c1e14778aa56",
       "api_urls": [
         "https://dashscope.aliyuncs.com/compatible-mode/v1"
       ],
@@ -212,8 +212,16 @@
               },
               "billing": {
                 "note": "Bundled manual preset, not automatically retrieved at runtime. Live provider pricing takes precedence."
+              },
+              "input_token_limit": {
+                "source": "documentation",
+                "reference": "https://help.aliyun.com/zh/model-studio/qwen3-8-max",
+                "updated_at": "2026-10-12",
+                "note": "Conservative input limit shared by thinking and non-thinking modes."
               }
-            }
+            },
+            "input_token_limit": 983616,
+            "input_token_limit_source": "catalog"
           },
           {
             "id": "qwen3.7-max",
@@ -1102,7 +1110,7 @@
     },
     "aliyun-tokenplan": {
       "path": "providers/aliyun-tokenplan.json",
-      "sha256": "2729e8d12b395d04fcf065b639219e1df2c326f0c116e19b5aace7c609668e1e",
+      "sha256": "d0989c25ac887f5f0a298e848dde91811a962af6fb1339d6595019d3415050ae",
       "api_urls": [
         "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
       ],
@@ -1155,8 +1163,16 @@
             "capability_provenance": {
               "billing": {
                 "note": "Bundled manual preset, not automatically retrieved at runtime. Live provider pricing takes precedence."
+              },
+              "input_token_limit": {
+                "source": "documentation",
+                "reference": "https://help.aliyun.com/zh/model-studio/qwen3-8-max",
+                "updated_at": "2026-10-12",
+                "note": "Conservative input limit shared by thinking and non-thinking modes."
               }
-            }
+            },
+            "input_token_limit": 983616,
+            "input_token_limit_source": "catalog"
           },
           {
             "id": "qwen3.7-plus",
@@ -1542,7 +1558,7 @@
     },
     "aliyun-tokenplan-intl": {
       "path": "providers/aliyun-tokenplan-intl.json",
-      "sha256": "24b2e52f53ef1559e5b93295c38e186663aa37ac39325e591a628a2a9e12fa99",
+      "sha256": "7c667c72f237c7c7bf18872bd07a242ac44c7362497279d47eebad64a60022b0",
       "api_urls": [
         "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
       ],
@@ -1595,8 +1611,16 @@
             "capability_provenance": {
               "billing": {
                 "note": "Bundled manual preset, not automatically retrieved at runtime. Live provider pricing takes precedence."
+              },
+              "input_token_limit": {
+                "source": "documentation",
+                "reference": "https://help.aliyun.com/zh/model-studio/qwen3-8-max",
+                "updated_at": "2026-10-12",
+                "note": "Conservative input limit shared by thinking and non-thinking modes."
               }
-            }
+            },
+            "input_token_limit": 983616,
+            "input_token_limit_source": "catalog"
           },
           {
             "id": "qwen3.7-plus",

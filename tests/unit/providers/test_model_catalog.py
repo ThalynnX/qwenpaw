@@ -44,6 +44,18 @@ def test_packaged_catalog_snapshot() -> None:
     assert catalog["dashscope"][0].id == "qwen3.8-max"
     assert catalog["dashscope"][0].supports_image is True
     assert catalog["dashscope"][0].thinking_enabled is True
+    for provider_id in (
+        "dashscope",
+        "aliyun-tokenplan",
+        "aliyun-tokenplan-intl",
+    ):
+        model = next(
+            model
+            for model in catalog[provider_id]
+            if model.id == "qwen3.8-max"
+        )
+        assert model.input_token_limit == 983_616
+        assert model.input_token_limit_source == "catalog"
     assert [model.id for model in catalog["deepseek"]] == [
         "deepseek-v4-pro",
         "deepseek-flash",
