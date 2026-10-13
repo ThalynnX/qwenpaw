@@ -3,6 +3,7 @@ import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import { startupMonitorPlugin } from "./scripts/startup-monitor-plugin";
+import { parseNavigationAllowlist } from "./src/plugins/registry/navigationPolicy";
 
 // Vitest-only plugin: transforms .css imports inside node_modules to empty
 // stubs. This prevents errors from packages like @agentscope-ai/icons that
@@ -26,6 +27,8 @@ export default defineConfig(({ command, mode }) => {
   // while `vite build --mode test` is a real build that needs real CSS.
   const isVitest = command === "serve" && mode === "test";
   const env = loadEnv(mode, process.cwd(), "");
+  // Reject malformed host configuration before producing a Console bundle.
+  parseNavigationAllowlist(env.VITE_QWENPAW_NAVIGATION_ALLOWLIST);
   // Empty = same-origin; frontend and backend served together, no hardcoded host.
   // Use a dedicated Vite-prefixed key so unrelated shell BASE_URL values don't leak into the build.
   const apiBaseUrl = env.VITE_API_BASE_URL ?? "";

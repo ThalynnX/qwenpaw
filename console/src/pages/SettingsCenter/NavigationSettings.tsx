@@ -34,6 +34,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useTranslation } from "react-i18next";
 import { useSidebarStore } from "@/stores/sidebarStore";
+import { hostNavigationPolicy } from "@/plugins/registry/navigationPolicy";
 import { orderSidebarEntries } from "@/layouts/registry/sidebarEntries";
 import type { FlatMenuEntry } from "@/layouts/registry/adapter";
 import { useSidebarEntryGroups } from "./useSidebarEntryGroups";
@@ -353,19 +354,21 @@ export default function NavigationSettings() {
                 {!selectedEntries.length && (
                   <p className={styles.empty}>{t("settingsCenter.dropHere")}</p>
                 )}
-                <div
-                  className={styles.fixedTile}
-                  title={t("settingsCenter.fixedEntry")}
-                >
-                  <span className={styles.icon}>
-                    <Inbox size={22} />
-                  </span>
-                  <span className={styles.label}>{t("nav.inbox")}</span>
-                  <LockKeyhole
-                    size={14}
-                    aria-label={t("settingsCenter.fixedEntry")}
-                  />
-                </div>
+                {hostNavigationPolicy.isAllowed("core.inbox") && (
+                  <div
+                    className={styles.fixedTile}
+                    title={t("settingsCenter.fixedEntry")}
+                  >
+                    <span className={styles.icon}>
+                      <Inbox size={22} />
+                    </span>
+                    <span className={styles.label}>{t("nav.inbox")}</span>
+                    <LockKeyhole
+                      size={14}
+                      aria-label={t("settingsCenter.fixedEntry")}
+                    />
+                  </div>
+                )}
               </DropZone>
             </div>
           </section>
