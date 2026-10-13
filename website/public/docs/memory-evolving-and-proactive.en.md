@@ -206,6 +206,8 @@ Deduplication has three layers, and a hit in any of them removes the item from t
 2. **ReMe, read side** — the `proactive` job withholds delivered entries inside the cooldown window and reports them as `delivered_ids`.
 3. **QwenPaw's local ledger** — `<metadata_dir>/proactive_delivered.json` records every item actually surfaced. It covers two things ReMe cannot see: a fallback when the ReMe-side write fails, and **cross-day dedupe** (the same topic reappearing in a later `interests.yaml`).
 
+`reminder` is the one exception to all three layers. A schedule that is due has to be announced, and a reminder's `topic_id` derives from a stable schedule title, so applying the cooldown normally would silence a recurring reminder for the whole window after a single delivery. ReMe's write and read sides and QwenPaw's local ledger therefore all let `kind == "reminder"` through; the other three kinds (`follow_up` / `new_idea` / `interest_extend`) are deduplicated as usual.
+
 After each real delivery QwenPaw makes a best-effort call to ReMe's `proactive_feedback` job reporting those items (`topic_id`, `agenda_date`, `delivered_at`, `channel`, `status`, `external_ref`, and so on). Reporting is an **optional contract**: a framework that never reports back leaves ReMe behaving exactly as before. `status` only moves forward (`shown` → `executed` / `dismissed`), and `failed` never blocks a later re-delivery.
 
 ### Privacy and safety
@@ -274,7 +276,7 @@ These live under `running.reme_light_memory_config` in `agent.json`, and all of 
 | `proactive_cron_enabled`                 | `false`        | Register the daily agenda push                                    |
 | `proactive_cron`                         | `"0 18 * * *"` | Five-field cron for the daily push; required when enabled          |
 | `proactive_cron_max_items`               | `0`            | Items in the daily push; `0` sends the whole agenda (ReMe caps at 6/day) |
-| `proactive_delivery_cooldown_days`       | `3`            | Days a delivered item stays hidden, in ReMe and in the local ledger (0–90) |
+| `proactive_delivery_cooldown_days`       | `3`            | Days a delivered item stays hidden, in ReMe and in the local ledger (0-90); `reminder` is exempt |
 | `proactive_refresh_min_interval_minutes` | `120`          | Minimum gap between on-demand refreshes; also spaces idle pushes; `0` lifts it |
 
 A smaller Auto-Memory interval feeds fresher material into both Auto-Dream and proactive extraction, at the cost of more model calls and tokens.

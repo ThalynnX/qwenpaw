@@ -483,7 +483,7 @@ ADBPG 和 PowerContext 插件配置见[长期记忆](./memory)。
 | `proactive_cron_enabled`             | bool        | `false`                          | 是否启用按 Cron 定时执行的每日议程推送任务                                                        |
 | `proactive_cron`                     | string      | `"0 18 * * *"`                   | 每日议程推送的有效 5 段 Cron 表达式（启用时必填）；触发后随机延迟 0–60 秒启动                     |
 | `proactive_cron_max_items`           | int         | `0`                              | 每日推送包含的议程条数，范围 0–20；`0` 表示全量（ReMe 自身每天最多 6 条）                         |
-| `proactive_delivery_cooldown_days`   | int         | `3`                              | 已投递议程条目的隐藏天数，ReMe 与本地投递台账共用，范围 0–90                                      |
+| `proactive_delivery_cooldown_days`   | int         | `3`                              | 已投递议程条目的隐藏天数，ReMe 与本地投递台账共用，范围 0–90；`reminder` 豁免                                      |
 | `proactive_refresh_min_interval_minutes` | int     | `120`                            | 议程为空时按需重跑 topic extraction 的最小间隔分钟数，同时限制空闲推送密度；`0` 表示不限制         |
 | `memory_search_enabled`          | bool        | `true`                           | 是否向智能体提供 `memory_search` 工具；不影响自动记忆搜索                                         |
 | `auto_memory_search_config`      | object      | _（见下方）_                     | 自动记忆搜索配置                                                                                  |

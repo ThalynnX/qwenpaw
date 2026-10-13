@@ -206,6 +206,8 @@ refresh 本身也不会无谓花钱：没有每日记忆变化、没有新的外
 2. **ReMe 读侧**——`proactive` job 按 `deliveries` 与冷却窗口扣掉已投递条目，并返回 `delivered_ids`；
 3. **QwenPaw 本地台账**——`<metadata_dir>/proactive_delivered.json` 记录每一条实际展示过的议程。它负责 ReMe 看不到的两件事：ReMe 侧写入失败时的兜底，以及**跨天去重**（同一主题第二天又出现在新的 `interests.yaml` 里）。
 
+`reminder` 是这三层冷却的唯一例外。日程到期就得说，而 reminder 的 `topic_id` 由稳定的日程标题派生，若照常压制，一条周期性提醒在投递一次之后就会在整个冷却窗口里静默。因此 ReMe 的写侧与读侧、以及 QwenPaw 的本地台账，都会放行 `kind == "reminder"` 的条目；其余三类（`follow_up` / `new_idea` / `interest_extend`）照常去重。
+
 每次真正展示之后，QwenPaw 会尽力调 ReMe 的 `proactive_feedback` job 回传这批条目（`topic_id`、`agenda_date`、`delivered_at`、`channel`、`status`、`external_ref` 等）。回传是**可选契约**：其他 Agent 框架不回传时，ReMe 的行为与从前完全一致。`status` 只向前推进（`shown` → `executed` / `dismissed`），而 `failed` 不阻止下一轮重新投递。
 
 ### 隐私与安全边界
@@ -273,7 +275,7 @@ refresh 本身也不会无谓花钱：没有每日记忆变化、没有新的外
 | `proactive_cron_enabled`             | `false`          | 是否注册每日议程推送任务                                |
 | `proactive_cron`                     | `"0 18 * * *"`   | 每日推送的 5 段 Cron；启用时必填，随机延迟 0–60 秒       |
 | `proactive_cron_max_items`           | `0`              | 每日推送条数；`0` 表示全量（ReMe 自身上限 6 条/天）      |
-| `proactive_delivery_cooldown_days`   | `3`              | 已投递条目的隐藏天数，ReMe 与本地台账共用（0–90）        |
+| `proactive_delivery_cooldown_days`   | `3`              | 已投递条目的隐藏天数，ReMe 与本地台账共用（0–90）；`reminder` 豁免        |
 | `proactive_refresh_min_interval_minutes` | `120`        | 按需刷新的最小间隔，同时限制空闲推送密度；`0` 不限制     |
 
 Auto-Memory 间隔越小，进入 Auto-Dream 与 proactive extraction 的素材越新，但模型调用和 Token 消耗也越高。
