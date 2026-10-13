@@ -32,6 +32,11 @@ export function useModelSelectorData({
     [onActiveModels],
   );
 
+  const updateActiveModels = useCallback((value: ActiveModelsInfo) => {
+    activeRequestRef.current += 1;
+    setActiveModels(value);
+  }, []);
+
   const fetchData = useCallback(async () => {
     const providersRequestId = ++providersRequestRef.current;
     const activeRequestId = ++activeRequestRef.current;
@@ -49,7 +54,6 @@ export function useModelSelectorData({
         },
       );
       if (providersRequestId !== providersRequestRef.current) return;
-      if (result.providers) setProviders(result.providers);
       if (result.activeModels && activeRequestId === activeRequestRef.current) {
         applyActiveModels(result.activeModels);
       }
@@ -84,7 +88,7 @@ export function useModelSelectorData({
     loadError,
     providers,
     refreshActiveModels,
-    setActiveModels,
+    setActiveModels: updateActiveModels,
     setProviders,
   };
 }
