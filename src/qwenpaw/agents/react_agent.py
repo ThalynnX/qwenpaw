@@ -32,7 +32,7 @@ from agentscope.tool import Toolkit
 
 from .context.base import ContextManager
 from .context.overflow_recovery import call_with_overflow_recovery
-from .skill_system import get_workspace_skills_dir
+from .skill_system import resolve_workspace_skill_dir
 from .utils.image_freezing import freeze_local_images_async
 from .utils.message_request_normalizer import _is_media_block
 from .utils.text_block_utils import (
@@ -542,11 +542,11 @@ class QwenPawAgent(CodingModeMixin, Agent):
         if not hasattr(toolkit, "_qp_skills"):
             toolkit._qp_skills = {}  # pylint: disable=protected-access
         workspace_dir = self._workspace_dir or WORKING_DIR
-        working_skills_dir = get_workspace_skills_dir(Path(workspace_dir))
+        workspace_dir = Path(workspace_dir)
 
         for skill_name in effective_skills:
-            skill_dir = working_skills_dir / skill_name
-            if skill_dir.exists():
+            skill_dir = resolve_workspace_skill_dir(workspace_dir, skill_name)
+            if skill_dir is not None:
                 try:
                     # pylint: disable=protected-access
                     toolkit._qp_skills[skill_name] = {
