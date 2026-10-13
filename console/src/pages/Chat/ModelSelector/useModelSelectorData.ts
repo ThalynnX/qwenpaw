@@ -42,6 +42,11 @@ export function useModelSelectorData({
         agentId,
         undefined,
         session,
+        (value) => {
+          if (providersRequestId !== providersRequestRef.current) return;
+          setProviders(value);
+          setLoading(false);
+        },
       );
       if (providersRequestId !== providersRequestRef.current) return;
       if (result.providers) setProviders(result.providers);

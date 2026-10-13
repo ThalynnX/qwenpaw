@@ -353,7 +353,10 @@ export default function Sidebar({
   }, [collapsed]);
 
   useEffect(() => {
+    let inFlight = false;
     const loadUnreadState = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
         const [inboxRes, pushRes] = await Promise.all([
           api.getInboxEvents({
@@ -380,6 +383,8 @@ export default function Sidebar({
         setHasPendingApprovals(currentIds.size > 0);
       } catch {
         // Keep previous state when polling fails.
+      } finally {
+        inFlight = false;
       }
     };
     void loadUnreadState();

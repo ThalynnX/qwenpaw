@@ -33,7 +33,10 @@ export default function ConsolePollService() {
 
   useEffect(() => {
     const prevApprovalsRef = { current: "" };
+    let inFlight = false;
     const tick = () => {
+      if (inFlight) return;
+      inFlight = true;
       consoleApi
         .getPushMessages()
         .then((res) => {
@@ -66,7 +69,10 @@ export default function ConsolePollService() {
             return merged.slice(-MAX_VISIBLE_BUBBLES);
           });
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => {
+          inFlight = false;
+        });
     };
 
     tick();

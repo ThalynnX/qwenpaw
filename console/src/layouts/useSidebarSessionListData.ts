@@ -198,9 +198,11 @@ export function useSessionListData(
 
     void fetchSessions();
 
+    let inFlight = false;
     const timer = setInterval(async () => {
       // Pause polling during session switch to avoid bandwidth contention
-      if (sessionApi.isSessionSwitching) return;
+      if (sessionApi.isSessionSwitching || inFlight) return;
+      inFlight = true;
       try {
         const list = await sessionApi.getSessionList();
         if (!cancelled && sessionApi.isActiveOwner(owner)) {
@@ -213,6 +215,8 @@ export function useSessionListData(
         }
       } catch {
         // ignore polling errors
+      } finally {
+        inFlight = false;
       }
     }, 3000);
 
