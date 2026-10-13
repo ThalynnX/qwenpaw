@@ -60,6 +60,10 @@ def model_card(row: dict) -> ModelInfo | None:
     return ModelInfo(
         id=model_id.strip(),
         name=row.get(f"name") or model_id,
+        # The directory labels this System One model as TG/Text.
+        model_type=(
+            "decision" if model_id.strip() == "decision-model-preview" else "chat"
+        ),
         **metadata,
     )
 
