@@ -125,33 +125,39 @@ function ProjectDirectorySetting() {
   );
 }
 
-function EnhancedCodeCapabilitySetting() {
+function CodeModeSetting() {
   const { t } = useTranslation();
   const { codingMode } = useCodingMode();
   const selectedAgent = useAgentStore((state) => state.selectedAgent);
   const setCodingMode = useCodingModeStore((state) => state.setCodingMode);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
       const mode = await codingModeApi.get();
       setCodingMode(selectedAgent, mode.enabled);
+    } catch {
+      setError(t("codingMode.loadFailed"));
     } finally {
       setLoading(false);
     }
-  }, [selectedAgent, setCodingMode]);
+  }, [selectedAgent, setCodingMode, t]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
-  const toggle = async (enabled: boolean) => {
+  const update = async (enabled: boolean) => {
+    setError("");
     setSaving(true);
     try {
       const result = await codingModeApi.toggle(enabled);
       setCodingMode(selectedAgent, result.enabled);
+    } catch {
+      setError(t("codingMode.updateFailed"));
     } finally {
       setSaving(false);
     }
@@ -159,23 +165,30 @@ function EnhancedCodeCapabilitySetting() {
 
   return (
     <SettingsField
-      label={t("agentConfig.enhancedCodeCapability")}
-      tooltip={t("agentConfig.enhancedCodeCapabilityTooltip")}
+      label={t("codingMode.title")}
+      tooltip={t("codingMode.toolPresentationHelp")}
       className={styles.reactAgentWideField}
     >
-      <div className={styles.switchSetting}>
-        <span>{t("agentConfig.enhancedCodeCapabilityDescription")}</span>
-        {loading ? (
-          <LoaderCircle className={styles.spin} size={16} />
-        ) : (
-          <Switch
-            checked={codingMode}
-            loading={saving}
-            onChange={(enabled) => void toggle(enabled)}
-            aria-label={t("agentConfig.enhancedCodeCapability")}
+      <div className={styles.codeModeSetting} aria-busy={loading || saving}>
+        <Switch
+          aria-label={t("codingMode.title")}
+          disabled={loading || saving}
+          checked={codingMode}
+          onChange={(enabled) => void update(enabled)}
+        />
+        {(loading || saving) && (
+          <LoaderCircle
+            className={styles.spin}
+            size={16}
+            aria-label={t("common.loading")}
           />
         )}
       </div>
+      {error && (
+        <span className={styles.codeModeError} role="alert">
+          {error}
+        </span>
+      )}
     </SettingsField>
   );
 }
@@ -236,7 +249,7 @@ export function ReactAgentCard({
 
       <div className={styles.reactAgentSettings}>
         <ProjectDirectorySetting />
-        <EnhancedCodeCapabilitySetting />
+        <CodeModeSetting />
       </div>
 
       <SettingsField

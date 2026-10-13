@@ -2080,7 +2080,9 @@ class CodingModeConfig(BaseModel):
 
     enabled: bool = Field(
         default=False,
-        description="Enable Coding Mode IDE layout and tools",
+        description=(
+            "Route enabled tools through sandboxed Python orchestration"
+        ),
     )
 
 

@@ -12,7 +12,6 @@ import pytest
 
 from qwenpaw.agents.acp.meta import ACP_PROJECT_DIR_META_KEY
 from qwenpaw.config.config import AgentProfileConfig
-from qwenpaw.modes.coding.mixin import CodingModeMixin
 from qwenpaw.runtime.builder import AgentBuilder
 
 
@@ -88,25 +87,6 @@ def test_request_project_warns_for_unsupported_config(
 
     assert updated is config
     assert "unsupported config type: dict" in caplog.text
-
-
-def test_coding_prompt_prefers_request_project(monkeypatch, tmp_path):
-    config = AgentProfileConfig(id="default", name="Default")
-    config.coding_mode.enabled = True
-    config.project_dir = str(tmp_path)
-
-    def fail_load_agent_config(_agent_id):
-        raise AssertionError("request project should be used first")
-
-    monkeypatch.setattr(
-        "qwenpaw.config.config.load_agent_config",
-        fail_load_agent_config,
-    )
-
-    # The request-scoped config is read straight off the holder; the disk
-    # reload is only a last resort and must not be reached here.
-    holder = SimpleNamespace(_agent_config=config, name="default")
-    assert CodingModeMixin._get_coding_project_dir(holder) == str(tmp_path)
 
 
 def test_normal_prompt_includes_workspace_fallback_as_project(tmp_path):
