@@ -151,6 +151,30 @@ def _immediate_transaction(
         raise
 
 
+def _validate_history_columns(conn: sqlite3.Connection) -> set[str]:
+    """Require the columns and rowid alias used by history writes and FTS."""
+    rows = conn.execute(f"PRAGMA table_info(conversation_history)").fetchall()
+    columns = {str(row[1]) for row in rows}
+    missing_required = _REQUIRED_COLUMNS - columns
+    if missing_required:
+        missing = f", ".join(sorted(missing_required))
+        raise HistorySchemaError(
+            f"history schema is missing required column(s): {missing}",
+        )
+    primary_key = [(row[1], row[2].upper()) for row in rows if row[5]]
+    # A rowid alias has no separate primary-key index. This also rejects
+    # WITHOUT ROWID tables and SQLite's column-level PRIMARY KEY DESC case.
+    indexed_primary_key = any(
+        row[3] == f"pk"
+        for row in conn.execute(f"PRAGMA index_list(conversation_history)")
+    )
+    if primary_key != [(f"seq", f"INTEGER")] or indexed_primary_key:
+        raise HistorySchemaError(
+            f"history seq must be an INTEGER PRIMARY KEY alias for rowid",
+        )
+    return columns
+
+
 def _validate_history_connection(conn: sqlite3.Connection) -> int:
     """Validate integrity and the minimum compatible history schema."""
     row = conn.execute("PRAGMA quick_check").fetchone()
@@ -166,18 +190,7 @@ def _validate_history_connection(conn: sqlite3.Connection) -> int:
             f"version {_SCHEMA_VERSION}",
         )
 
-    columns = {
-        str(column[1])
-        for column in conn.execute(
-            "PRAGMA table_info(conversation_history)",
-        ).fetchall()
-    }
-    missing_required = _REQUIRED_COLUMNS - columns
-    if missing_required:
-        raise HistorySchemaError(
-            "history schema is missing required column(s): "
-            + ", ".join(sorted(missing_required)),
-        )
+    _validate_history_columns(conn)
     return version
 
 
@@ -610,13 +623,7 @@ class HistoryStore:
                 f"version {_SCHEMA_VERSION}",
             )
 
-        columns = self._schema_columns(self._conn)
-        missing_required = _REQUIRED_COLUMNS - columns
-        if missing_required:
-            raise HistorySchemaError(
-                "history schema is missing required column(s): "
-                + ", ".join(sorted(missing_required)),
-            )
+        columns = _validate_history_columns(self._conn)
         for name, ddl in _OPTIONAL_COLUMNS.items():
             if name not in columns:
                 self._conn.execute(
