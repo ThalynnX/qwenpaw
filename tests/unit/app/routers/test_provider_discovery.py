@@ -12,7 +12,6 @@ from qwenpaw.app.routers.providers import (
     CreateCustomProviderRequest,
     DiscoverModelsRequest,
     ProviderConfigRequest,
-    TestModelRequest as ModelTestRequest,
     TestProviderRequest,
     configure_provider,
     create_custom_provider_endpoint,
@@ -291,7 +290,7 @@ async def test_model_route_returns_structured_availability() -> None:
     result = await model_test_endpoint(
         manager=manager,
         provider_id="modelscope",
-        body=ModelTestRequest(model_id="org/model"),
+        body=SimpleNamespace(model_id="org/model"),
     )
 
     assert result.success is False

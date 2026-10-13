@@ -22,34 +22,11 @@ QwenPaw also provides the QwenPaw-Flash series for local deployment. It includes
 
 ## Decision Models
 
-Each model has a **Chat** or **Decision** type. Both types can belong to the same provider; existing configurations default to Chat. Decision models consume structured state and questions and return choices, scores, or probabilities. They cannot fill default chat, subagent, or fallback chat slots.
+Models have a **Chat** or **Decision** type; existing configurations default to Chat. Choose the type when manually adding a model. It is fixed afterward; remove and re-add a manually added model to change its type. The same provider can contain both types, including DashScope.
 
-- **TypeSafe / JEV**: configure the TypeSafe provider's API key and select `jev-latest`, or manually add an authorized model version. The default API base URL is `https://api.typesafe.ai/v1`.
-- **DashScope**: add `decision-model-preview` and set its model-specific API URL, for example `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1`. Replace `{WorkspaceId}` with your workspace ID and use the region and endpoint shown in the service console. Other models retain the provider URL; all models use the provider's API key.
+Configure **TypeSafe** with its API key and provider URL (default: `https://api.typesafe.ai/v1`), then discover and add JEV models. Provider connection tests use the model list; model connection tests send a minimal native decision request.
 
-Choose the model type when adding it; the type is fixed afterward. To change the type, remove and re-add the model. The optional model API URL remains editable; an empty URL inherits the provider URL. Connection tests use the appropriate API for the model's type; tests in the add dialog do not save the draft. Decision models hide chat generation settings and are excluded from chat selectors.
-
-The initial adapter supports System One `choice`, `score`, and `noul` questions. Automatic tool selection is not enabled by configuration. Callers select an explicit provider and model and own confidence thresholds and failure fallback policies:
-
-```python
-from qwenpaw.providers.provider_manager import ProviderManager
-from qwenpaw.providers.systemone_model import ChoiceQuestion
-
-manager = ProviderManager.get_instance()
-async with manager.create_decision_model("typesafe", "jev-latest") as model:
-    result = await model.evaluate(
-        state={"request": "Find an earlier discussion"},
-        questions={
-            "tool": ChoiceQuestion(
-                instructions="Select the most suitable tool",
-                criteria={"memory": "Search discussions", "none": "No tool"},
-            ),
-        },
-        timeout=10,
-    )
-```
-
-The task-scoped async client supports cancellation and a total deadline, retries a 429 or server error at most once, and validates answer IDs, types, and probabilities. It preserves confidence separately from probabilities. See the [TypeSafe API](https://docs.typesafe.ai/api) and [DashScope decision API](https://help.aliyun.com/zh/model-studio/decision-model-api).
+Decision models display a type label and are excluded from chat selectors and execution. They share the provider's endpoint and credentials and have no chat generation settings. For decision models in OpenAI-compatible providers, connection tests currently verify only provider connectivity. Configuring a decision model does not enable automatic tool selection; runtime decision integration is follow-up work.
 
 ## QwenPaw Local (llama.cpp) Configuration
 

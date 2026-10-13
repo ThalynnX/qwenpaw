@@ -3,7 +3,7 @@ import { formatCompact } from "@/utils/formatNumber";
 import { InteractiveCard } from "@/components/interaction/InteractiveCard";
 import { useState, useEffect, useMemo, useDeferredValue, useRef } from "react";
 import { Button, Form, Modal, Tag, Tooltip } from "@agentscope-ai/design";
-import { Input, Pagination, Select, Spin, Switch } from "antd";
+import { Pagination, Select, Spin, Switch } from "antd";
 import {
   ListChecks,
   ListX,
@@ -261,7 +261,6 @@ export function RemoteModelManageModal({
         id,
         name: values.name?.trim() || id,
         model_type: values.model_type ?? "chat",
-        base_url: values.base_url?.trim() || null,
         template_id: templateId,
       });
       await onSaved();
@@ -624,7 +623,6 @@ export function RemoteModelManageModal({
         onCancel={() => setAdding(false)}
         onOk={addManual}
         confirmLoading={busy === "manual"}
-        okButtonProps={{ disabled: busy !== null }}
         destroyOnHidden
       >
         <Form
@@ -644,7 +642,6 @@ export function RemoteModelManageModal({
               if (model)
                 form.setFieldsValue({
                   model_type: model.model_type ?? "chat",
-                  base_url: model.base_url ?? "",
                 });
             }}
           />
@@ -656,41 +653,6 @@ export function RemoteModelManageModal({
               ]}
             />
           </Form.Item>
-          <Form.Item name="base_url" label={t("models.modelBaseUrl")}>
-            <Input placeholder={t("models.modelBaseUrlHint")} />
-          </Form.Item>
-          <Button
-            htmlType="button"
-            disabled={busy !== null}
-            loading={busy === "draft-test"}
-            onClick={async () => {
-              try {
-                const values = await form.validateFields();
-                setBusy("draft-test");
-                const result = await api.testModelConnection(provider.id, {
-                  model_id: values.id.trim(),
-                  model_type: values.model_type ?? "chat",
-                  base_url: values.base_url?.trim() || null,
-                });
-                message[result.success ? "success" : "warning"](
-                  getLocalizedTestConnectionMessage(result, t),
-                );
-              } catch (error) {
-                if (
-                  !(
-                    error &&
-                    typeof error === "object" &&
-                    "errorFields" in error
-                  )
-                )
-                  failure(error);
-              } finally {
-                setBusy(null);
-              }
-            }}
-          >
-            {t("models.testConnection")}
-          </Button>
           {enteredModelType === "decision" ? (
             <p>{t("models.decisionModelHint")}</p>
           ) : (

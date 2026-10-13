@@ -47,7 +47,6 @@ from ...providers.provider_discovery_policy import (
 from ...config.config import ActiveModelsInfo
 from ...providers.provider_manager import ProviderManager
 from ...providers.model_metadata import list_model_templates
-from ...providers.model_info import ModelBaseUrl
 from ...providers.model_resolution import resolve_model_info
 from ...providers.hub_managed import (
     PROVIDER_ID,
@@ -213,7 +212,6 @@ class CreateCustomProviderRequest(BaseModel):
 
 class AddModelRequest(BaseModel):
     model_type: Literal["chat", "decision"] = "chat"
-    base_url: ModelBaseUrl = None
     template_id: str | None = None
     id: str = Field(...)
     name: str = Field(...)
@@ -240,8 +238,6 @@ class AddModelRequest(BaseModel):
 
 
 class ModelConfigRequest(BaseModel):
-    model_type: Literal["chat", "decision"] | None = None
-    base_url: ModelBaseUrl = None
     thinking_control: ThinkingControl | None = None
     supports_image: bool | None = None
     supports_video: bool | None = None
@@ -321,11 +317,11 @@ def _validate_model_slot(
                 f"'{provider_id}'."
             ),
         )
-    model_info = provider.get_model_info(model_id)
     try:
-        provider.for_model(model_id)
+        provider.validate_chat_model(model_id)
     except AppBaseException as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    model_info = provider.get_model_info(model_id)
     if model_info and model_info.availability_status in {
         "permission_denied",
         "model_not_found",
@@ -554,8 +550,6 @@ class TestProviderRequest(BaseModel):
 
 class TestModelRequest(BaseModel):
     model_id: str = Field(..., description="Model ID to test")
-    model_type: Literal["chat", "decision"] | None = None
-    base_url: ModelBaseUrl = None
 
 
 class ModelVisibilityRequest(BaseModel):
@@ -711,20 +705,10 @@ async def test_model(
 ) -> TestConnectionResponse:
     """Test if a specific model works with the configured provider."""
     try:
-        overrides = body.model_dump(exclude_unset=True, exclude={"model_id"})
-        if overrides.get("model_type") is None:
-            overrides.pop("model_type", None)
-        if overrides:
-            result = await manager.check_provider_model(
-                provider_id,
-                body.model_id,
-                overrides=overrides,
-            )
-        else:
-            result = await manager.check_provider_model(
-                provider_id,
-                body.model_id,
-            )
+        result = await manager.check_provider_model(
+            provider_id,
+            body.model_id,
+        )
         return TestConnectionResponse(
             success=result.success,
             message=(
@@ -775,7 +759,6 @@ async def add_model_endpoint(
         model_payload = {"id": body.id, "name": body.name}
         for field in (
             "model_type",
-            "base_url",
             "supports_multimodal",
             "supports_image",
             "supports_video",
@@ -942,8 +925,6 @@ async def configure_model(
         config = {
             field: getattr(body, field) for field in body.model_fields_set
         }
-        if config.get("model_type") is None:
-            config.pop("model_type", None)
         provider_info = await manager.update_model_config(
             provider_id=provider_id,
             model_id=model_id,

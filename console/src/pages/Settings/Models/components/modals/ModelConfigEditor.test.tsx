@@ -135,24 +135,17 @@ describe("ModelConfigEditor output limits", () => {
 describe("ModelConfigEditor decision models", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("saves the independent endpoint without chat generation settings", async () => {
-    vi.mocked(api.configureModel).mockResolvedValue(provider);
-    const user = userEvent.setup();
+  it("shows the decision model hint without chat settings", () => {
     renderEditor(createModel({ model_type: "decision", source: "user" }));
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     expect(
       screen.queryByLabelText("Generation config"),
     ).not.toBeInTheDocument();
     expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
-    await user.type(
-      screen.getByRole("textbox", { name: "models.modelBaseUrl" }),
-      "https://decision.example/v1",
-    );
-    await user.click(screen.getByRole("button", { name: /Save/i }));
-    await waitFor(() => expect(api.configureModel).toHaveBeenCalledOnce());
-    expect(vi.mocked(api.configureModel).mock.calls[0][2]).toEqual({
-      base_url: "https://decision.example/v1",
-    });
+    expect(screen.getByText("models.decisionModelHint")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Save/i }),
+    ).not.toBeInTheDocument();
   });
 });
 

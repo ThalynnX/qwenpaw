@@ -22,34 +22,11 @@ QwenPaw 官方还提供了适合本地部署的 QwenPaw-Flash 系列模型，包
 
 ## 决策模型
 
-模型可设置为「聊天」或「决策」类型，同一提供商下可以同时配置两种模型。旧配置默认是聊天模型。决策模型接收结构化的状态和问题，返回选择、评分或概率，不能作为默认聊天、子智能体或备用聊天模型。
+模型具有**聊天**或**决策**类型，已有配置默认为聊天。手动添加模型时选择类型，添加后固定；手动添加的模型可删除后重新添加以更换类型。同一供应商可以同时包含两种类型，例如 DashScope。
 
-- **TypeSafe / JEV**：在 TypeSafe 提供商中配置 API Key，选择 `jev-latest`，也可以手动添加已获授权的模型版本。默认 API 地址为 `https://api.typesafe.ai/v1`。
-- **DashScope**：在 DashScope 中添加 `decision-model-preview`，在模型配置中填写该模型的 API 地址，例如 `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1`。将 `{WorkspaceId}` 替换为服务控制台中的工作空间 ID；以控制台提供的地域和地址为准。覆盖地址只用于该模型，其余模型继续使用提供商地址和同一个 API Key。
+配置 **TypeSafe** 的 API Key 和供应商地址（默认 `https://api.typesafe.ai/v1`），然后发现并添加 JEV 模型。供应商连接测试读取模型列表；模型连接测试发送一次最小原生决策请求。
 
-添加模型时选择类型，添加后类型固定；需要更换类型时，删除后重新添加。独立 API 地址仍可编辑，留空表示继承提供商地址。测试连接会按模型类型调用对应接口，添加界面的测试不会保存尚未确认的配置。决策模型不显示聊天生成参数，也不会出现在聊天模型选择器中。
-
-当前支持 System One 的 `choice`、`score`、`noul` 三种问题。配置和连接测试不代表已启用自动工具选择；业务调用方需要明确指定提供商和模型，并自行处理置信度阈值与失败后的回退策略。开发调用示例：
-
-```python
-from qwenpaw.providers.provider_manager import ProviderManager
-from qwenpaw.providers.systemone_model import ChoiceQuestion
-
-manager = ProviderManager.get_instance()
-async with manager.create_decision_model("typesafe", "jev-latest") as model:
-    result = await model.evaluate(
-        state={"request": "查找历史讨论"},
-        questions={
-            "tool": ChoiceQuestion(
-                instructions="选择最合适的工具",
-                criteria={"memory": "检索历史讨论", "none": "无需工具"},
-            ),
-        },
-        timeout=10,
-    )
-```
-
-适配器使用任务范围内的异步连接，支持取消和总超时，遇到 429 或服务端错误最多重试一次，并校验问题 ID、回答类型及概率范围。原始置信度和概率分别保留，不设置通用业务阈值。详见 [TypeSafe API](https://docs.typesafe.ai/api) 和 [DashScope 决策模型 API](https://help.aliyun.com/zh/model-studio/decision-model-api)。
+决策模型显示类型标签，不参与聊天模型选择和执行。它们复用供应商的地址和凭据，不提供聊天生成参数设置。OpenAI 兼容供应商中的决策模型目前只验证供应商连通性。配置决策模型不会自动启用工具选择，运行时的决策调用将在后续接入。
 
 ## QwenPaw Local (llama.cpp) 配置
 

@@ -56,8 +56,8 @@ class _FakeProvider(SimpleNamespace):
         """Return the stub's already configured model information."""
         return self.get_model_info(model_id)
 
-    def for_model(self, _model_id):
-        return self
+    def validate_chat_model(self, _model_id):
+        pass
 
 
 def _patched_load_agent_config(_agent_id):  # noqa: ARG001

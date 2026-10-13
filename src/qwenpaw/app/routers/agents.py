@@ -68,41 +68,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/agents", tags=["agents"])
 
 
-def _validate_chat_model_types(
-    request: Request | None,
-    settings: "CreateAgentRequest | AgentProfileConfig | AgentModelSettingsPatch",
-) -> None:
-    """Validate model purposes without changing agent configuration."""
-    from ...providers.provider_manager import ProviderManager
-
-    slots = [
-        settings.active_model,
-        settings.subagent_model,
-        *(settings.fallback_models or []),
-    ]
-    routing = getattr(settings, "llm_routing", None)
-    if routing is not None:
-        slots.extend([routing.local, routing.cloud])
-    slots = [
-        slot for slot in slots if slot and slot.provider_id and slot.model
-    ]
-    if not slots:
-        return
-    manager = (
-        getattr(request.app.state, "provider_manager", None)
-        if request is not None
-        else None
-    ) or ProviderManager.get_instance()
-    for slot in slots:
-        provider = manager.get_provider(slot.provider_id)
-        if provider is None:
-            continue
-        try:
-            provider.for_model(slot.model)
-        except AppBaseException as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
 @router.get("/memory/backends")
 async def list_memory_backends() -> list[dict[str, Any]]:
     """Describe memory backends registered by core and preloaded plugins."""
@@ -845,8 +810,6 @@ async def create_agent(
     uniqueness).  Otherwise a random short UUID is generated.
     """
     _validate_mail_backend_compatibility(request.backend, request.mail)
-    if request.backend == "qwenpaw":
-        await run_sync_io(_validate_chat_model_types, http_request, request)
     if request.backend != "qwenpaw":
         _get_available_third_party_provider(request.backend)
 
@@ -1220,8 +1183,6 @@ async def update_agent(  # pylint: disable=too-many-statements
         _validate_mail_config(effective_mail)
 
     update_data = agent_config.model_dump(exclude_unset=True)
-    if effective_backend == "qwenpaw":
-        await run_sync_io(_validate_chat_model_types, request, agent_config)
     previous_config = existing_config_snap
 
     def apply_update(existing_config: AgentProfileConfig) -> None:
@@ -1360,7 +1321,6 @@ async def update_agent_model_settings(
 ) -> AgentProfileConfig:
     """Patch model-routing fields without overwriting other settings."""
     values = {field: getattr(body, field) for field in body.model_fields_set}
-    await run_sync_io(_validate_chat_model_types, request, body)
 
     def apply_settings(existing_config: AgentProfileConfig) -> None:
         AgentProfileConfig.model_validate(

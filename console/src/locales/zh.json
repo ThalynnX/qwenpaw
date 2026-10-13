@@ -2387,9 +2387,7 @@
     "modelType": "模型类型",
     "modelTypeChat": "聊天",
     "modelTypeDecision": "决策",
-    "modelBaseUrl": "模型 API 地址（可选）",
-    "modelBaseUrlHint": "留空使用供应商地址",
-    "decisionModelHint": "返回选择、评分或是非判断，供自动化功能使用。",
+    "decisionModelHint": "在此配置决策模型，供后续自动化功能接入；不能用于聊天。",
     "connectProviderTitle": "连接你的第一个模型",
     "cardStatus": {
       "configured": "已配置",

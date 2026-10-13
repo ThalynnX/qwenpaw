@@ -104,19 +104,6 @@ PROVIDER_DASHSCOPE = DashScopeProvider(
     },
 )
 
-PROVIDER_DASHSCOPE.models.append(
-    ModelInfo(
-        id="decision-model-preview",
-        name="Decision Model Preview",
-        model_type="decision",
-        supports_multimodal=False,
-        supports_image=False,
-        supports_video=False,
-        supports_audio=False,
-        supports_tool_calling=False,
-    ),
-)
-
 PROVIDER_TYPESAFE = TypeSafeProvider(
     id="typesafe",
     name="TypeSafe",
@@ -126,11 +113,6 @@ PROVIDER_TYPESAFE = TypeSafeProvider(
             id="jev-latest",
             name="Jev Latest",
             model_type="decision",
-            supports_multimodal=False,
-            supports_image=False,
-            supports_video=False,
-            supports_audio=False,
-            supports_tool_calling=False,
         ),
     ],
     meta={"api_key_url": "https://console.typesafe.ai/"},

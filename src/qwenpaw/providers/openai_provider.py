@@ -286,6 +286,16 @@ class OpenAIProvider(Provider):
                 message="Empty model ID",
             )
 
+        model = self.get_model_info(model_id)
+        if model is None:
+            model = self.get_discovered_model_info(model_id)
+        if model is not None and model.model_type == "decision":
+            success, message = await self.check_connection(timeout=timeout)
+            return ModelConnectionResult(
+                success=success,
+                message=message or "Only provider connectivity was checked",
+                verification="provider_only",
+            )
         if _is_non_chat_model(model_id):
             return await self._check_non_chat_model_connection(
                 model_id,

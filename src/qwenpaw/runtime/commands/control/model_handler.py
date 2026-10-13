@@ -519,7 +519,7 @@ class ModelCommandHandler(BaseControlCommandHandler):
             )
 
         try:
-            provider.for_model(model_id)
+            provider.validate_chat_model(model_id)
         except ProviderError as exc:
             return False, str(exc)
         return True, ""

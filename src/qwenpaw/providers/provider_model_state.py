@@ -10,7 +10,6 @@ from .thinking import ThinkingControl
 PROVIDER_SNAPSHOT_SCHEMA_VERSION = 2
 
 PERSISTED_MODEL_STATE_FIELDS = (
-    "base_url",
     f"source",
     "model_type",
     "generate_kwargs",

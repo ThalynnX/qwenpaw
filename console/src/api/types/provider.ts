@@ -10,7 +10,6 @@ export type ModelAvailabilityStatus =
 
 export interface ModelInfo {
   model_type?: "chat" | "decision";
-  base_url?: string | null;
   thinking_control?: ThinkingControlSpec | null;
   released_at?: string | null;
   config_overrides?: string[];
@@ -193,7 +192,6 @@ export interface CreateCustomProviderRequest {
 
 export interface AddModelRequest {
   model_type?: "chat" | "decision";
-  base_url?: string | null;
   template_id?: string | null;
   id: string;
   name: string;
@@ -205,8 +203,6 @@ export interface AddModelRequest {
 }
 
 export interface ModelConfigRequest {
-  model_type?: "chat" | "decision";
-  base_url?: string | null;
   thinking_control?: ThinkingControlSpec | null;
   supports_image?: boolean | null;
   supports_video?: boolean | null;
@@ -311,8 +307,6 @@ export interface DiscoverModelsRequest {
 
 export interface TestModelRequest {
   model_id: string;
-  model_type?: "chat" | "decision";
-  base_url?: string | null;
 }
 
 export interface DiscoverModelsResponse {

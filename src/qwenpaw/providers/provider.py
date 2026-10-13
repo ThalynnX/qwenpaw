@@ -42,7 +42,6 @@ from .adapters.wire_protocol import protocol_url
 
 if TYPE_CHECKING:
     from .multimodal_prober import ProbeResult
-    from .systemone_model import SystemOneDecisionModel
 
 
 _AGENT_THINKING_LEVEL: ContextVar[str] = ContextVar(
@@ -362,26 +361,15 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
     async def close(self) -> None:
         """Release resources owned by this runtime provider instance."""
 
-    def for_model(
-        self,
-        model_id: str,
-        *,
-        model_type: Literal["chat", "decision"] = "chat",
-    ) -> Provider:
-        """Resolve model-specific routing without mutating shared settings."""
+    def validate_chat_model(self, model_id: str) -> None:
+        """Reject decision models before sending a chat request."""
         model = self.get_model_info(model_id)
         if model is None:
             model = self.get_discovered_model_info(model_id)
-        if model is not None and model.model_type != model_type:
+        if model is not None and model.model_type != "chat":
             raise ProviderError(
-                message=f"Model '{model_id}' is not a {model_type} model",
-                details={"error_kind": "unsupported_model_type"},
+                message=f"Model '{model_id}' is not a chat model"
             )
-        if model is not None and model.base_url:
-            snapshot = self.configuration_snapshot()
-            snapshot.base_url = model.base_url
-            return snapshot
-        return self
 
     def model_protocol(self, model_id: str) -> str:
         """Return this service's protocol for one model."""
@@ -744,7 +732,6 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
                 }
                 overrides.update(
                     model_type=getattr(configured, "model_type", "chat"),
-                    base_url=getattr(configured, "base_url", None),
                     config_overrides=getattr(
                         configured, "config_overrides", []
                     ),
@@ -1118,11 +1105,6 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
                     raise ProviderError(
                         message="Model type cannot be changed after adding it",
                     )
-                if "base_url" in config:
-                    model.base_url = ModelInfo.model_validate(
-                        {**model.model_dump(), "base_url": config["base_url"]},
-                    ).base_url
-                    changed_fields.append("base_url")
                 for field in (
                     f"supports_image",
                     f"supports_video",
@@ -1397,21 +1379,6 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
         provider and model_id."""
         raise ProviderError(
             message=f"Provider '{self.id}' has no chat model adapter",
-        )
-
-    def get_decision_model_instance(
-        self,
-        model_id: str,
-    ) -> SystemOneDecisionModel:
-        """Build a decision adapter with this model's effective endpoint."""
-        from .systemone_model import SystemOneDecisionModel
-
-        provider = self.for_model(model_id, model_type="decision")
-        return SystemOneDecisionModel(
-            model=model_id,
-            base_url=provider.base_url,
-            api_key=provider.api_key,
-            headers=provider.custom_headers,
         )
 
     async def probe_model_multimodal(

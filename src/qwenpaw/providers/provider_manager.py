@@ -9,7 +9,7 @@ import asyncio
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List, TYPE_CHECKING
+from typing import Any, Dict, List
 
 from agentscope.model import ChatModelBase
 
@@ -58,9 +58,6 @@ from .provider_update_fields import (
 )
 from .plugin_provider_registry import PluginProviderRegistry
 from .provider_annotations import ProviderAnnotationService
-
-if TYPE_CHECKING:
-    from .systemone_model import SystemOneDecisionModel
 
 logger = logging.getLogger(__name__)
 
@@ -187,14 +184,6 @@ class ProviderManager(
                     model.model_copy(deep=True)
                     for model in catalog.get(catalog_key, builtin.models)
                 ]
-            for declared in provider.models:
-                if declared.model_type != "decision":
-                    continue
-                existing = builtin.get_model_info(declared.id)
-                if existing is None:
-                    builtin.models.append(declared.model_copy(deep=True))
-                else:
-                    existing.model_type = "decision"
             self._add_builtin(builtin)
 
     def _add_builtin(self, provider: Provider):
@@ -640,7 +629,7 @@ class ProviderManager(
                 details={"provider_id": provider_id, "model_id": model_id},
             )
         model_info = provider.get_model_info(model_id)
-        provider.for_model(model_id)
+        provider.validate_chat_model(model_id)
         if model_info and model_info.availability_status in {
             "permission_denied",
             "model_not_found",
@@ -1100,9 +1089,8 @@ class ProviderManager(
             return {"error": f"Provider '{provider_id}' not found"}
 
         async def probe_model(candidate: Provider) -> Any:
-            probe_result = await candidate.for_model(
-                model_id,
-            ).probe_model_multimodal(
+            candidate.validate_chat_model(model_id)
+            probe_result = await candidate.probe_model_multimodal(
                 model_id,
                 image_only=image_only,
             )
@@ -1264,35 +1252,6 @@ class ProviderManager(
             ProviderManager._instance = ProviderManager()
         return ProviderManager._instance
 
-    def create_chat_model(
-        self,
-        provider_id: str,
-        model_id: str,
-    ) -> ChatModelBase:
-        """Create a chat adapter using the model's effective endpoint."""
-        provider = self.get_provider(provider_id)
-        if provider is None:
-            raise ProviderError(message=f"Provider '{provider_id}' not found")
-        return provider.for_model(model_id).get_chat_model_instance(model_id)
-
-    def create_decision_model(
-        self,
-        provider_id: str,
-        model_id: str,
-    ) -> "SystemOneDecisionModel":
-        """Resolve an explicit model reference to a task-scoped adapter."""
-        provider = self.get_provider(provider_id)
-        if provider is None:
-            raise ProviderError(message=f"Provider '{provider_id}' not found")
-        if not provider.enabled:
-            raise ProviderError(message="Provider is disabled")
-        if not provider.has_model(model_id):
-            raise ModelNotFoundException(
-                model_name=f"{provider_id}/{model_id}",
-            )
-        provider.check_model_billing(model_id)
-        return provider.get_decision_model_instance(model_id)
-
     @staticmethod
     def get_active_chat_model() -> ChatModelBase:
         """Get the currently active provider/model configuration."""
@@ -1309,4 +1268,5 @@ class ProviderManager(
             )
         if not provider.enabled:
             raise ProviderError(message=f"Provider is disabled")
-        return manager.create_chat_model(model.provider_id, model.model)
+        provider.validate_chat_model(model.model)
+        return provider.get_chat_model_instance(model.model)
