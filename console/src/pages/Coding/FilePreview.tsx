@@ -9,6 +9,7 @@
  *   • csv    – parsed table
  */
 
+import { message } from "antd";
 import { ExternalLink, FileWarning, LoaderCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -394,16 +395,23 @@ function HtmlPreview({
         <button
           type="button"
           className={styles.htmlOpenButton}
-          onClick={() =>
-            openHtmlFile({
+          onClick={() => {
+            void openHtmlFile({
               content,
               filePath,
               chatId,
               projectDirOverride,
               root,
               workspaceBacked,
-            })
-          }
+            }).then((result) => {
+              // The native shell only opens HTML that resolves inside the
+              // workspace; when it refuses we fall back to the in-memory copy.
+              // Say so, otherwise the button looks like it did nothing.
+              if (result.mode === "blob") {
+                message.info(t("files.openHtmlOutsideWorkspace"));
+              }
+            });
+          }}
         >
           <ExternalLink size={14} />
           {t("files.openHtmlInBrowser")}
