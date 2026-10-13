@@ -534,7 +534,7 @@ class HistoryStore:
     def _repair_fts(self) -> None:
         logger.warning("Rebuilding damaged history FTS index: %s", self._path)
         try:
-            with self._conn:
+            with _immediate_transaction(self._conn):
                 self._rebuild_fts()
                 self._check_fts()
         except sqlite3.DatabaseError as exc:
@@ -630,11 +630,14 @@ class HistoryStore:
 
     def _init_schema(self) -> None:
         version = self._conn.execute("PRAGMA user_version").fetchone()[0]
+        missing_columns = _OPTIONAL_COLUMNS.keys() - self._schema_columns(
+            self._conn,
+        )
         # Reopening an initialized store must not wait for an ordinary writer.
         # Only schema creation/migration needs an explicit write transaction.
         transaction = (
             self._conn
-            if version == _SCHEMA_VERSION
+            if version == _SCHEMA_VERSION and not missing_columns
             else _immediate_transaction(self._conn)
         )
         with self._lock, transaction:
@@ -1180,6 +1183,14 @@ class HistoryStore:
         if dry_run:
             return self.estimate_purge(before=before, kinds=kinds)["rows"]
         with self._lock:
+            # Avoid writer contention when retention has nothing to delete.
+            # Re-read matching rows under the write lock for FTS consistency.
+            match = self._conn.execute(
+                f"SELECT 1 FROM conversation_history WHERE {where} LIMIT 1",
+                params,
+            ).fetchone()
+            if match is None:
+                return 0
             for attempt in range(2):
                 try:
                     with _immediate_transaction(
@@ -1190,7 +1201,7 @@ class HistoryStore:
                             "FROM conversation_history WHERE " + where,
                             params,
                         ).fetchall()
-                        if dry_run or not doomed:
+                        if not doomed:
                             return len(doomed)
                         if self._fts:
                             for row in doomed:
@@ -1205,7 +1216,6 @@ class HistoryStore:
                     # rebuild for operational errors or retry more than once.
                     if (
                         attempt
-                        or dry_run
                         or not self._fts
                         or not self._is_corruption(exc)
                     ):
