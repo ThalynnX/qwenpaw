@@ -96,6 +96,47 @@ def custom_provider(**model_fields):
     )
 
 
+@pytest.mark.parametrize(
+    ("configured", "detected", "expected"),
+    [
+        (None, None, 983_616),
+        (None, 1_000_000, 983_616),
+        (1_000_000, None, 983_616),
+        (1_000_000, 1_000_000, 983_616),
+        (64_000, 1_000_000, 64_000),
+        (None, 64_000, 64_000),
+    ],
+)
+def test_documented_input_limit_caps_context_and_user_overrides(
+    metadata,
+    configured,
+    detected,
+    expected,
+):
+    path = model_catalog.PACKAGED_CATALOG_PATH
+    document = json.loads(path.read_text())
+    model = document["providers"]["alibaba-cn"]["models"][0]
+    model["input_token_limit"] = 983_616
+    model["input_token_limit_source"] = "catalog"
+    path.write_text(json.dumps(document))
+
+    fields = {"max_input_length_auto_detected": detected}
+    if configured is not None:
+        fields.update(
+            max_input_length=configured,
+            max_input_length_configured=True,
+        )
+    provider = custom_provider(**fields)
+    resolved = provider.resolve_model_info("qwen3.8-max")
+    assert resolved.input_token_limit == 983_616
+    assert resolved.effective_max_input_length == expected
+    assert resolved.automatic_max_input_length == min(
+        detected or 1_000_000,
+        983_616,
+    )
+    assert provider.get_context_size("qwen3.8-max") == expected
+
+
 async def test_custom_endpoint_uses_named_template(metadata):
     provider = custom_provider()
     assert provider.get_context_size(f"qwen3.8-max") == 1_000_000
@@ -314,3 +355,31 @@ def test_remote_update_keeps_documented_provider_limits(metadata, monkeypatch):
     assert provider.get_context_size(f"qwen3.8-max") == 200_000
     provider.extra_models[0].max_input_length_auto_detected = 64_000
     assert provider.get_context_size(f"qwen3.8-max") == 64_000
+
+
+def test_remote_update_preserves_documented_input_limit(metadata, monkeypatch):
+    path = model_catalog.PACKAGED_CATALOG_PATH
+    document = json.loads(path.read_text())
+    model = document["providers"]["alibaba-cn"]["models"][0]
+    model["input_token_limit"] = 983_616
+    model["input_token_limit_source"] = "catalog"
+    model["capability_provenance"] = {
+        "input_token_limit": {
+            "source": "documentation",
+            "reference": "https://help.aliyun.com/zh/model-studio/qwen3-8-max",
+        },
+    }
+    path.write_text(json.dumps(document))
+    metadata["alibaba-cn"]["models"]["qwen3.8-max"]["limit"][
+        "input"
+    ] = 1_000_000
+    monkeypatch.setattr(
+        model_catalog,
+        "_download_bytes",
+        lambda *args: json.dumps(metadata).encode(),
+    )
+
+    model_catalog.update_model_metadata()
+
+    provider = custom_provider(max_input_length_auto_detected=1_000_000)
+    assert provider.get_context_size("qwen3.8-max") == 983_616

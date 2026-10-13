@@ -223,6 +223,13 @@ class OpenAIProvider(Provider):
                 if isinstance(value, (int, float)) and value >= 1000:
                     metadata["max_input_length_auto_detected"] = int(value)
                     break
+            # Some compatible endpoints expose a separate input limit. Keep
+            # it distinct from the total window so resolution can cap both
+            # discovered context metadata and user context overrides.
+            input_limit = getattr(row, "max_input_tokens", None)
+            if type(input_limit) is int and input_limit > 0:
+                metadata["input_token_limit"] = input_limit
+                metadata["input_token_limit_source"] = "api"
             output_limit = getattr(row, "max_output_tokens", None)
             if isinstance(output_limit, (int, float)) and output_limit > 0:
                 metadata["max_output_length"] = int(output_limit)

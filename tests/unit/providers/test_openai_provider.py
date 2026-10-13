@@ -103,6 +103,52 @@ async def test_list_model_normalizes_and_deduplicates(monkeypatch) -> None:
     close.assert_awaited_once()
 
 
+@pytest.mark.parametrize("input_limit", [983_616, 512])
+def test_discovered_input_limit_caps_compatible_model_context(input_limit):
+    models = OpenAIProvider._normalize_models_payload(
+        SimpleNamespace(
+            data=[
+                SimpleNamespace(
+                    id="compatible-model",
+                    context_window=1_000_000,
+                    max_input_tokens=input_limit,
+                ),
+            ],
+        ),
+    )
+    assert models[0].input_token_limit == input_limit
+    assert models[0].input_token_limit_source == "api"
+
+    provider = _make_provider(is_custom=True)
+    provider.extra_models = [
+        ModelInfo(
+            id="compatible-model",
+            name="Compatible",
+            max_input_length=2_000_000,
+            max_input_length_configured=True,
+        ),
+    ]
+    provider.discovered_models = models
+    assert provider.get_context_size("compatible-model") == input_limit
+
+
+@pytest.mark.parametrize("input_limit", [None, 0, -1, True, "983616", 1.5])
+def test_discovery_ignores_invalid_input_limits(input_limit):
+    models = OpenAIProvider._normalize_models_payload(
+        SimpleNamespace(
+            data=[
+                SimpleNamespace(
+                    id="compatible-model",
+                    context_window=1_000_000,
+                    max_input_tokens=input_limit,
+                ),
+            ],
+        ),
+    )
+    assert models[0].input_token_limit is None
+    assert models[0].max_input_length_auto_detected == 1_000_000
+
+
 async def test_kilo_uses_gateway_free_flag_for_non_suffix_routes(
     monkeypatch,
 ) -> None:

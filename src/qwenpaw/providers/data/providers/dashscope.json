@@ -51,8 +51,16 @@
         },
         "billing": {
           "note": "Bundled manual preset, not automatically retrieved at runtime. Live provider pricing takes precedence."
+        },
+        "input_token_limit": {
+          "source": "documentation",
+          "reference": "https://help.aliyun.com/zh/model-studio/qwen3-8-max",
+          "updated_at": "2026-10-12",
+          "note": "Conservative input limit shared by thinking and non-thinking modes."
         }
-      }
+      },
+      "input_token_limit": 983616,
+      "input_token_limit_source": "catalog"
     },
     {
       "id": "qwen3.7-max",
@@ -91,8 +99,16 @@
         },
         "billing": {
           "note": "Bundled manual preset, not automatically retrieved at runtime. Live provider pricing takes precedence."
+        },
+        "input_token_limit": {
+          "source": "documentation",
+          "reference": "https://help.aliyun.com/zh/model-studio/qwen3-7-max",
+          "updated_at": "2026-10-12",
+          "note": "Conservative input limit shared by thinking and non-thinking modes."
         }
-      }
+      },
+      "input_token_limit": 983616,
+      "input_token_limit_source": "catalog"
     },
     {
       "id": "qwen3.7-plus",
@@ -130,8 +146,16 @@
         },
         "billing": {
           "note": "Bundled manual preset, not automatically retrieved at runtime. Live provider pricing takes precedence."
+        },
+        "input_token_limit": {
+          "source": "documentation",
+          "reference": "https://help.aliyun.com/zh/model-studio/qwen3-7-plus",
+          "updated_at": "2026-10-12",
+          "note": "Conservative input limit shared by thinking and non-thinking modes."
         }
-      }
+      },
+      "input_token_limit": 983616,
+      "input_token_limit_source": "catalog"
     },
     {
       "id": "qwen3.6-plus",
@@ -169,8 +193,16 @@
         },
         "billing": {
           "note": "Bundled manual preset, not automatically retrieved at runtime. Live provider pricing takes precedence."
+        },
+        "input_token_limit": {
+          "source": "documentation",
+          "reference": "https://help.aliyun.com/zh/model-studio/qwen3-6-plus",
+          "updated_at": "2026-10-12",
+          "note": "Conservative input limit shared by thinking and non-thinking modes."
         }
-      }
+      },
+      "input_token_limit": 983616,
+      "input_token_limit_source": "catalog"
     },
     {
       "id": "deepseek-v4-pro",
@@ -1089,8 +1121,16 @@
           "reference": "https://help.aliyun.com/zh/model-studio/model-pricing",
           "updated_at": "2026-09-20",
           "note": "Bundled manual preset, not automatically retrieved at runtime. Live provider pricing takes precedence."
+        },
+        "input_token_limit": {
+          "source": "documentation",
+          "reference": "https://help.aliyun.com/zh/model-studio/qwen3-7-flash",
+          "updated_at": "2026-10-12",
+          "note": "Conservative input limit shared by thinking and non-thinking modes."
         }
-      }
+      },
+      "input_token_limit": 983616,
+      "input_token_limit_source": "catalog"
     },
     {
       "id": "kimi-k3",
@@ -1353,8 +1393,16 @@
           "reference": "https://help.aliyun.com/zh/model-studio/model-pricing",
           "updated_at": "2026-09-20",
           "note": "Bundled manual preset, not automatically retrieved at runtime. Live provider pricing takes precedence."
+        },
+        "input_token_limit": {
+          "source": "documentation",
+          "reference": "https://help.aliyun.com/zh/model-studio/qwen3-6-flash",
+          "updated_at": "2026-10-12",
+          "note": "Conservative input limit shared by thinking and non-thinking modes."
         }
-      }
+      },
+      "input_token_limit": 983616,
+      "input_token_limit_source": "catalog"
     },
     {
       "id": "qwen3.8-flash",
@@ -1381,6 +1429,12 @@
           "source": "catalog",
           "reference": "https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions",
           "updated_at": "2026-09-20"
+        },
+        "input_token_limit": {
+          "source": "documentation",
+          "reference": "https://help.aliyun.com/zh/model-studio/qwen3-8-flash",
+          "updated_at": "2026-10-12",
+          "note": "Conservative input limit shared by thinking and non-thinking modes."
         }
       },
       "thinking_control": {
@@ -1390,7 +1444,9 @@
         "budget_default": 131072,
         "supports_off": true,
         "wire": "compat_budget"
-      }
+      },
+      "input_token_limit": 983616,
+      "input_token_limit_source": "catalog"
     },
     {
       "id": "qwen2-5-14b-instruct",
@@ -1827,8 +1883,16 @@
           "reference": "https://help.aliyun.com/zh/model-studio/model-pricing",
           "updated_at": "2026-09-20",
           "note": "Bundled manual preset, not automatically retrieved at runtime. Live provider pricing takes precedence."
+        },
+        "input_token_limit": {
+          "source": "documentation",
+          "reference": "https://help.aliyun.com/zh/model-studio/qwen3-5-plus",
+          "updated_at": "2026-10-12",
+          "note": "Conservative input limit shared by thinking and non-thinking modes."
         }
-      }
+      },
+      "input_token_limit": 983616,
+      "input_token_limit_source": "catalog"
     },
     {
       "id": "qwen-math-plus",
@@ -2076,8 +2140,16 @@
           "source": "catalog",
           "reference": "https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions",
           "updated_at": "2026-09-20"
+        },
+        "input_token_limit": {
+          "source": "documentation",
+          "reference": "https://help.aliyun.com/zh/model-studio/qwen3-8-max",
+          "updated_at": "2026-10-12",
+          "note": "Conservative input limit shared by thinking and non-thinking modes."
         }
-      }
+      },
+      "input_token_limit": 983616,
+      "input_token_limit_source": "catalog"
     },
     {
       "id": "qwen3.8-2.4t-a95b",
