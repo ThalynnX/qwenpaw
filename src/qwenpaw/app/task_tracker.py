@@ -5,6 +5,7 @@
 event buffer. Reconnects get buffer replay + new events. Cleanup when task
 completes.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -46,6 +47,7 @@ class _RunState:
     start_time: Optional[datetime] = None
     finish_time: Optional[datetime] = None
     owner: object | None = None
+    channel_id: str | None = None
 
 
 class TaskTracker:
@@ -137,6 +139,7 @@ class TaskTracker:
     async def snapshot_active_tasks(
         self,
         owner: object | None = None,
+        channel_id: str | None = None,
     ) -> dict[str, asyncio.Future]:
         """Return the currently active tasks without tracking later runs."""
         async with self._lock:
@@ -145,6 +148,7 @@ class TaskTracker:
                 for run_key, state in self._runs.items()
                 if not state.task.done()
                 and (owner is None or state.owner is owner)
+                and (channel_id is None or state.channel_id == channel_id)
             }
 
     async def wait_tasks_done(
@@ -261,6 +265,7 @@ class TaskTracker:
         stream_fn: Callable[[Any], AsyncIterator[str]],
         owner: object | None = None,
         on_finished: Callable[[str, datetime], Awaitable[Any]] | None = None,
+        channel_id: str | None = None,
     ) -> tuple[asyncio.Queue, bool]:
         """Attach to an existing run or start a new one.
 
@@ -281,6 +286,7 @@ class TaskTracker:
                 queues=[my_queue],
                 buffer=[],
                 owner=owner,
+                channel_id=channel_id,
             )
 
             tracker_ref = weakref.ref(self)
