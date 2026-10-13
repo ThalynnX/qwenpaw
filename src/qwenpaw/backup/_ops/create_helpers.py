@@ -25,6 +25,10 @@ from ...constant import CONFIG_FILE, SECRET_DIR, WORKING_DIR
 logger = logging.getLogger(__name__)
 
 
+class BackupCancelled(Exception):
+    """Raised when cooperative cancellation stops archive creation."""
+
+
 def add_agent_workspaces(
     zf: zipfile.ZipFile,
     valid_agents: list[tuple[str, Any]],
@@ -35,7 +39,15 @@ def add_agent_workspaces(
 
     Returns:
         False if stop_event was set (cancelled), True otherwise.
+
+    Raises:
+        BackupCancelled: If cancellation interrupts a history snapshot.
     """
+
+    def check_cancelled() -> None:
+        if stop_event and stop_event.is_set():
+            raise BackupCancelled()
+
     total = len(valid_agents)
     logger.info(
         "Backing up %d agent(s): %s",
@@ -63,10 +75,10 @@ def add_agent_workspaces(
                 for entry in sorted(ws.rglob("*")):
                     if stop_event and stop_event.is_set():
                         return False
-                    if not entry.is_file():
+                    resolved_entry = entry.resolve()
+                    if not entry.is_file() or resolved_entry in sidecars:
                         continue
                     relative = entry.relative_to(ws)
-                    resolved_entry = entry.resolve()
                     if resolved_entry == history_db:
                         # SQLite's backup API captures one consistent point
                         # while the runtime continues writing in WAL mode.
@@ -75,13 +87,15 @@ def add_agent_workspaces(
                         # history.
                         rel = relative.as_posix()
                         arcname = f"{PREFIX_WORKSPACES}{aid}/{rel}"
-                        backup_history_database(entry, history_snapshot)
+                        if not history_snapshot.exists():
+                            backup_history_database(
+                                entry,
+                                history_snapshot,
+                                check_cancelled=check_cancelled,
+                            )
                         zf.write(history_snapshot, arcname)
                         file_count += 1
                         continue
-                    if resolved_entry in sidecars:
-                        continue
-
                     rel = relative.as_posix()
                     arcname = f"{PREFIX_WORKSPACES}{aid}/{rel}"
                     try:

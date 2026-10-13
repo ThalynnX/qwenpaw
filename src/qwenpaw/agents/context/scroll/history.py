@@ -12,7 +12,7 @@ import sqlite3
 import sys
 import threading
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +23,7 @@ from ..types import LogEntry
 logger = logging.getLogger(__name__)
 
 _BUSY_TIMEOUT_MS = 5000
+_BACKUP_TIMEOUT_S = 60.0
 _WRITE_RETRY_DEADLINE_S = 5.0
 _WRITE_RETRY_MIN_S = 0.020
 _WRITE_RETRY_MAX_S = 0.150
@@ -204,8 +205,19 @@ def validate_history_database(db_path: str | Path) -> int:
 def backup_history_database(
     source: str | Path,
     destination: str | Path,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> Path:
-    """Create a verified online snapshot without mutating the source store."""
+    """Create a verified snapshot with bounded, cancellable copying."""
+    deadline = time.monotonic() + _BACKUP_TIMEOUT_S
+
+    def check_progress(_status: int, _remaining: int, _total: int) -> None:
+        if check_cancelled is not None:
+            check_cancelled()
+        if time.monotonic() >= deadline:
+            raise TimeoutError(f"History snapshot timed out: {source}")
+
+    check_progress(0, 0, 0)
     source_path = Path(source).expanduser().resolve()
     if not source_path.is_file():
         raise FileNotFoundError(source_path)
@@ -225,9 +237,15 @@ def backup_history_database(
     )
     snapshot: sqlite3.Connection | None = None
     try:
-        conn.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
+        # Short lock waits let progress checks observe cancellation promptly.
+        conn.execute(f"PRAGMA busy_timeout=100")
         snapshot = sqlite3.connect(str(target))
-        conn.backup(snapshot)
+        conn.backup(
+            snapshot,
+            pages=256,
+            progress=check_progress,
+            sleep=0.05,
+        )
         _validate_history_connection(snapshot)
         return target
     finally:
