@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import i18next, { i18nReady } from "../../i18n";
+import { resolveLocalized } from "../../plugins/registry/types";
 import { BUILTIN_ROUTES } from "./builtinRoutes";
 
 const EXPECTED_ROUTES = [
@@ -54,6 +56,20 @@ describe("BUILTIN_ROUTES", () => {
           /^(rail|context|settings|search-only)$/,
         ),
       });
+    }
+  });
+
+  it("resolves titles with the requested locale", async () => {
+    await i18nReady;
+    const previousLanguage = i18next.language;
+
+    try {
+      await i18next.changeLanguage("zh");
+      const chatRoute = BUILTIN_ROUTES.find(({ id }) => id === "core.chat");
+
+      expect(resolveLocalized(chatRoute?.meta?.title, "en")).toBe("Chat");
+    } finally {
+      await i18next.changeLanguage(previousLanguage);
     }
   });
 });

@@ -83,7 +83,8 @@ function routeMeta(
 ): RouteMeta {
   return {
     domain,
-    title: () => i18next.t(titleKey, fallback),
+    title: (locale) =>
+      i18next.t(titleKey, { defaultValue: fallback, lng: locale }),
     scope,
     layout,
     navigation,
