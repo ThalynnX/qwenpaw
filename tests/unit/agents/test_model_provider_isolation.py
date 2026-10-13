@@ -39,6 +39,7 @@ def test_personal_model_uses_personal_provider_in_hub(monkeypatch):
     monkeypatch.setenv(f"QWENPAW_HUB_MODEL_TOKEN", f"token")
     selected = ModelSlotConfig(provider_id=f"kilo", model=f"qwen")
     provider = Mock(id=f"kilo", enabled=True)
+    provider.for_model.return_value = provider
     provider.get_model_info.return_value = SimpleNamespace(name=f"Qwen 27B")
     model = SimpleNamespace()
     provider.get_chat_model_instance.return_value = model
@@ -101,6 +102,7 @@ def test_runtime_identity_uses_created_model_not_agent_id(tmp_path, name):
 def test_org_model_keeps_routing_id_and_separate_identity():
     selected = ModelSlotConfig(provider_id=f"hub-managed", model=f"opaque-id")
     provider = Mock()
+    provider.for_model.return_value = provider
     provider.get_model_info.return_value = SimpleNamespace(name=f"Org Qwen")
     model = SimpleNamespace()
     provider.get_chat_model_instance.return_value = model

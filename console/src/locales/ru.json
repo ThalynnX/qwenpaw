@@ -1887,6 +1887,12 @@
     "searchCandidates": "Search candidate models..."
   },
   "models": {
+    "modelType": "Тип модели",
+    "modelTypeChat": "Чат",
+    "modelTypeDecision": "Решения",
+    "modelBaseUrl": "URL API модели (необязательно)",
+    "modelBaseUrlHint": "Оставьте пустым для использования URL провайдера",
+    "decisionModelHint": "Возвращает выбор, оценку или ответ да/нет для функций автоматизации.",
     "discoveryOriginApi": "Обнаружено через API",
     "discoveryOriginCatalog": "Официальный каталог",
     "discoveryOriginBoth": "API + каталог",

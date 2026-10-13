@@ -7,6 +7,7 @@ import { ThinkingCapabilityFields } from "./ThinkingCapabilityFields";
 import type { ThinkingControlSpec } from "@/features/thinking/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Switch } from "@agentscope-ai/design";
+import { Input, Select } from "antd";
 import type { ModelInfo, ProviderInfo } from "../../../../../api/types";
 import api from "../../../../../api";
 import { useTranslation } from "react-i18next";
@@ -55,6 +56,11 @@ export function ModelConfigEditor({
   const { t } = useTranslation();
   const { message } = useAppMessage();
   const [saving, setSaving] = useState(false);
+  const [modelType, setModelType] = useState<"chat" | "decision">(
+    model.model_type ?? "chat",
+  );
+  const [baseUrl, setBaseUrl] = useState(model.base_url ?? "");
+  const isDecision = modelType === "decision";
   const [thinkingDeclaration, setThinkingDeclaration] = useState<
     ThinkingControlSpec | null | undefined
   >();
@@ -94,6 +100,8 @@ export function ModelConfigEditor({
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
+    setModelType(model.model_type ?? "chat");
+    setBaseUrl(model.base_url ?? "");
     setCapabilities({});
     setThinkingDeclaration(undefined);
     setText(initialText);
@@ -106,6 +114,8 @@ export function ModelConfigEditor({
     setReasoningEffort(model.reasoning_effort ?? null);
     setDirty(false);
   }, [
+    model.model_type,
+    model.base_url,
     initialText,
     configuredMaxTokens,
     resolvedContext,
@@ -137,7 +147,7 @@ export function ModelConfigEditor({
   const handleSave = async () => {
     const trimmed = text.trim();
     let parsed: Record<string, unknown> = {};
-    if (trimmed) {
+    if (!isDecision && trimmed) {
       try {
         const obj = JSON.parse(trimmed);
         if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
@@ -151,23 +161,35 @@ export function ModelConfigEditor({
         return;
       }
     }
-    if (maxTokens !== null) {
+    if (!isDecision && maxTokens !== null) {
       parsed.max_tokens = maxTokens;
     }
 
     setSaving(true);
     try {
       const updated = await api.configureModel(providerId, model.id, {
-        ...capabilities,
-        ...(thinkingDeclaration !== undefined
-          ? { thinking_control: thinkingDeclaration }
+        ...(modelType !== (model.model_type ?? "chat")
+          ? { model_type: modelType }
           : {}),
-        ...(maxInputLengthDirty ? { max_input_length: maxInputLength } : {}),
-        generate_kwargs: parsed,
-        relay_reasoning: relayReasoning,
-        thinking_enabled: thinkingEnabled,
-        thinking_budget: thinkingBudget,
-        reasoning_effort: reasoningEffort,
+        ...(baseUrl !== (model.base_url ?? "")
+          ? { base_url: baseUrl.trim() || null }
+          : {}),
+        ...(!isDecision
+          ? {
+              ...capabilities,
+              ...(thinkingDeclaration !== undefined
+                ? { thinking_control: thinkingDeclaration }
+                : {}),
+              ...(maxInputLengthDirty
+                ? { max_input_length: maxInputLength }
+                : {}),
+              generate_kwargs: parsed,
+              relay_reasoning: relayReasoning,
+              thinking_enabled: thinkingEnabled,
+              thinking_budget: thinkingBudget,
+              reasoning_effort: reasoningEffort,
+            }
+          : {}),
       });
       message.success(t("models.modelConfigSaved", { name: model.name }));
       setDirty(false);
@@ -189,130 +211,176 @@ export function ModelConfigEditor({
   return (
     <div className={styles.editor}>
       <InteractiveCard as="section" tilt={0} className={styles.capabilities}>
-        <ModelCapabilitiesFields
-          model={model}
-          changes={capabilities}
+        <label>{t("models.modelType")}</label>
+        <Select
+          aria-label={t("models.modelType")}
+          style={{ width: "100%", marginBottom: 12 }}
+          value={modelType}
+          disabled={model.source === "builtin"}
+          options={[
+            { value: "chat", label: t("models.modelTypeChat") },
+            { value: "decision", label: t("models.modelTypeDecision") },
+          ]}
           onChange={(value) => {
-            setCapabilities(value);
+            setModelType(value);
             setDirty(true);
           }}
         />
+        <label>{t("models.modelBaseUrl")}</label>
+        <Input
+          aria-label={t("models.modelBaseUrl")}
+          placeholder={t("models.modelBaseUrlHint")}
+          value={baseUrl}
+          onChange={(event) => {
+            setBaseUrl(event.target.value);
+            setDirty(true);
+          }}
+        />
+        {isDecision && <p>{t("models.decisionModelHint")}</p>}
       </InteractiveCard>
-      <div className={styles.basics}>
-        <InteractiveCard as="section" tilt={0} className={styles.limits}>
-          <OutputTokenLimitField
-            value={maxTokens}
-            onChange={handleMaxTokensChange}
-            model={model}
-            chatModel={chatModel}
-          />
-          <ContextLengthField
-            value={effectiveMaxInputLength}
-            onChange={handleMaxInputLengthChange}
-            source={
-              maxInputLengthDirty && maxInputLength !== null
-                ? "user"
-                : maxInputLength === null
-                ? "automatic"
-                : model.context_length_source
-            }
-            onReset={
-              model.max_input_length_configured ||
-              (maxInputLengthDirty && maxInputLength !== null)
-                ? () => handleMaxInputLengthChange(null)
-                : undefined
-            }
-          />
-        </InteractiveCard>
-        {(model.thinking_control || thinkingParamStyle) && (
-          <InteractiveCard as="section" tilt={0} className={styles.thinking}>
-            <ThinkingControl
-              tone="quiet"
-              control={
-                model.thinking_control ?? {
-                  kind: thinkingParamStyle === "budget" ? "budget" : "effort",
-                  supports_off: true,
-                  efforts: (
-                    reasoningEffortOptions ?? ["low", "medium", "high"]
-                  ).filter((v) => v !== "none") as ThinkingLevel[],
-                  budget_min: thinkingBudgetRange[0],
-                  budget_max: thinkingBudgetRange[1],
-                }
-              }
-              value={
-                thinkingEnabled === false || reasoningEffort === "none"
-                  ? { level: "off" }
-                  : thinkingBudget != null
-                  ? { level: "budget", budget_tokens: thinkingBudget }
-                  : { level: (reasoningEffort || "inherit") as ThinkingLevel }
-              }
-              onChange={(next) => {
-                setThinkingEnabled(
-                  next.level === "inherit" ? null : next.level !== "off",
-                );
-                setThinkingBudget(
-                  next.level === "budget" ? next.budget_tokens ?? null : null,
-                );
-                setReasoningEffort(
-                  next.level !== "inherit" &&
-                    next.level !== "off" &&
-                    next.level !== "budget"
-                    ? next.level
-                    : null,
-                );
+      {!isDecision && (
+        <>
+          <InteractiveCard
+            as="section"
+            tilt={0}
+            className={styles.capabilities}
+          >
+            <ModelCapabilitiesFields
+              model={model}
+              changes={capabilities}
+              onChange={(value) => {
+                setCapabilities(value);
                 setDirty(true);
               }}
             />
           </InteractiveCard>
-        )}
-      </div>
-      <InteractiveCard tilt={0} className={styles.advanced}>
-        <details>
-          <summary>{t("common.advancedSettings")}</summary>
-          <ThinkingCapabilityFields
-            value={
-              thinkingDeclaration === undefined
-                ? model.thinking_control
-                : thinkingDeclaration
-            }
-            onChange={(next) => {
-              setThinkingDeclaration(next);
-              setDirty(true);
-            }}
-          />
-
-          {/* Responses API models handle reasoning via native reasoning items
-         that the API requires to be echoed back; relay_reasoning has no
-         effect, so hide the toggle to avoid confusion. */}
-          {chatModel !== "OpenAIResponseModel" && (
-            <div className={styles.settingRow}>
-              <div>
-                <span className={styles.settingLabel}>
-                  {t("models.relayReasoningLabel")}
-                </span>
-                <InlineHelp>{t("models.relayReasoningHint")}</InlineHelp>
-              </div>
-              <Switch
-                checked={relayReasoning}
-                onChange={(checked) => {
-                  setRelayReasoning(checked);
+          <div className={styles.basics}>
+            <InteractiveCard as="section" tilt={0} className={styles.limits}>
+              <OutputTokenLimitField
+                value={maxTokens}
+                onChange={handleMaxTokensChange}
+                model={model}
+                chatModel={chatModel}
+              />
+              <ContextLengthField
+                value={effectiveMaxInputLength}
+                onChange={handleMaxInputLengthChange}
+                source={
+                  maxInputLengthDirty && maxInputLength !== null
+                    ? "user"
+                    : maxInputLength === null
+                    ? "automatic"
+                    : model.context_length_source
+                }
+                onReset={
+                  model.max_input_length_configured ||
+                  (maxInputLengthDirty && maxInputLength !== null)
+                    ? () => handleMaxInputLengthChange(null)
+                    : undefined
+                }
+              />
+            </InteractiveCard>
+            {(model.thinking_control || thinkingParamStyle) && (
+              <InteractiveCard
+                as="section"
+                tilt={0}
+                className={styles.thinking}
+              >
+                <ThinkingControl
+                  tone="quiet"
+                  control={
+                    model.thinking_control ?? {
+                      kind:
+                        thinkingParamStyle === "budget" ? "budget" : "effort",
+                      supports_off: true,
+                      efforts: (
+                        reasoningEffortOptions ?? ["low", "medium", "high"]
+                      ).filter((v) => v !== "none") as ThinkingLevel[],
+                      budget_min: thinkingBudgetRange[0],
+                      budget_max: thinkingBudgetRange[1],
+                    }
+                  }
+                  value={
+                    thinkingEnabled === false || reasoningEffort === "none"
+                      ? { level: "off" }
+                      : thinkingBudget != null
+                      ? { level: "budget", budget_tokens: thinkingBudget }
+                      : {
+                          level: (reasoningEffort ||
+                            "inherit") as ThinkingLevel,
+                        }
+                  }
+                  onChange={(next) => {
+                    setThinkingEnabled(
+                      next.level === "inherit" ? null : next.level !== "off",
+                    );
+                    setThinkingBudget(
+                      next.level === "budget"
+                        ? next.budget_tokens ?? null
+                        : null,
+                    );
+                    setReasoningEffort(
+                      next.level !== "inherit" &&
+                        next.level !== "off" &&
+                        next.level !== "budget"
+                        ? next.level
+                        : null,
+                    );
+                    setDirty(true);
+                  }}
+                />
+              </InteractiveCard>
+            )}
+          </div>
+          <InteractiveCard tilt={0} className={styles.advanced}>
+            <details>
+              <summary>{t("common.advancedSettings")}</summary>
+              <ThinkingCapabilityFields
+                value={
+                  thinkingDeclaration === undefined
+                    ? model.thinking_control
+                    : thinkingDeclaration
+                }
+                onChange={(next) => {
+                  setThinkingDeclaration(next);
                   setDirty(true);
                 }}
               />
-            </div>
-          )}
 
-          <div className={styles.jsonHeading}>
-            <span>JSON</span>
-            <InlineHelp>{t("models.modelGenerateConfigHint")}</InlineHelp>
-          </div>
-          <JsonConfigEditor
-            value={text}
-            onChange={handleChange}
-            placeholder="{}"
-          />
-        </details>
-      </InteractiveCard>
+              {/* Responses API models handle reasoning via native reasoning items
+         that the API requires to be echoed back; relay_reasoning has no
+         effect, so hide the toggle to avoid confusion. */}
+              {chatModel !== "OpenAIResponseModel" && (
+                <div className={styles.settingRow}>
+                  <div>
+                    <span className={styles.settingLabel}>
+                      {t("models.relayReasoningLabel")}
+                    </span>
+                    <InlineHelp>{t("models.relayReasoningHint")}</InlineHelp>
+                  </div>
+                  <Switch
+                    checked={relayReasoning}
+                    onChange={(checked) => {
+                      setRelayReasoning(checked);
+                      setDirty(true);
+                    }}
+                  />
+                </div>
+              )}
+
+              <div className={styles.jsonHeading}>
+                <span>JSON</span>
+                <InlineHelp>{t("models.modelGenerateConfigHint")}</InlineHelp>
+              </div>
+              <JsonConfigEditor
+                value={text}
+                onChange={handleChange}
+                placeholder="{}"
+              />
+            </details>
+          </InteractiveCard>
+        </>
+      )}
       <div className={styles.actions}>
         <Button
           type="primary"

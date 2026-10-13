@@ -60,6 +60,20 @@ describe("modelSelectorModels (#5784 压缩阈值跨 provider 校验)", () => {
   });
 
   describe("buildEligibleProviders", () => {
+    it("filters decision models within mixed providers and excludes decision-only services", () => {
+      const decision = {
+        ...makeModel("decision", 32768),
+        model_type: "decision" as const,
+      };
+      const providers = [
+        makeProvider({ models: [makeModel("chat", 32768), decision] }),
+        makeProvider({ id: "typesafe", chat_model: "", models: [decision] }),
+      ];
+      const eligible = buildEligibleProviders(providers);
+      expect(eligible).toHaveLength(1);
+      expect(eligible[0].models.map((model) => model.id)).toEqual(["chat"]);
+    });
+
     it("两个 provider 有同名 model 时，各自保留自己的 max_input_length", () => {
       const sharedModelId = "shared-model";
       const providers: ProviderInfo[] = [

@@ -12,8 +12,18 @@ interface ModelsSectionProps {
   providers: Array<{
     id: string;
     name: string;
-    models?: Array<{ id: string; name: string; is_free?: boolean }>;
-    extra_models?: Array<{ id: string; name: string; is_free?: boolean }>;
+    models?: Array<{
+      id: string;
+      name: string;
+      is_free?: boolean;
+      model_type?: string;
+    }>;
+    extra_models?: Array<{
+      id: string;
+      name: string;
+      is_free?: boolean;
+      model_type?: string;
+    }>;
     base_url?: string;
     api_key?: string;
     is_custom: boolean;
@@ -50,8 +60,9 @@ export const ModelsSection = React.memo(function ModelsSection({
   const eligible = useMemo(
     () =>
       providers.filter((p) => {
-        const hasModels =
-          (p.models?.length ?? 0) + (p.extra_models?.length ?? 0) > 0;
+        const hasModels = [...(p.models ?? []), ...(p.extra_models ?? [])].some(
+          (model) => model.model_type !== "decision",
+        );
         if (!hasModels) return false;
         if (p.id === "hub-managed") return true;
         if (p.require_api_key === false) return !!p.base_url;
@@ -74,7 +85,7 @@ export const ModelsSection = React.memo(function ModelsSection({
   const modelOptions = [
     ...(chosenProvider?.models ?? []),
     ...(chosenProvider?.extra_models ?? []),
-  ];
+  ].filter((model) => model.model_type !== "decision");
   const hasModels = modelOptions.length > 0;
 
   const handleProviderChange = (pid: string) => {

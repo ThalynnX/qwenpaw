@@ -2524,6 +2524,12 @@
     "retry": "Retry"
   },
   "models": {
+    "modelType": "Model type",
+    "modelTypeChat": "Chat",
+    "modelTypeDecision": "Decision",
+    "modelBaseUrl": "Model API URL (optional)",
+    "modelBaseUrlHint": "Leave blank to use the provider URL",
+    "decisionModelHint": "Returns choices, scores or yes/no judgments for automation features.",
     "connectProviderTitle": "Connect your first model",
     "cardStatus": {
       "configured": "Configured",

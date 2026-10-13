@@ -53,9 +53,11 @@ export function buildEligibleProviders(
   return providers
     .filter((provider) => {
       if (provider.enabled === false) return false;
-      const hasModels =
-        (provider.models?.length ?? 0) + (provider.extra_models?.length ?? 0) >
-        0;
+      const hasModels = [
+        ...(provider.models ?? []),
+        ...(provider.extra_models ?? []),
+      ].some((model) => model.model_type !== "decision");
+      if (!hasModels && provider.chat_model === "") return false;
       if (provider.id === "hub-managed") return true;
       if (provider.is_free_tier) return true;
       if (!hasModels) return false;
@@ -67,7 +69,10 @@ export function buildEligibleProviders(
     .map((provider) => ({
       id: provider.id,
       name: provider.name,
-      models: [...(provider.models ?? []), ...(provider.extra_models ?? [])],
+      models: [
+        ...(provider.models ?? []),
+        ...(provider.extra_models ?? []),
+      ].filter((model) => model.model_type !== "decision"),
       is_free_tier: provider.is_free_tier,
       is_custom: provider.is_custom,
       is_local: provider.is_local,
@@ -94,6 +99,7 @@ export function buildDiscoveryCandidates(
       (provider.discovered_models ?? [])
         .filter(
           (model) =>
+            model.model_type !== "decision" &&
             !configured.has(modelKey(provider.id, model.id)) &&
             !(provider.hidden_model_ids ?? []).includes(model.id),
         )
@@ -109,7 +115,9 @@ export function buildHiddenCandidates(
     .flatMap((provider) => {
       const hidden = new Set(provider.hidden_model_ids ?? []);
       return (provider.discovered_models ?? [])
-        .filter((model) => hidden.has(model.id))
+        .filter(
+          (model) => model.model_type !== "decision" && hidden.has(model.id),
+        )
         .map((model) => ({ provider, model }));
     });
 }

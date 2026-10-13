@@ -20,6 +20,37 @@ QwenPaw Local (llama.cpp) is built into QwenPaw and does not require additional 
 
 QwenPaw also provides the QwenPaw-Flash series for local deployment. It includes 2B, 4B, and 9B variants, with original, 4-bit, and 8-bit versions for different VRAM and performance requirements. These models are open-sourced on [ModelScope](https://www.modelscope.cn/organization/AgentScope?tab=model) and [Hugging Face](https://huggingface.co/agentscope-ai/models). The following sections explain how to use QwenPaw-Flash with each local provider.
 
+## Decision Models
+
+Each model has a **Chat** or **Decision** type. Both types can belong to the same provider; existing configurations default to Chat. Decision models consume structured state and questions and return choices, scores, or probabilities. They cannot fill default chat, subagent, or fallback chat slots.
+
+- **TypeSafe / JEV**: configure the TypeSafe provider's API key and select `jev-latest`, or manually add an authorized model version. The default API base URL is `https://api.typesafe.ai/v1`.
+- **DashScope**: add `decision-model-preview` and set its model-specific API URL, for example `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1`. Replace `{WorkspaceId}` with your workspace ID and use the region and endpoint shown in the service console. Other models retain the provider URL; all models use the provider's API key.
+
+You can set the type and an optional API URL when adding or configuring a model. An empty URL inherits the provider URL. Connection tests use the appropriate API for the model's type; tests in the add dialog do not save the draft. Decision models hide chat generation settings and are excluded from chat selectors.
+
+The initial adapter supports System One `choice`, `score`, and `noul` questions. Automatic tool selection is not enabled by configuration. Callers select an explicit provider and model and own confidence thresholds and failure fallback policies:
+
+```python
+from qwenpaw.providers.provider_manager import ProviderManager
+from qwenpaw.providers.systemone_model import ChoiceQuestion
+
+manager = ProviderManager.get_instance()
+async with manager.create_decision_model("typesafe", "jev-latest") as model:
+    result = await model.evaluate(
+        state={"request": "Find an earlier discussion"},
+        questions={
+            "tool": ChoiceQuestion(
+                instructions="Select the most suitable tool",
+                criteria={"memory": "Search discussions", "none": "No tool"},
+            ),
+        },
+        timeout=10,
+    )
+```
+
+The task-scoped async client supports cancellation and a total deadline, retries a 429 or server error at most once, and validates answer IDs, types, and probabilities. It preserves confidence separately from probabilities. See the [TypeSafe API](https://docs.typesafe.ai/api) and [DashScope decision API](https://help.aliyun.com/zh/model-studio/decision-model-api).
+
 ## QwenPaw Local (llama.cpp) Configuration
 
 > QwenPaw Local is currently still in the testing phase, and there may be issues with stability and GPU compatibility. If you are looking for a more stable local model experience or need GPU acceleration, it is recommended to use Ollama or LM Studio as your local model provider in the short term.

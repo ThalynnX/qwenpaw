@@ -46,6 +46,7 @@ vi.mock("@agentscope-ai/design", async (original) => {
   return {
     ...actual,
     Form: antd.Form,
+    Button: antd.Button,
     Input: antd.Input,
     Modal: ({
       open,
@@ -490,5 +491,33 @@ describe("model pool switches", () => {
     await render();
     fireEvent.click(screen.getByText("models.addModel"));
     expect(screen.getAllByRole("dialog")).toHaveLength(2);
+  });
+  it("tests a decision model draft without saving it", async () => {
+    const user = userEvent.setup();
+    api.testModelConnection.mockResolvedValue({ success: true });
+    await render({ chat_model: "" });
+    await user.click(screen.getByText("models.addModel"));
+    const dialog = within(screen.getAllByRole("dialog")[1]);
+    await user.type(dialog.getByLabelText("models.modelIdLabel"), "jev-latest");
+    await user.type(
+      dialog.getByLabelText("models.modelBaseUrl"),
+      "https://decision.example/v1",
+    );
+    await user.click(
+      dialog.getByRole("button", { name: "models.testConnection" }),
+    );
+    await waitFor(() => {
+      expect(message.error.mock.calls).toEqual([]);
+      expect(api.testModelConnection).toHaveBeenCalledOnce();
+    });
+    await waitFor(() =>
+      expect(api.testModelConnection).toHaveBeenCalledWith("openrouter", {
+        model_id: "jev-latest",
+        model_type: "decision",
+        base_url: "https://decision.example/v1",
+      }),
+    );
+    expect(api.addModel).not.toHaveBeenCalled();
+    expect(dialog.queryByText("preview")).not.toBeInTheDocument();
   });
 });

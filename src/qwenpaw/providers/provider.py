@@ -361,6 +361,27 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
     async def close(self) -> None:
         """Release resources owned by this runtime provider instance."""
 
+    def for_model(
+        self,
+        model_id: str,
+        *,
+        model_type: Literal["chat", "decision"] = "chat",
+    ) -> Provider:
+        """Resolve model-specific routing without mutating shared settings."""
+        model = self.get_model_info(model_id)
+        if model is None:
+            model = self.get_discovered_model_info(model_id)
+        if model is not None and model.model_type != model_type:
+            raise ProviderError(
+                message=f"Model '{model_id}' is not a {model_type} model",
+                details={"error_kind": "unsupported_model_type"},
+            )
+        if model is not None and model.base_url:
+            snapshot = self.configuration_snapshot()
+            snapshot.base_url = model.base_url
+            return snapshot
+        return self
+
     def model_protocol(self, model_id: str) -> str:
         """Return this service's protocol for one model."""
         del model_id
@@ -708,17 +729,23 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
                     ordered_ids.append(model.id)
                 by_id[model.id] = model
         for configured in self.models:
-            if configured.id in by_id and getattr(
-                configured,
-                f"config_overrides",
-                [],
-            ):
+            if configured.id in by_id:
                 overrides = {
                     field: getattr(configured, field)
-                    for field in configured.config_overrides
+                    for field in getattr(configured, "config_overrides", [])
                     if field in ModelInfo.model_fields
                 }
-                overrides[f"config_overrides"] = configured.config_overrides
+                overrides["model_type"] = getattr(
+                    configured,
+                    "model_type",
+                    "chat",
+                )
+                overrides["base_url"] = getattr(configured, "base_url", None)
+                overrides[f"config_overrides"] = getattr(
+                    configured,
+                    "config_overrides",
+                    [],
+                )
                 by_id[configured.id] = by_id[configured.id].model_copy(
                     update=overrides,
                 )
@@ -1081,6 +1108,13 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
         for model in Provider.all_models(self) + self.discovered_models:
             if model.id == model_id:
                 changed_fields: list[str] = []
+                for field in ("model_type", "base_url"):
+                    if field in config:
+                        validated = ModelInfo.model_validate(
+                            {**model.model_dump(), field: config[field]},
+                        )
+                        setattr(model, field, getattr(validated, field))
+                        changed_fields.append(field)
                 for field in (
                     f"supports_image",
                     f"supports_video",
@@ -1350,10 +1384,12 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
         """Alias of :meth:`get_context_size` kept for provider internals."""
         return self.get_context_size(model_id)
 
-    @abstractmethod
     def get_chat_model_instance(self, model_id: str) -> ChatModelBase:
         """Return an instance of the chat model associated with this
         provider and model_id."""
+        raise ProviderError(
+            message=f"Provider '{self.id}' has no chat model adapter",
+        )
 
     async def probe_model_multimodal(
         self,

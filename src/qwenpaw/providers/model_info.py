@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Literal
+from typing import Annotated, Any, Dict, List, Literal
+from urllib.parse import urlsplit
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AfterValidator, BaseModel, Field, model_validator
 
 from .context_windows import DEFAULT_CONTEXT_WINDOW
 from .model_ranking import RankingEvidence
@@ -31,9 +32,33 @@ def release_date(value: Any) -> str | None:
         return None
 
 
+def normalize_model_base_url(value: str | None) -> str | None:
+    """Normalize an optional HTTP endpoint before it can be persisted."""
+    if value is None or not value.strip():
+        return None
+    value = value.strip().rstrip("/")
+    url = urlsplit(value)
+    if (
+        url.scheme not in {"http", "https"}
+        or not url.hostname
+        or any((url.username, url.password, url.query, url.fragment))
+    ):
+        raise ValueError("Model Base URL must be an HTTP endpoint")
+    return value
+
+
+ModelBaseUrl = Annotated[str | None, AfterValidator(normalize_model_base_url)]
+
+
 class ModelInfo(BaseModel):
     id: str = Field(..., description="Model identifier used in API calls")
     name: str = Field(..., description="Human-readable model name")
+    model_type: Literal["chat", "decision"] = "chat"
+    base_url: ModelBaseUrl = Field(
+        default=None,
+        description="Optional model endpoint overriding the provider URL.",
+    )
+
     released_at: str | None = Field(
         default=None,
         description=f"Documented model release or creation date.",

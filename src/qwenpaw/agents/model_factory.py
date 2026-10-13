@@ -2182,7 +2182,9 @@ def _apply_model_fallbacks(
         # from being built: skip the slot instead of propagating.
         try:
             with agent_thinking_level(thinking_level, thinking_budget):
-                fallback_model = fallback_provider.get_chat_model_instance(
+                fallback_model = fallback_provider.for_model(
+                    fallback_slot.model,
+                ).get_chat_model_instance(
                     fallback_slot.model,
                 )
             fallback_provider_id = _bind_provider_id_to_model(
@@ -2242,7 +2244,9 @@ def _create_hub_model_and_formatter(settings, model_slot, *, explicit):
         settings.thinking_level,
         settings.thinking_budget,
     ):
-        model = provider.get_chat_model_instance(selected.model)
+        model = provider.for_model(selected.model).get_chat_model_instance(
+            selected.model,
+        )
     _ensure_model_context_size(model, provider, selected.model)
     formatter = _install_model_formatter(
         model,
@@ -2325,7 +2329,9 @@ def create_model_and_formatter(
         settings.thinking_level,
         settings.thinking_budget,
     ):
-        model = provider.get_chat_model_instance(model_slot.model)
+        model = provider.for_model(model_slot.model).get_chat_model_instance(
+            model_slot.model,
+        )
     provider_id = _resolved_provider_id(provider, model_slot.provider_id)
     selected_model_id = model_slot.model
 

@@ -9,7 +9,7 @@ import asyncio
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, TYPE_CHECKING
 
 from agentscope.model import ChatModelBase
 
@@ -58,6 +58,9 @@ from .provider_update_fields import (
 )
 from .plugin_provider_registry import PluginProviderRegistry
 from .provider_annotations import ProviderAnnotationService
+
+if TYPE_CHECKING:
+    from .systemone_model import SystemOneDecisionModel
 
 logger = logging.getLogger(__name__)
 
@@ -184,6 +187,14 @@ class ProviderManager(
                     model.model_copy(deep=True)
                     for model in catalog.get(catalog_key, builtin.models)
                 ]
+            for declared in provider.models:
+                if declared.model_type != "decision":
+                    continue
+                existing = builtin.get_model_info(declared.id)
+                if existing is None:
+                    builtin.models.append(declared.model_copy(deep=True))
+                else:
+                    existing.model_type = "decision"
             self._add_builtin(builtin)
 
     def _add_builtin(self, provider: Provider):
@@ -629,6 +640,7 @@ class ProviderManager(
                 details={"provider_id": provider_id, "model_id": model_id},
             )
         model_info = provider.get_model_info(model_id)
+        provider.for_model(model_id)
         if model_info and model_info.availability_status in {
             "permission_denied",
             "model_not_found",
@@ -763,6 +775,11 @@ class ProviderManager(
                     payload[field] = getattr(requested_model, field)
                 requested_model = ModelInfo.model_validate(payload)
 
+            await self._validate_model_type_change(
+                candidate,
+                requested_model.id,
+                {"model_type": requested_model.model_type},
+            )
             added, error_message = await candidate.add_model(requested_model)
             if not added:
                 raise ProviderError(
@@ -1025,6 +1042,11 @@ class ProviderManager(
                     candidate.discovered_models.append(
                         card.model_copy(deep=True),
                     )
+            await self._validate_model_type_change(
+                candidate,
+                model_id,
+                config_snapshot,
+            )
             if not candidate.update_model_config(model_id, config_snapshot):
                 raise ModelNotFoundException(
                     model_name=f"{provider_id}/{model_id}",
@@ -1088,7 +1110,9 @@ class ProviderManager(
             return {"error": f"Provider '{provider_id}' not found"}
 
         async def probe_model(candidate: Provider) -> Any:
-            probe_result = await candidate.probe_model_multimodal(
+            probe_result = await candidate.for_model(
+                model_id,
+            ).probe_model_multimodal(
                 model_id,
                 image_only=image_only,
             )
@@ -1250,6 +1274,105 @@ class ProviderManager(
             ProviderManager._instance = ProviderManager()
         return ProviderManager._instance
 
+    async def _validate_model_type_change(
+        self,
+        provider: Provider,
+        model_id: str,
+        config: dict,
+    ) -> None:
+        old = provider.get_model_info(model_id)
+        if (
+            old is None
+            or "model_type" not in config
+            or config["model_type"] == old.model_type
+        ):
+            return
+        if old.source == "builtin":
+            raise ProviderError(
+                message="Built-in model types cannot be changed",
+            )
+        if config["model_type"] == "decision":
+            await run_sync_io(
+                self._check_chat_model_references,
+                provider.id,
+                model_id,
+            )
+
+    def _check_chat_model_references(self, provider_id: str, model_id: str):
+        """Reject type changes while a stored chat slot uses the model."""
+        from ..config.config import load_agent_config
+        from ..config.utils import load_config
+
+        def references(slot):
+            return slot and (
+                self._normalize_provider_id(slot.provider_id) == provider_id
+                and slot.model == model_id
+            )
+
+        if references(self.get_active_model()):
+            raise ProviderError(
+                message=(
+                    "Switch the default chat model before changing its type"
+                ),
+                details={"error_kind": "model_in_use"},
+            )
+        for agent_id in load_config().agents.profiles:
+            config = load_agent_config(agent_id)
+            if config.backend != "qwenpaw":
+                continue
+            slots = [
+                config.active_model,
+                config.subagent_model,
+                *config.fallback_models,
+                config.llm_routing.local,
+                config.llm_routing.cloud,
+            ]
+            if any(references(slot) for slot in slots):
+                raise ProviderError(
+                    message=(
+                        f"Switch the chat model for agent '{agent_id}' "
+                        "before changing its type"
+                    ),
+                    details={"error_kind": "model_in_use"},
+                )
+
+    def create_chat_model(
+        self,
+        provider_id: str,
+        model_id: str,
+    ) -> ChatModelBase:
+        """Create a chat adapter using the model's effective endpoint."""
+        provider = self.get_provider(provider_id)
+        if provider is None:
+            raise ProviderError(message=f"Provider '{provider_id}' not found")
+        return provider.for_model(model_id).get_chat_model_instance(model_id)
+
+    def create_decision_model(
+        self,
+        provider_id: str,
+        model_id: str,
+    ) -> "SystemOneDecisionModel":
+        """Resolve an explicit model reference to a task-scoped adapter."""
+        from .systemone_model import SystemOneDecisionModel
+
+        provider = self.get_provider(provider_id)
+        if provider is None:
+            raise ProviderError(message=f"Provider '{provider_id}' not found")
+        if not provider.enabled:
+            raise ProviderError(message="Provider is disabled")
+        if not provider.has_model(model_id):
+            raise ModelNotFoundException(
+                model_name=f"{provider_id}/{model_id}",
+            )
+        resolved = provider.for_model(model_id, model_type="decision")
+        resolved.check_model_billing(model_id)
+        return SystemOneDecisionModel(
+            model=model_id,
+            base_url=resolved.base_url,
+            api_key=resolved.api_key,
+            headers=resolved.custom_headers,
+        )
+
     @staticmethod
     def get_active_chat_model() -> ChatModelBase:
         """Get the currently active provider/model configuration."""
@@ -1266,4 +1389,4 @@ class ProviderManager(
             )
         if not provider.enabled:
             raise ProviderError(message=f"Provider is disabled")
-        return provider.get_chat_model_instance(model.model)
+        return manager.create_chat_model(model.provider_id, model.model)

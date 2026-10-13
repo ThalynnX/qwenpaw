@@ -56,6 +56,9 @@ class _FakeProvider(SimpleNamespace):
         """Return the stub's already configured model information."""
         return self.get_model_info(model_id)
 
+    def for_model(self, _model_id):
+        return self
+
 
 def _patched_load_agent_config(_agent_id):  # noqa: ARG001
     """Return fake agent config with an overridable active model."""
@@ -775,7 +778,7 @@ def test_invalid_fallback_slots_are_skipped(monkeypatch):
                 _FakeChatModel(f"default-provider/{model_name}")
             ),
         ),
-        "known-provider": SimpleNamespace(
+        "known-provider": _FakeProvider(
             enabled=True,
             get_model_info=lambda _model_name: None,
         ),

@@ -120,6 +120,13 @@ export function CapabilityTags({
   iconOnly?: boolean;
 }) {
   const { t } = useTranslation();
+  if (model.model_type === "decision") {
+    return (
+      <CapabilityTag icon={Boxes} iconOnly={iconOnly}>
+        {t("models.modelTypeDecision")}
+      </CapabilityTag>
+    );
+  }
   const modalities = [
     model.supports_image,
     model.supports_audio,

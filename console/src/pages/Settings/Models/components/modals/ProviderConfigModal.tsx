@@ -471,7 +471,9 @@ export function ProviderConfigModal({
         api_key: undefined,
         name: provider.name,
         base_url: provider.base_url || undefined,
-        chat_model: provider.chat_model || "OpenAIChatModel",
+        chat_model:
+          provider.chat_model ||
+          (provider.is_custom ? "OpenAIChatModel" : undefined),
         generate_kwargs_text:
           provider.generate_kwargs &&
           Object.keys(provider.generate_kwargs).length > 0
@@ -536,7 +538,11 @@ export function ProviderConfigModal({
         name: provider.is_custom ? values.name?.trim() : undefined,
         base_url: values.base_url,
         chat_model: values.chat_model,
-        generate_kwargs: hasGenerateConfigInput ? generateConfig : {},
+        generate_kwargs: provider.chat_model
+          ? hasGenerateConfigInput
+            ? generateConfig
+            : {}
+          : undefined,
         custom_headers: headersObj,
         auth_mode: isAnthropicProvider ? authMode : undefined,
       });
@@ -684,7 +690,9 @@ export function ProviderConfigModal({
           enabled: provider.enabled !== false,
           name: provider.name,
           base_url: provider.base_url || undefined,
-          chat_model: provider.chat_model || "OpenAIChatModel",
+          chat_model:
+            provider.chat_model ||
+            (provider.is_custom ? "OpenAIChatModel" : undefined),
           generate_kwargs_text:
             provider.generate_kwargs &&
             Object.keys(provider.generate_kwargs).length > 0
@@ -862,7 +870,7 @@ export function ProviderConfigModal({
           )}
 
           <Form.Item
-            hidden={!advancedOpen}
+            hidden={!advancedOpen || !provider.chat_model}
             name="generate_kwargs_text"
             label={t("models.generateConfig")}
             extra={t("models.generateConfigHint")}

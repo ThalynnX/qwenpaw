@@ -5,6 +5,7 @@ The ProviderManager singleton, local-model manager and every interactive
 prompt are replaced with fakes, so all commands (interactive and
 non-interactive) run fully in-process.
 """
+
 # pylint: disable=protected-access,redefined-outer-name,unnecessary-lambda,unused-argument,unused-import,use-implicit-booleaness-not-comparison  # noqa: E501
 from __future__ import annotations
 
@@ -17,7 +18,6 @@ from click.testing import CliRunner
 
 import qwenpaw.cli.providers_cmd as pcmd
 from qwenpaw.providers.provider import ModelInfo, ProviderInfo
-
 
 # ---------------------------------------------------------------------------
 # fake provider / manager
@@ -46,6 +46,7 @@ class FakeProvider:
         self.id = pid
         self.name = name or pid.title()
         self.base_url = base_url
+        self.chat_model = "OpenAIChatModel"
         self.api_key = api_key
         self.require_api_key = require_api_key
         self.is_local = is_local

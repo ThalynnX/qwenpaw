@@ -455,11 +455,57 @@ class ProviderManagerDiscoveryMixin(
             verification=verification,
         )
 
+    @staticmethod
+    async def _test_model_connection(
+        provider: Provider,
+        model_id: str,
+        timeout: float,
+        overrides: dict | None,
+    ) -> ModelConnectionResult | tuple[bool, str]:
+        """Resolve a draft and dispatch a check without persisting it."""
+        model_info = (
+            provider.get_model_info(model_id)
+            or provider.get_discovered_model_info(model_id)
+            or ModelInfo(id=model_id, name=model_id)
+        )
+        snapshot = provider
+        if overrides:
+            model_info = ModelInfo.model_validate(
+                {**model_info.model_dump(), **overrides},
+            )
+            snapshot = provider.configuration_snapshot()
+            snapshot.extra_models.insert(0, model_info)
+            snapshot.removed_model_ids = [
+                removed
+                for removed in snapshot.removed_model_ids
+                if removed != model_id
+            ]
+        resolved = snapshot.for_model(
+            model_id,
+            model_type=model_info.model_type,
+        )
+        if model_info.model_type == "decision":
+            from .systemone_model import SystemOneDecisionModel
+
+            async with SystemOneDecisionModel(
+                model=model_id,
+                base_url=resolved.base_url,
+                api_key=resolved.api_key,
+                headers=resolved.custom_headers,
+            ) as model:
+                return await model.check_connection(timeout)
+        return await resolved.check_model_connection(
+            model_id=model_id,
+            timeout=timeout,
+        )
+
     async def check_provider_model(
         self,
         provider_id: str,
         model_id: str,
         timeout: float = 5,
+        *,
+        overrides: dict | None = None,
     ) -> ProviderModelCheckResult:
         """Check a model and cache its structured availability result."""
         provider_id = self._normalize_provider_id(provider_id)
@@ -470,9 +516,11 @@ class ProviderManagerDiscoveryMixin(
             )
         revision = self._provider_revision(provider_id)
 
-        raw_result = await provider.check_model_connection(
-            model_id=model_id,
-            timeout=timeout,
+        raw_result = await self._test_model_connection(
+            provider,
+            model_id,
+            timeout,
+            overrides,
         )
         if isinstance(raw_result, ModelConnectionResult):
             result = self._classify_model_check(
@@ -486,7 +534,11 @@ class ProviderManagerDiscoveryMixin(
             success, message = raw_result
             result = self._classify_model_check(success, message)
 
-        if not self._is_current_provider(provider_id, provider, revision):
+        if overrides or not self._is_current_provider(
+            provider_id,
+            provider,
+            revision,
+        ):
             return result
 
         normalized_id = model_id.strip()
