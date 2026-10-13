@@ -27,7 +27,7 @@ Each model has a **Chat** or **Decision** type. Both types can belong to the sam
 - **TypeSafe / JEV**: configure the TypeSafe provider's API key and select `jev-latest`, or manually add an authorized model version. The default API base URL is `https://api.typesafe.ai/v1`.
 - **DashScope**: add `decision-model-preview` and set its model-specific API URL, for example `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1`. Replace `{WorkspaceId}` with your workspace ID and use the region and endpoint shown in the service console. Other models retain the provider URL; all models use the provider's API key.
 
-You can set the type and an optional API URL when adding or configuring a model. An empty URL inherits the provider URL. Connection tests use the appropriate API for the model's type; tests in the add dialog do not save the draft. Decision models hide chat generation settings and are excluded from chat selectors.
+Choose the model type when adding it; the type is fixed afterward. To change the type, remove and re-add the model. The optional model API URL remains editable; an empty URL inherits the provider URL. Connection tests use the appropriate API for the model's type; tests in the add dialog do not save the draft. Decision models hide chat generation settings and are excluded from chat selectors.
 
 The initial adapter supports System One `choice`, `score`, and `noul` questions. Automatic tool selection is not enabled by configuration. Callers select an explicit provider and model and own confidence thresholds and failure fallback policies:
 

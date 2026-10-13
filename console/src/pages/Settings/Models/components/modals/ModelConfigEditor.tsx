@@ -7,7 +7,7 @@ import { ThinkingCapabilityFields } from "./ThinkingCapabilityFields";
 import type { ThinkingControlSpec } from "@/features/thinking/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Switch } from "@agentscope-ai/design";
-import { Input, Select } from "antd";
+import { Input } from "antd";
 import type { ModelInfo, ProviderInfo } from "../../../../../api/types";
 import api from "../../../../../api";
 import { useTranslation } from "react-i18next";
@@ -56,11 +56,8 @@ export function ModelConfigEditor({
   const { t } = useTranslation();
   const { message } = useAppMessage();
   const [saving, setSaving] = useState(false);
-  const [modelType, setModelType] = useState<"chat" | "decision">(
-    model.model_type ?? "chat",
-  );
   const [baseUrl, setBaseUrl] = useState(model.base_url ?? "");
-  const isDecision = modelType === "decision";
+  const isDecision = model.model_type === "decision";
   const [thinkingDeclaration, setThinkingDeclaration] = useState<
     ThinkingControlSpec | null | undefined
   >();
@@ -100,7 +97,6 @@ export function ModelConfigEditor({
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
-    setModelType(model.model_type ?? "chat");
     setBaseUrl(model.base_url ?? "");
     setCapabilities({});
     setThinkingDeclaration(undefined);
@@ -114,7 +110,6 @@ export function ModelConfigEditor({
     setReasoningEffort(model.reasoning_effort ?? null);
     setDirty(false);
   }, [
-    model.model_type,
     model.base_url,
     initialText,
     configuredMaxTokens,
@@ -168,9 +163,6 @@ export function ModelConfigEditor({
     setSaving(true);
     try {
       const updated = await api.configureModel(providerId, model.id, {
-        ...(modelType !== (model.model_type ?? "chat")
-          ? { model_type: modelType }
-          : {}),
         ...(baseUrl !== (model.base_url ?? "")
           ? { base_url: baseUrl.trim() || null }
           : {}),
@@ -211,21 +203,6 @@ export function ModelConfigEditor({
   return (
     <div className={styles.editor}>
       <InteractiveCard as="section" tilt={0} className={styles.capabilities}>
-        <label>{t("models.modelType")}</label>
-        <Select
-          aria-label={t("models.modelType")}
-          style={{ width: "100%", marginBottom: 12 }}
-          value={modelType}
-          disabled={model.source === "builtin"}
-          options={[
-            { value: "chat", label: t("models.modelTypeChat") },
-            { value: "decision", label: t("models.modelTypeDecision") },
-          ]}
-          onChange={(value) => {
-            setModelType(value);
-            setDirty(true);
-          }}
-        />
         <label>{t("models.modelBaseUrl")}</label>
         <Input
           aria-label={t("models.modelBaseUrl")}

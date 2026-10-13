@@ -4,7 +4,6 @@
 
 import asyncio
 import json
-from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -331,52 +330,47 @@ async def test_restart_and_discovery_preserve_model_config(manager):
     )
 
 
-async def test_active_chat_model_cannot_change_type(manager):
-    from qwenpaw.config.config import ModelSlotConfig
-
-    manager.active_model = ModelSlotConfig(provider_id="mixed", model="chat")
-    with pytest.raises(ProviderError, match="Switch the default chat"):
+@pytest.mark.parametrize(
+    "model_id,new_type", [("chat", "decision"), ("decision", "chat")]
+)
+async def test_existing_model_type_is_fixed(manager, model_id, new_type):
+    original = (
+        manager.get_provider("mixed").get_model_info(model_id).model_type
+    )
+    with pytest.raises(ProviderError, match="Model type cannot be changed"):
         await manager.update_model_config(
-            "mixed",
-            "chat",
-            {"model_type": "decision"},
+            "mixed", model_id, {"model_type": new_type}
+        )
+    with pytest.raises(ProviderError, match="Model type cannot be changed"):
+        await manager.add_model_to_provider(
+            "mixed", ModelInfo(id=model_id, name=model_id, model_type=new_type)
         )
     assert (
-        manager.get_provider("mixed").get_model_info("chat").model_type
-        == "chat"
+        manager.get_provider("mixed").get_model_info(model_id).model_type
+        == original
     )
 
 
-async def test_agent_fallback_prevents_type_change(manager, monkeypatch):
-    from qwenpaw.config.config import ModelSlotConfig
+@pytest.mark.parametrize(
+    "field", ["active_model", "subagent_model", "fallback_models"]
+)
+def test_create_agent_rejects_decision_in_any_chat_slot(manager, field):
+    from qwenpaw.app.routers import agents as routes
 
-    config = SimpleNamespace(
-        backend="qwenpaw",
-        active_model=None,
-        subagent_model=None,
-        fallback_models=[ModelSlotConfig(provider_id="mixed", model="chat")],
-        llm_routing=SimpleNamespace(local=None, cloud=None),
-    )
-    monkeypatch.setattr(
-        "qwenpaw.config.config.load_agent_config",
-        lambda _id: config,
-    )
-    monkeypatch.setattr(
-        "qwenpaw.config.utils.load_config",
-        lambda: SimpleNamespace(agents=SimpleNamespace(profiles={"agent"})),
-    )
-    with pytest.raises(ProviderError, match="agent 'agent'"):
-        await manager.update_model_config(
-            "mixed",
-            "chat",
-            {"model_type": "decision"},
+    app = FastAPI()
+    app.state.provider_manager = manager
+    app.include_router(routes.router)
+    slot = {"provider_id": "mixed", "model": "decision"}
+    with TestClient(app) as client:
+        response = client.post(
+            "/agents",
+            json={
+                "name": "Test",
+                field: [slot] if field == "fallback_models" else slot,
+            },
         )
-    config.backend = "other"
-    await manager.update_model_config(
-        "mixed",
-        "chat",
-        {"model_type": "decision"},
-    )
+    assert response.status_code == 400
+    assert "not a chat model" in response.json()["detail"]
 
 
 def test_runtime_factory_rejects_decision_reference(manager, monkeypatch):

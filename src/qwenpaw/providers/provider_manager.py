@@ -775,11 +775,6 @@ class ProviderManager(
                     payload[field] = getattr(requested_model, field)
                 requested_model = ModelInfo.model_validate(payload)
 
-            await self._validate_model_type_change(
-                candidate,
-                requested_model.id,
-                {"model_type": requested_model.model_type},
-            )
             added, error_message = await candidate.add_model(requested_model)
             if not added:
                 raise ProviderError(
@@ -1042,11 +1037,6 @@ class ProviderManager(
                     candidate.discovered_models.append(
                         card.model_copy(deep=True),
                     )
-            await self._validate_model_type_change(
-                candidate,
-                model_id,
-                config_snapshot,
-            )
             if not candidate.update_model_config(model_id, config_snapshot):
                 raise ModelNotFoundException(
                     model_name=f"{provider_id}/{model_id}",
@@ -1274,68 +1264,6 @@ class ProviderManager(
             ProviderManager._instance = ProviderManager()
         return ProviderManager._instance
 
-    async def _validate_model_type_change(
-        self,
-        provider: Provider,
-        model_id: str,
-        config: dict,
-    ) -> None:
-        old = provider.get_model_info(model_id)
-        if (
-            old is None
-            or "model_type" not in config
-            or config["model_type"] == old.model_type
-        ):
-            return
-        if old.source == "builtin":
-            raise ProviderError(
-                message="Built-in model types cannot be changed",
-            )
-        if config["model_type"] == "decision":
-            await run_sync_io(
-                self._check_chat_model_references,
-                provider.id,
-                model_id,
-            )
-
-    def _check_chat_model_references(self, provider_id: str, model_id: str):
-        """Reject type changes while a stored chat slot uses the model."""
-        from ..config.config import load_agent_config
-        from ..config.utils import load_config
-
-        def references(slot):
-            return slot and (
-                self._normalize_provider_id(slot.provider_id) == provider_id
-                and slot.model == model_id
-            )
-
-        if references(self.get_active_model()):
-            raise ProviderError(
-                message=(
-                    "Switch the default chat model before changing its type"
-                ),
-                details={"error_kind": "model_in_use"},
-            )
-        for agent_id in load_config().agents.profiles:
-            config = load_agent_config(agent_id)
-            if config.backend != "qwenpaw":
-                continue
-            slots = [
-                config.active_model,
-                config.subagent_model,
-                *config.fallback_models,
-                config.llm_routing.local,
-                config.llm_routing.cloud,
-            ]
-            if any(references(slot) for slot in slots):
-                raise ProviderError(
-                    message=(
-                        f"Switch the chat model for agent '{agent_id}' "
-                        "before changing its type"
-                    ),
-                    details={"error_kind": "model_in_use"},
-                )
-
     def create_chat_model(
         self,
         provider_id: str,
@@ -1353,8 +1281,6 @@ class ProviderManager(
         model_id: str,
     ) -> "SystemOneDecisionModel":
         """Resolve an explicit model reference to a task-scoped adapter."""
-        from .systemone_model import SystemOneDecisionModel
-
         provider = self.get_provider(provider_id)
         if provider is None:
             raise ProviderError(message=f"Provider '{provider_id}' not found")
@@ -1364,14 +1290,8 @@ class ProviderManager(
             raise ModelNotFoundException(
                 model_name=f"{provider_id}/{model_id}",
             )
-        resolved = provider.for_model(model_id, model_type="decision")
-        resolved.check_model_billing(model_id)
-        return SystemOneDecisionModel(
-            model=model_id,
-            base_url=resolved.base_url,
-            api_key=resolved.api_key,
-            headers=resolved.custom_headers,
-        )
+        provider.check_model_billing(model_id)
+        return provider.get_decision_model_instance(model_id)
 
     @staticmethod
     def get_active_chat_model() -> ChatModelBase:

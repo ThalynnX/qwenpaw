@@ -220,21 +220,13 @@ class SystemOneDecisionModel:
         self,
         timeout: float = 5,
     ) -> ModelConnectionResult:
-        """Check all three primitives through the same execution path."""
+        """Check connectivity with a minimal decision request."""
         try:
             await self.evaluate(
                 state="A customer asks to check their invoice.",
                 questions={
-                    "team": ChoiceQuestion(
-                        instructions="Select the relevant team.",
-                        criteria={"billing": "Invoices", "other": "Other"},
-                    ),
                     "invoice": NoulQuestion(
                         instructions="Does the request mention an invoice?",
-                    ),
-                    "urgency": ScoreQuestion(
-                        instructions="Rate the urgency.",
-                        criteria=["Routine", "Urgent"],
                     ),
                 },
                 timeout=timeout,

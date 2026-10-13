@@ -70,19 +70,30 @@ router = APIRouter(prefix="/agents", tags=["agents"])
 
 def _validate_chat_model_types(
     request: Request | None,
-    slots: list[ModelSlotConfig | None],
+    settings: "CreateAgentRequest | AgentProfileConfig | AgentModelSettingsPatch",
 ) -> None:
     """Validate model purposes without changing agent configuration."""
     from ...providers.provider_manager import ProviderManager
 
+    slots = [
+        settings.active_model,
+        settings.subagent_model,
+        *(settings.fallback_models or []),
+    ]
+    routing = getattr(settings, "llm_routing", None)
+    if routing is not None:
+        slots.extend([routing.local, routing.cloud])
+    slots = [
+        slot for slot in slots if slot and slot.provider_id and slot.model
+    ]
+    if not slots:
+        return
     manager = (
         getattr(request.app.state, "provider_manager", None)
         if request is not None
         else None
     ) or ProviderManager.get_instance()
     for slot in slots:
-        if slot is None or not slot.provider_id or not slot.model:
-            continue
         provider = manager.get_provider(slot.provider_id)
         if provider is None:
             continue
@@ -834,12 +845,8 @@ async def create_agent(
     uniqueness).  Otherwise a random short UUID is generated.
     """
     _validate_mail_backend_compatibility(request.backend, request.mail)
-    if request.backend == "qwenpaw" and request.active_model:
-        await run_sync_io(
-            _validate_chat_model_types,
-            http_request,
-            [request.active_model],
-        )
+    if request.backend == "qwenpaw":
+        await run_sync_io(_validate_chat_model_types, http_request, request)
     if request.backend != "qwenpaw":
         _get_available_third_party_provider(request.backend)
 
@@ -1214,16 +1221,7 @@ async def update_agent(  # pylint: disable=too-many-statements
 
     update_data = agent_config.model_dump(exclude_unset=True)
     if effective_backend == "qwenpaw":
-        slots = []
-        for field in ("active_model", "subagent_model", "fallback_models"):
-            if field in agent_config.model_fields_set:
-                value = getattr(agent_config, field)
-                slots.extend(value if isinstance(value, list) else [value])
-        if "llm_routing" in agent_config.model_fields_set:
-            routing = agent_config.llm_routing
-            slots.extend([routing.local, routing.cloud])
-        if slots:
-            await run_sync_io(_validate_chat_model_types, request, slots)
+        await run_sync_io(_validate_chat_model_types, request, agent_config)
     previous_config = existing_config_snap
 
     def apply_update(existing_config: AgentProfileConfig) -> None:
@@ -1362,13 +1360,7 @@ async def update_agent_model_settings(
 ) -> AgentProfileConfig:
     """Patch model-routing fields without overwriting other settings."""
     values = {field: getattr(body, field) for field in body.model_fields_set}
-    slots = []
-    for field in ("active_model", "subagent_model", "fallback_models"):
-        if field in values:
-            value = values[field]
-            slots.extend(value if isinstance(value, list) else [value])
-    if slots:
-        await run_sync_io(_validate_chat_model_types, request, slots)
+    await run_sync_io(_validate_chat_model_types, request, body)
 
     def apply_settings(existing_config: AgentProfileConfig) -> None:
         AgentProfileConfig.model_validate(

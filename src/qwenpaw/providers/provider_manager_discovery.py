@@ -480,21 +480,10 @@ class ProviderManagerDiscoveryMixin(
                 for removed in snapshot.removed_model_ids
                 if removed != model_id
             ]
-        resolved = snapshot.for_model(
-            model_id,
-            model_type=model_info.model_type,
-        )
         if model_info.model_type == "decision":
-            from .systemone_model import SystemOneDecisionModel
-
-            async with SystemOneDecisionModel(
-                model=model_id,
-                base_url=resolved.base_url,
-                api_key=resolved.api_key,
-                headers=resolved.custom_headers,
-            ) as model:
+            async with snapshot.get_decision_model_instance(model_id) as model:
                 return await model.check_connection(timeout)
-        return await resolved.check_model_connection(
+        return await snapshot.for_model(model_id).check_model_connection(
             model_id=model_id,
             timeout=timeout,
         )

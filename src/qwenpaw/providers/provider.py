@@ -42,6 +42,7 @@ from .adapters.wire_protocol import protocol_url
 
 if TYPE_CHECKING:
     from .multimodal_prober import ProbeResult
+    from .systemone_model import SystemOneDecisionModel
 
 
 _AGENT_THINKING_LEVEL: ContextVar[str] = ContextVar(
@@ -544,6 +545,12 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
             (m for m in self.models if m.id == model_info.id),
             None,
         )
+        if (
+            existing is not None
+            and not was_removed
+            and existing.model_type != model_info.model_type
+        ):
+            return False, "Model type cannot be changed after adding it"
         if existing is not None and not self.automatically_listed(existing):
             for field in model_info.model_fields_set:
                 setattr(existing, field, getattr(model_info, field))
@@ -735,16 +742,12 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
                     for field in getattr(configured, "config_overrides", [])
                     if field in ModelInfo.model_fields
                 }
-                overrides["model_type"] = getattr(
-                    configured,
-                    "model_type",
-                    "chat",
-                )
-                overrides["base_url"] = getattr(configured, "base_url", None)
-                overrides[f"config_overrides"] = getattr(
-                    configured,
-                    "config_overrides",
-                    [],
+                overrides.update(
+                    model_type=getattr(configured, "model_type", "chat"),
+                    base_url=getattr(configured, "base_url", None),
+                    config_overrides=getattr(
+                        configured, "config_overrides", []
+                    ),
                 )
                 by_id[configured.id] = by_id[configured.id].model_copy(
                     update=overrides,
@@ -1108,13 +1111,18 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
         for model in Provider.all_models(self) + self.discovered_models:
             if model.id == model_id:
                 changed_fields: list[str] = []
-                for field in ("model_type", "base_url"):
-                    if field in config:
-                        validated = ModelInfo.model_validate(
-                            {**model.model_dump(), field: config[field]},
-                        )
-                        setattr(model, field, getattr(validated, field))
-                        changed_fields.append(field)
+                if (
+                    config.get("model_type", model.model_type)
+                    != model.model_type
+                ):
+                    raise ProviderError(
+                        message="Model type cannot be changed after adding it",
+                    )
+                if "base_url" in config:
+                    model.base_url = ModelInfo.model_validate(
+                        {**model.model_dump(), "base_url": config["base_url"]},
+                    ).base_url
+                    changed_fields.append("base_url")
                 for field in (
                     f"supports_image",
                     f"supports_video",
@@ -1389,6 +1397,21 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
         provider and model_id."""
         raise ProviderError(
             message=f"Provider '{self.id}' has no chat model adapter",
+        )
+
+    def get_decision_model_instance(
+        self,
+        model_id: str,
+    ) -> SystemOneDecisionModel:
+        """Build a decision adapter with this model's effective endpoint."""
+        from .systemone_model import SystemOneDecisionModel
+
+        provider = self.for_model(model_id, model_type="decision")
+        return SystemOneDecisionModel(
+            model=model_id,
+            base_url=provider.base_url,
+            api_key=provider.api_key,
+            headers=provider.custom_headers,
         )
 
     async def probe_model_multimodal(

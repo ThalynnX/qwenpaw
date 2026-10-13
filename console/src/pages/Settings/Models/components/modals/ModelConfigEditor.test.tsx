@@ -139,6 +139,7 @@ describe("ModelConfigEditor decision models", () => {
     vi.mocked(api.configureModel).mockResolvedValue(provider);
     const user = userEvent.setup();
     renderEditor(createModel({ model_type: "decision", source: "user" }));
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     expect(
       screen.queryByLabelText("Generation config"),
     ).not.toBeInTheDocument();

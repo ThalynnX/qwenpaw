@@ -27,7 +27,7 @@ QwenPaw 官方还提供了适合本地部署的 QwenPaw-Flash 系列模型，包
 - **TypeSafe / JEV**：在 TypeSafe 提供商中配置 API Key，选择 `jev-latest`，也可以手动添加已获授权的模型版本。默认 API 地址为 `https://api.typesafe.ai/v1`。
 - **DashScope**：在 DashScope 中添加 `decision-model-preview`，在模型配置中填写该模型的 API 地址，例如 `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1`。将 `{WorkspaceId}` 替换为服务控制台中的工作空间 ID；以控制台提供的地域和地址为准。覆盖地址只用于该模型，其余模型继续使用提供商地址和同一个 API Key。
 
-添加或配置模型时，可以设置模型类型和独立 API 地址；留空表示继承提供商地址。测试连接会按模型类型调用对应接口，添加界面的测试不会保存尚未确认的配置。决策模型不显示聊天生成参数，也不会出现在聊天模型选择器中。
+添加模型时选择类型，添加后类型固定；需要更换类型时，删除后重新添加。独立 API 地址仍可编辑，留空表示继承提供商地址。测试连接会按模型类型调用对应接口，添加界面的测试不会保存尚未确认的配置。决策模型不显示聊天生成参数，也不会出现在聊天模型选择器中。
 
 当前支持 System One 的 `choice`、`score`、`noul` 三种问题。配置和连接测试不代表已启用自动工具选择；业务调用方需要明确指定提供商和模型，并自行处理置信度阈值与失败后的回退策略。开发调用示例：
 

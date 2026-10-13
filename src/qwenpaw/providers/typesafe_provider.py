@@ -8,7 +8,6 @@ from typing import List
 import httpx
 
 from .provider import ModelConnectionResult, ModelInfo, Provider
-from .systemone_model import SystemOneDecisionModel
 
 
 class TypeSafeProvider(Provider):
@@ -54,11 +53,5 @@ class TypeSafeProvider(Provider):
         model_id: str,
         timeout: float = 5,
     ) -> ModelConnectionResult:
-        provider = self.for_model(model_id, model_type="decision")
-        async with SystemOneDecisionModel(
-            model=model_id,
-            base_url=provider.base_url,
-            api_key=provider.api_key,
-            headers=provider.custom_headers,
-        ) as model:
+        async with self.get_decision_model_instance(model_id) as model:
             return await model.check_connection(timeout)
