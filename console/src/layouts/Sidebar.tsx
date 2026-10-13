@@ -358,13 +358,21 @@ export default function Sidebar({
       if (inFlight) return;
       inFlight = true;
       try {
-        const [inboxRes, pushRes] = await Promise.all([
+        const [inboxResult, pushResult] = await Promise.allSettled([
           api.getInboxEvents({
             unread_only: true,
             limit: 1,
           }),
           api.getPushMessages(),
         ]);
+        if (
+          inboxResult.status === "rejected" ||
+          pushResult.status === "rejected"
+        ) {
+          return;
+        }
+        const inboxRes = inboxResult.value;
+        const pushRes = pushResult.value;
         const hasUnreadEvents = (inboxRes?.events?.length || 0) > 0;
         const approvals = pushRes?.pending_approvals || [];
         const currentIds = new Set(

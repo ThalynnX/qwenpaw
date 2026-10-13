@@ -175,6 +175,7 @@ export function useSessionListData(
   useEffect(() => {
     if (!active) return;
     let cancelled = false;
+    let inFlight = true;
     const owner = sessionApi.getActiveOwner();
 
     const fetchSessions = async () => {
@@ -192,13 +193,13 @@ export function useSessionListData(
       } catch (err) {
         console.error("useSessionListData: failed to fetch sessions", err);
       } finally {
+        inFlight = false;
         if (!cancelled) setLoading(false);
       }
     };
 
     void fetchSessions();
 
-    let inFlight = false;
     const timer = setInterval(async () => {
       // Pause polling during session switch to avoid bandwidth contention
       if (sessionApi.isSessionSwitching || inFlight) return;
