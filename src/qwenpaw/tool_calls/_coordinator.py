@@ -736,14 +736,19 @@ class ToolCoordinator:
         tool_call: Any,
         entry: ToolCallEntry,
     ) -> None:
+        terminal = False
         try:
             async for item in next_handler(tool_call=tool_call):
+                # Drain through EOF so toolkit finalizers and middleware
+                # finish normally. Keep the first terminal result intact.
+                if terminal:
+                    continue
                 if isinstance(item, ToolResponse):
                     item = self._normalize_interrupted_result(item, entry.ctx)
                     entry.final_response = item
                     entry.end_state = self._end_state(item.state)
-                    await entry.stream.close()
-                    return
+                    terminal = True
+                    continue
 
                 if isinstance(item, ToolChunk):
                     item = self._normalize_interrupted_result(item, entry.ctx)
@@ -759,18 +764,19 @@ class ToolCoordinator:
                             if item.state == ToolResultState.ERROR
                             else "interrupted"
                         )
-                        # AgentScope follows a final chunk with its accumulated
-                        # ToolResponse. Drain that response instead of closing
-                        # the generator while it is yielding from ``finally``.
-                        if item.is_last:
-                            continue
-                        await entry.stream.close()
-                        return
+                        terminal = True
 
         except asyncio.CancelledError:
             entry.final_response = self._cancel_response(entry.ctx)
             entry.end_state = self._end_state(entry.final_response.state)
         except Exception as exc:
+            if terminal:
+                logger.warning(
+                    f"Tool stream cleanup failed after terminal result: "
+                    f"{entry.ctx.tool_name}/{entry.ctx.tool_call_id}",
+                    exc_info=True,
+                )
+                return
             logger.exception(
                 "Tool handler failed for %s/%s",
                 entry.ctx.tool_name,

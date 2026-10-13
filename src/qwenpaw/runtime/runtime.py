@@ -144,6 +144,12 @@ class Runtime:
             async for ev in envelope.finalize():
                 yield ev
 
+        except GeneratorExit:
+            # The consumer closed the stream; persist without yielding an
+            # error envelope into a generator that is already closing.
+            ctx.error = asyncio.CancelledError()
+            await self._try_save_on_cancel(ctx)
+            raise
         except (asyncio.CancelledError, KeyboardInterrupt) as e:
             ctx.error = e
             # The Task's _must_cancel flag may still be True after
