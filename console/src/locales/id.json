@@ -375,6 +375,7 @@
   },
   "settingsCenter": {
     "backToApp": "Kembali ke aplikasi",
+    "openNavigation": "Buka menu pengaturan",
     "searchPlaceholder": "Cari pengaturan",
     "noResults": "Tidak ada pengaturan yang cocok",
     "groups": {
