@@ -737,6 +737,18 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
    *  at runtime the module claims the selected agent on load, below). */
   private activeOwner: SessionOwnerToken = { agentId: "", generation: 0 };
 
+  /** Route metadata survives lists that exclude the selected archived Chat. */
+  private resolvedRouteSession: ExtendedSession | null = null;
+
+  registerResolvedChat(chat: ChatSpec, owner: SessionOwnerToken): void {
+    if (this.isActiveOwner(owner)) {
+      this.resolvedRouteSession = {
+        ...chatSpecToSession(chat),
+        realId: chat.id,
+      };
+    }
+  }
+
   private creationVisit = 0;
   private pendingCreatedSessions = new Set<string>();
 
@@ -785,6 +797,7 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     // list, and merging against leftover entries would transfer the previous
     // agent's local id / backend UUID onto a different chat.
     this.sessionList = [];
+    this.resolvedRouteSession = null;
     this._prevReturnedList = null;
     this.lastSelectedIds.clear();
     // Release the switch lock: the switch it belonged to is owned by the
@@ -882,6 +895,7 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
   resetForTests(): void {
     this.visibleSessionId = undefined;
     this.activeOwner = { agentId: "", generation: 0 };
+    this.resolvedRouteSession = null;
     this.sessionListRequest = null;
     this.invalidateSessionCreation();
     this.resolvePromise = null;
@@ -1145,15 +1159,24 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     ) as ExtendedSession | undefined;
     if (direct) return direct;
 
+    const resolved = this.resolvedRouteSession;
+    if (resolved?.id === id || resolved?.realId === id) return resolved;
+
     // Runtime session_id values are opaque. Most locally-created values use
     // the timestamp-random format, but imported/auto-registered Chats may use
     // UUID-looking runtime IDs as well. Resolve those aliases only when the
     // match is unique: the backend permits multiple Chats to share a runtime
     // identity, and choosing an arbitrary one would cross conversation data.
-    const runtimeMatches = this.sessionList.filter(
-      (x) => (x as ExtendedSession).sessionId === id,
-    ) as ExtendedSession[];
-    return runtimeMatches.length === 1 ? runtimeMatches[0] : undefined;
+    const runtimeMatches = new Map<string, ExtendedSession>();
+    for (const session of this.sessionList as ExtendedSession[]) {
+      if (session.sessionId === id)
+        runtimeMatches.set(session.realId ?? session.id, session);
+    }
+    if (resolved?.sessionId === id)
+      runtimeMatches.set(resolved.realId ?? resolved.id, resolved);
+    return runtimeMatches.size === 1
+      ? runtimeMatches.values().next().value
+      : undefined;
   }
 
   /** Returns the real backend UUID, or null when not yet resolved. */
@@ -1600,20 +1623,13 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     if (isLocalTimestamp(sessionId)) {
       const fromList = this.findSession(sessionId);
       if (fromList?.realId) {
-        try {
-          return await this.fetchAndBuildSession(
-            sessionId,
-            fromList.realId,
-            fromList,
-            signal,
-            owner,
-          );
-        } catch (error) {
-          // If fetching with realId fails, return the local session without messages
-          // This handles cases where the backend has an inconsistency
-          this.applySessionView(fromList, owner);
-          return fromList;
-        }
+        return this.fetchAndBuildSession(
+          sessionId,
+          fromList.realId,
+          fromList,
+          signal,
+          owner,
+        );
       }
       // A triggerResolve may be in-flight (POST succeeded but getSessionList
       // hasn't returned yet). Wait for it so we can return real messages
@@ -1623,18 +1639,13 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
         await this.resolvePromise;
         const resolved = this.findSession(sessionId);
         if (resolved?.realId) {
-          try {
-            return await this.fetchAndBuildSession(
-              sessionId,
-              resolved.realId,
-              resolved,
-              signal,
-              owner,
-            );
-          } catch {
-            this.applySessionView(resolved, owner);
-            return resolved;
-          }
+          return this.fetchAndBuildSession(
+            sessionId,
+            resolved.realId,
+            resolved,
+            signal,
+            owner,
+          );
         }
       }
       if (fromList) {
@@ -1645,30 +1656,17 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     }
 
     // --- Backend Chat UUID or an opaque runtime session_id alias ---
-    try {
-      const listEntry = this.findSession(sessionId);
-      const backendId =
-        listEntry?.realId ??
-        (listEntry && listEntry.id !== sessionId ? listEntry.id : sessionId);
-      return await this.fetchAndBuildSession(
-        sessionId,
-        backendId,
-        listEntry,
-        signal,
-        owner,
-      );
-    } catch (error: any) {
-      // If the backend session doesn't exist (e.g. invalid UUID or expired session)
-      // return an empty session to prevent repeated 404 API calls.
-      // Note: the request layer throws Error(message) without attaching .status,
-      // so only message-based detection is reliable here.
-      if (error.message?.includes("Chat not found")) {
-        const emptySession = this.createEmptySession(sessionId, owner);
-        emptySession.id = sessionId;
-        return emptySession;
-      }
-      throw error;
-    }
+    const listEntry = this.findSession(sessionId);
+    const backendId =
+      listEntry?.realId ??
+      (listEntry && listEntry.id !== sessionId ? listEntry.id : sessionId);
+    return this.fetchAndBuildSession(
+      sessionId,
+      backendId,
+      listEntry,
+      signal,
+      owner,
+    );
   }
 
   /**
@@ -1821,6 +1819,7 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     if (!session.id) return [...this.sessionList];
 
     const { id: sessionId } = session;
+    const owner = this.getActiveOwner();
 
     const existing = this.findSession(sessionId);
 
@@ -1837,6 +1836,12 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     // the caller passed a UUID), so the filter always removes the right entry.
     const canonicalId = existing?.id ?? sessionId;
     this.sessionList = this.sessionList.filter((s) => s.id !== canonicalId);
+    if (
+      this.isActiveOwner(owner) &&
+      this.resolvedRouteSession?.id === canonicalId
+    ) {
+      this.resolvedRouteSession = null;
+    }
 
     const resolvedId = existing?.realId ?? sessionId;
     this.onSessionRemoved?.(resolvedId);
