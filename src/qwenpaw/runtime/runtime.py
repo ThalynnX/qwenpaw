@@ -147,6 +147,7 @@ class Runtime:
         except GeneratorExit:
             # The consumer closed the stream; persist without yielding an
             # error envelope into a generator that is already closing.
+            ctx.error = asyncio.CancelledError()
             await self._try_save_on_cancel(ctx)
             raise
         except (asyncio.CancelledError, KeyboardInterrupt) as e:

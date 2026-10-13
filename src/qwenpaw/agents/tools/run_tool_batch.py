@@ -641,6 +641,12 @@ async def _call_tool(
             await tool_stream.aclose()
         raise
     except Exception as exc:  # pylint: disable=broad-except
+        if getattr(response, "state", None) == ToolResultState.INTERRUPTED:
+            logger.warning(
+                f"Tool stream cleanup failed after interruption: {tool_name}",
+                exc_info=True,
+            )
+            return response
         return _json_tool_response(
             {"ok": False, "error": f"{type(exc).__name__}: {exc}"},
         )

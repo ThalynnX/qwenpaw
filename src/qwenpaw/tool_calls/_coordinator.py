@@ -763,6 +763,13 @@ class ToolCoordinator:
             )
             entry.end_state = "interrupted"
         except Exception as exc:
+            if terminal:
+                logger.warning(
+                    f"Tool stream cleanup failed after terminal result: "
+                    f"{entry.ctx.tool_name}/{entry.ctx.tool_call_id}",
+                    exc_info=True,
+                )
+                return
             logger.exception(
                 "Tool handler failed for %s/%s",
                 entry.ctx.tool_name,
