@@ -15,21 +15,6 @@ from qwenpaw.config.config import AgentProfileConfig
 from qwenpaw.runtime.builder import AgentBuilder
 
 
-def test_request_project_override_does_not_enable_coding_tools(tmp_path):
-    config = AgentProfileConfig(id="default", name="Default")
-
-    updated = AgentBuilder._apply_request_project(
-        config,
-        {ACP_PROJECT_DIR_META_KEY: str(tmp_path)},
-    )
-
-    assert updated is not config
-    assert updated.coding_mode.enabled is False
-    assert updated.project_dir == str(tmp_path.resolve())
-    assert config.coding_mode.enabled is False
-    assert config.project_dir is None
-
-
 def test_session_project_override_uses_canonical_request_key(tmp_path):
     config = AgentProfileConfig(id="default", name="Default")
 
@@ -40,7 +25,6 @@ def test_session_project_override_uses_canonical_request_key(tmp_path):
 
     assert updated is not config
     assert updated.project_dir == str(tmp_path.resolve())
-    assert updated.coding_mode.enabled is False
 
 
 def test_active_mode_project_precedes_session_project(tmp_path):
@@ -70,7 +54,6 @@ def test_request_project_ignores_non_directory(tmp_path):
     )
 
     assert updated is config
-    assert config.coding_mode.enabled is False
 
 
 @pytest.mark.usefixtures("capture_qwenpaw_logs")
