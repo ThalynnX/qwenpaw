@@ -723,12 +723,17 @@ class ToolCoordinator:
         tool_call: Any,
         entry: ToolCallEntry,
     ) -> None:
+        terminal = False
         try:
             async for item in next_handler(tool_call=tool_call):
+                # Drain through EOF so toolkit finalizers and middleware
+                # finish normally. Keep the first terminal result intact.
+                if terminal:
+                    continue
                 if isinstance(item, ToolResponse):
                     entry.final_response = item
-                    await entry.stream.close()
-                    return
+                    terminal = True
+                    continue
 
                 if isinstance(item, ToolChunk):
                     entry.final_response.append_chunk(item)
@@ -743,8 +748,7 @@ class ToolCoordinator:
                             if item.state == ToolResultState.ERROR
                             else "interrupted"
                         )
-                        await entry.stream.close()
-                        return
+                        terminal = True
 
         except asyncio.CancelledError:
             entry.final_response = ToolResponse(
