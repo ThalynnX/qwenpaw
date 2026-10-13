@@ -17,6 +17,8 @@ import asyncio
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
+from ...plugins.browser_access import browser_prefixes
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/pawapps", tags=["pawapps"])
@@ -48,9 +50,11 @@ def _build_app_info(
         "name": manifest.get("name", fallback_id),
         "version": manifest.get("version", "0.0.0"),
         "description": manifest.get("description", ""),
+        "description_i18n": manifest.get("description_i18n", {}) or {},
         "author": manifest.get("author", ""),
         "category": pawapp_meta.get("category", ""),
         "icon": pawapp_meta.get("icon", ""),
+        "icon_url": pawapp_meta.get("icon_url", ""),
         "entry_page": pawapp_meta.get("entry_page", ""),
         "launch_scope": pawapp_meta.get(
             "launch_scope",
@@ -160,7 +164,11 @@ async def get_pawapp(app_id: str, request: Request) -> Dict[str, Any]:
         apps = await asyncio.to_thread(_scan_installed_apps_fallback)
     for app in apps:
         if app["id"] == app_id:
-            return app
+            registry = getattr(request.app.state, "plugin_registry", None)
+            return {
+                **app,
+                "browser_prefixes": browser_prefixes(registry, app_id),
+            }
     raise HTTPException(status_code=404, detail=f"PawApp '{app_id}' not found")
 
 

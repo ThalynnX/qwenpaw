@@ -66,6 +66,40 @@ async def test_attach_returns_none_for_unknown_run_key():
     assert await tracker.attach("missing") is None
 
 
+@pytest.mark.asyncio
+async def test_has_active_tasks_excluding_uses_task_identity():
+    tracker = TaskTracker()
+    started = asyncio.Event()
+    release = asyncio.Event()
+    producer_sees_other: list[bool] = []
+
+    async def producer(_payload):
+        producer_sees_other.append(
+            await tracker.has_active_tasks_excluding(
+                asyncio.current_task(),
+            ),
+        )
+        started.set()
+        await release.wait()
+        yield "data: done\n\n"
+
+    queue, _ = await tracker.attach_or_start(
+        "tracked-producer",
+        None,
+        producer,
+    )
+    await asyncio.wait_for(started.wait(), timeout=1)
+
+    assert producer_sees_other == [False]
+    assert await tracker.has_active_tasks_excluding(
+        asyncio.current_task(),
+    )
+
+    release.set()
+    async for _ in tracker.stream_from_queue(queue, "tracked-producer"):
+        pass
+
+
 # ---------------------------------------------------------------------------
 # attach_or_start: producer/consumer flow
 # ---------------------------------------------------------------------------
@@ -95,6 +129,28 @@ async def test_attach_or_start_streams_events_and_marks_completion():
     # After completion the tracker cleans up the run.
     assert await tracker.get_status("run-1") == "idle"
     assert "run-1" not in tracker._runs
+
+
+@pytest.mark.asyncio
+async def test_attach_or_start_reports_completion_before_becoming_idle():
+    tracker = TaskTracker()
+    completions = []
+
+    async def on_finished(run_key, finished_at):
+        completions.append((run_key, finished_at))
+        assert await tracker.get_status(run_key) == "running"
+
+    queue, _ = await tracker.attach_or_start(
+        "run-with-callback",
+        payload=None,
+        stream_fn=_make_stream([]),
+        on_finished=on_finished,
+    )
+    assert await asyncio.wait_for(queue.get(), timeout=1) is None
+
+    assert len(completions) == 1
+    assert completions[0][0] == "run-with-callback"
+    assert await tracker.get_status("run-with-callback") == "idle"
 
 
 @pytest.mark.asyncio
@@ -154,10 +210,15 @@ async def test_attach_or_start_existing_run_returns_buffer_replay():
 async def test_request_stop_cancels_live_run():
     tracker = TaskTracker()
     started = asyncio.Event()
+    cancel_reasons = []
 
     async def long_stream(_payload):
         started.set()
-        await asyncio.sleep(60)
+        try:
+            await asyncio.sleep(60)
+        except asyncio.CancelledError as exc:
+            cancel_reasons.append(exc.args)
+            raise
         yield "never"
 
     await tracker.attach_or_start(
@@ -169,8 +230,9 @@ async def test_request_stop_cancels_live_run():
 
     assert await tracker.get_status("run-cancel") == "running"
 
-    stopped = await tracker.request_stop("run-cancel")
+    stopped = await tracker.request_stop("run-cancel", reason="timeout")
     assert stopped is True
+    assert cancel_reasons == [("timeout",)]
 
     # Give the task loop time to process cancellation and cleanup.
     await asyncio.sleep(0.05)
@@ -310,6 +372,81 @@ async def test_wait_all_done_times_out_when_task_runs():
             pass
 
 
+@pytest.mark.asyncio
+async def test_snapshot_active_tasks_filters_by_owner():
+    tracker = TaskTracker()
+    owner_a = object()
+    owner_b = object()
+    release = asyncio.Event()
+
+    async def producer(_payload):
+        await release.wait()
+        yield "data: done\n\n"
+
+    queue_a, _ = await tracker.attach_or_start(
+        "run-owner-a",
+        None,
+        producer,
+        owner=owner_a,
+    )
+    queue_b, _ = await tracker.attach_or_start(
+        "run-owner-b",
+        None,
+        producer,
+        owner=owner_b,
+    )
+
+    try:
+        snapshot = await tracker.snapshot_active_tasks(owner=owner_a)
+        assert list(snapshot) == ["run-owner-a"]
+    finally:
+        release.set()
+        async for _ in tracker.stream_from_queue(queue_a, "run-owner-a"):
+            pass
+        async for _ in tracker.stream_from_queue(queue_b, "run-owner-b"):
+            pass
+
+
+@pytest.mark.asyncio
+async def test_wait_tasks_done_ignores_runs_started_after_snapshot():
+    tracker = TaskTracker()
+    release_old = asyncio.Event()
+    release_new = asyncio.Event()
+
+    async def old_producer(_payload):
+        await release_old.wait()
+        yield "data: old\n\n"
+
+    async def new_producer(_payload):
+        await release_new.wait()
+        yield "data: new\n\n"
+
+    old_queue, _ = await tracker.attach_or_start(
+        "run-old",
+        None,
+        old_producer,
+    )
+    snapshot = await tracker.snapshot_active_tasks()
+    new_queue, _ = await tracker.attach_or_start(
+        "run-new",
+        None,
+        new_producer,
+    )
+
+    release_old.set()
+    assert await tracker.wait_tasks_done(
+        list(snapshot.values()),
+        timeout=1,
+    )
+    assert await tracker.get_status("run-new") == "running"
+
+    release_new.set()
+    async for _ in tracker.stream_from_queue(old_queue, "run-old"):
+        pass
+    async for _ in tracker.stream_from_queue(new_queue, "run-new"):
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Concurrent attach / start safety
 # ---------------------------------------------------------------------------
@@ -344,3 +481,86 @@ async def test_concurrent_attach_or_start_only_one_producer():
             item = await asyncio.wait_for(q.get(), timeout=1)
             if item is None:
                 break
+
+
+@pytest.mark.asyncio
+async def test_failed_task_creation_leaves_no_zombie_run(monkeypatch):
+    """A failed task creation must not leak a permanent "running" entry.
+
+    Defensive path: ``attach_or_start`` registers the run only *after*
+    the producer task exists, so a failure to create it leaves nothing
+    behind. This is not reachable in production -- the register/create
+    window is synchronous and a running loop cannot be closed -- so the
+    failure is injected through the module-level ``_create_task`` seam,
+    leaving the process-wide ``asyncio`` module untouched.
+    """
+    from qwenpaw.app import task_tracker as tracker_mod
+
+    tracker = TaskTracker()
+
+    def _boom(coro):
+        coro.close()
+        raise RuntimeError("create_task failed")
+
+    monkeypatch.setattr(tracker_mod, "_create_task", _boom)
+
+    with pytest.raises(RuntimeError):
+        await tracker.attach_or_start(
+            "run-fail",
+            None,
+            _make_stream(["data: x\n\n"]),
+        )
+
+    assert "run-fail" not in tracker._runs
+    assert await tracker.list_active_tasks() == []
+    assert await tracker.has_active_tasks() is False
+    status = await tracker.get_global_status()
+    assert status["running_task_count"] == 0
+    assert status["status"] == "idle"
+
+
+# ---------------------------------------------------------------------------
+# attach(): replay-end marker for reconnect fast-forward
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_attach_appends_replay_end_marker_after_buffer():
+    """Reconnect subscribers get the buffered events, then a
+    ``replay_end`` marker, then live events. The marker lets the client
+    render the replayed part instantly instead of re-animating it."""
+    tracker = TaskTracker()
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def slow_stream(_payload):
+        yield "data: first\n\n"
+        started.set()
+        await release.wait()
+        yield "data: second\n\n"
+
+    queue_a, _ = await tracker.attach_or_start(
+        "run-replay",
+        payload=None,
+        stream_fn=slow_stream,
+    )
+    await asyncio.wait_for(started.wait(), timeout=1)
+    await asyncio.sleep(0)
+
+    queue_b = await tracker.attach("run-replay")
+    assert queue_b is not None
+
+    first = await asyncio.wait_for(queue_b.get(), timeout=1)
+    marker = await asyncio.wait_for(queue_b.get(), timeout=1)
+    assert first == "data: first\n\n"
+    assert marker.startswith("data: ")
+    assert json.loads(marker[len("data: ") :].strip()) == {
+        "type": "replay_end",
+    }
+
+    release.set()
+    rest_b = await _drain(queue_b, 2)
+    assert rest_b == ["data: second\n\n", None]
+    # The original (non-reconnect) subscriber never sees the marker.
+    rest_a = await _drain(queue_a, 3)
+    assert rest_a == ["data: first\n\n", "data: second\n\n", None]

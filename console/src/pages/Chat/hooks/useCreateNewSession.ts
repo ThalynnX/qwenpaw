@@ -1,27 +1,30 @@
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { useChatAnywhereSessions } from "@agentscope-ai/chat";
+import { useChatAnywhereSessionsState } from "@agentscope-ai/chat";
+import { CHAT_BASE_PATH } from "../../../utils/sessionRoute";
+import { useAgentStore } from "../../../stores/agentStore";
 import sessionApi from "../sessionApi";
-import { useCodingMode } from "../../../stores/codingModeStore";
-import { buildBasePath } from "../../../utils/sessionRoute";
+import { clearPendingModel } from "../../../features/session-settings/sessionModel";
+import { clearPendingThinking } from "../../../features/thinking/sessionThinkingApi";
 
 /**
- * Returns a stable async function that creates a new blank chat session.
- *
- * Navigates to the base path (/chat or /coding) BEFORE calling the library's
- * createSession so that ChatSessionInitializer sees chatId=undefined and does
- * not re-apply the previous session, which would race against the new session
- * creation.
+ * Open the blank composer. The SDK allocates a backend session on first send;
+ * opening this page (including after deletion) must not persist an empty chat.
  */
 export function useCreateNewSession(): () => Promise<void> {
   const navigate = useNavigate();
-  const { createSession } = useChatAnywhereSessions();
-  const { codingMode } = useCodingMode();
-
+  const { setCurrentSessionId } = useChatAnywhereSessionsState();
   return useCallback(async () => {
-    const mode = codingMode ? "coding" : "chat";
-    navigate(buildBasePath(mode), { replace: true });
-    sessionApi.userInitiatedCreate = true;
-    await createSession();
-  }, [navigate, createSession, codingMode]);
+    sessionApi.invalidateSessionCreation();
+    sessionApi.finishSessionSwitch();
+    sessionApi.lastActiveChatId = null;
+    sessionApi.preferredChatId = null;
+    const agents = useAgentStore.getState();
+    clearPendingModel(agents.selectedAgent, "new");
+    clearPendingThinking(agents.selectedAgent, "new");
+    agents.removeLastChatId(agents.selectedAgent);
+    setCurrentSessionId(undefined);
+    navigate(CHAT_BASE_PATH, { replace: true });
+    window.dispatchEvent(new Event("session-model-changed"));
+  }, [navigate, setCurrentSessionId]);
 }

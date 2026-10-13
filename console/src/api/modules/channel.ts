@@ -29,6 +29,16 @@ export interface ChannelSchema {
   doc_url?: LocalizedText;
 }
 
+export interface ChannelConflictAgent {
+  agent_id: string;
+  agent_name: string;
+}
+
+export interface ChannelConflictResponse {
+  conflict: boolean;
+  agents: ChannelConflictAgent[];
+}
+
 export const channelApi = {
   listChannelTypes: () => request<string[]>("/config/channels/types"),
 
@@ -48,12 +58,31 @@ export const channelApi = {
       `/config/channels/${encodeURIComponent(channelName)}`,
     ),
 
-  updateChannelConfig: (channelName: string, body: SingleChannelConfig) =>
+  updateChannelConfig: (
+    channelName: string,
+    body: SingleChannelConfig,
+    agentId?: string,
+  ) =>
     request<SingleChannelConfig>(
       `/config/channels/${encodeURIComponent(channelName)}`,
       {
         method: "PUT",
         body: JSON.stringify(body),
+        ...(agentId ? { headers: { "X-Agent-Id": agentId } } : {}),
+      },
+    ),
+
+  checkChannelConflict: (
+    channelName: string,
+    body: SingleChannelConfig,
+    agentId?: string,
+  ) =>
+    request<ChannelConflictResponse>(
+      `/config/channels/${encodeURIComponent(channelName)}/conflict-check`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+        ...(agentId ? { headers: { "X-Agent-Id": agentId } } : {}),
       },
     ),
 

@@ -61,6 +61,8 @@ def add_agent_workspaces(
             ) as snapshot_dir:
                 history_snapshot = Path(snapshot_dir) / "history.db"
                 for entry in sorted(ws.rglob("*")):
+                    if stop_event and stop_event.is_set():
+                        return False
                     if not entry.is_file():
                         continue
                     relative = entry.relative_to(ws)

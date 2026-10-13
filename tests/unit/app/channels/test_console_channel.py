@@ -19,6 +19,7 @@ import pytest
 
 from qwenpaw.schemas import (
     ContentType,
+    FileContent,
     ImageContent,
     Message,
     MessageType,
@@ -142,6 +143,21 @@ class TestBuildAgentRequestFromNative:
         req = console_channel.build_agent_request_from_native(payload)
         assert req.request_context == {"foo": "bar"}
 
+    def test_message_metadata_propagated(self, console_channel):
+        payload = {
+            "sender_id": "u1",
+            "content_parts": [TextContent(text="hi")],
+            "message_metadata": {
+                "qwenpaw_client_message_id": "client-2",
+            },
+            "meta": {},
+        }
+        req = console_channel.build_agent_request_from_native(payload)
+
+        assert req.input[0].metadata == {
+            "qwenpaw_client_message_id": "client-2",
+        }
+
     def test_non_dict_payload_returns_empty_request(
         self,
         console_channel,
@@ -262,17 +278,24 @@ class TestNoTextDebounce:
         assert ok is True
         assert merged == parts
 
-    def test_no_text_buffers(self, console_channel):
-        parts = [ImageContent(image_url="http://x/a.png")]
+    @pytest.mark.parametrize(
+        "part",
+        [
+            ImageContent(image_url="http://x/a.png"),
+            FileContent(file_url="http://x/a.txt"),
+        ],
+    )
+    def test_attachment_only_passes_through(self, console_channel, part):
+        parts = [part]
         ok, merged = console_channel._apply_no_text_debounce(
             "console:u1",
             parts,
         )
-        assert ok is False
-        assert merged == []
-        assert "console:u1" in console_channel._pending_content_by_session
+        assert ok is True
+        assert merged == parts
+        assert not console_channel._pending_content_by_session
 
-    def test_text_after_buffer_merges(self, console_channel):
+    def test_next_text_does_not_repeat_attachment(self, console_channel):
         img = ImageContent(image_url="http://x/a.png")
         console_channel._apply_no_text_debounce("console:u1", [img])
         ok, merged = console_channel._apply_no_text_debounce(
@@ -280,9 +303,8 @@ class TestNoTextDebounce:
             [TextContent(text="now text")],
         )
         assert ok is True
-        assert len(merged) == 2
-        assert merged[0].type == ContentType.IMAGE
-        assert merged[1].type == ContentType.TEXT
+        assert len(merged) == 1
+        assert merged[0].type == ContentType.TEXT
 
     def test_audio_bypasses_debounce(self, console_channel):
         from qwenpaw.schemas import AudioContent

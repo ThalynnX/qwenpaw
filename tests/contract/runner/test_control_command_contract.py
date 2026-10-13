@@ -13,6 +13,7 @@ Specifically:
 - the global registry includes all six default handlers;
 - the registry rejects empty ``command_name`` registrations.
 """
+
 # pylint: disable=protected-access,redefined-outer-name,unused-argument
 # pylint: disable=wrong-import-position,no-name-in-module,c-extension-no-member
 # flake8: noqa: E402
@@ -24,18 +25,10 @@ from typing import get_type_hints
 
 import pytest
 
-# pylint: disable=no-name-in-module
-pytest.importorskip(
-    "qwenpaw.app.runner.control_commands",
-    reason="qwenpaw.app.runner was removed in AgentScope 2.0",
-)
-from qwenpaw.app.runner import (  # type: ignore[import]
-    control_commands,
-)
-from qwenpaw.app.runner.control_commands.base import (  # type: ignore[import]
+from qwenpaw.runtime.commands import control as control_commands
+from qwenpaw.runtime.commands.control.base import (
     BaseControlCommandHandler,
 )
-
 
 _EXPECTED_DEFAULTS = {
     "/approval",
