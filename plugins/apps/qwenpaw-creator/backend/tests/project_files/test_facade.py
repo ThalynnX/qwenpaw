@@ -27,6 +27,7 @@ def test_stale_runtime_owner_system_error_does_not_abort_startup(
 
     monkeypatch.setattr(facade.os, "kill", raise_system_error)
 
+    # pylint: disable-next=protected-access
     assert facade._warn_on_second_backend(tmp_path) is False
     updated = json.loads(marker.read_text(encoding="utf-8"))
     assert updated["pid"] == os.getpid()
