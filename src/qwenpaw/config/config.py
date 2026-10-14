@@ -36,10 +36,7 @@ from qwenpaw.exceptions import (
     ConfigurationException,
 )
 
-from .history_path import (
-    migrate_history_db_path,
-    normalize_history_db_filename,
-)
+from .history_path import normalize_history_db_filename
 from .timezone import detect_system_timezone
 from ..constant import (
     HEARTBEAT_DEFAULT_EVERY,
@@ -1220,22 +1217,24 @@ class ScrollContextConfig(BaseModel):
     """Scroll (retrieval-driven) context manager configuration.
 
     Only consulted when ``LightContextConfig.strategy == "scroll"``. The
-    durable history lives at ``{working_dir}/{db_filename}``; evicted turns
-    fold into an in-context eviction index recallable from the sandboxed
-    ``recall_history_python`` REPL.
+    durable history uses ``db_filename`` (relative to the workspace unless
+    absolute). Evicted turns fold into an in-context eviction index,
+    recallable from the sandboxed ``recall_history_python`` REPL.
     """
 
     model_config = ConfigDict(extra="ignore")
 
     db_filename: str = Field(
         default="history.db",
-        description="SQLite history store filename, relative to working_dir.",
+        description=(
+            f"SQLite history path, absolute or relative to the workspace."
+        ),
     )
 
     @field_validator("db_filename")
     @classmethod
     def validate_db_filename(cls, value: str) -> str:
-        """Keep durable history inside its agent workspace."""
+        """Normalize the configured durable history filename."""
         return normalize_history_db_filename(value)
 
     tool_output_token_cap: int = Field(
@@ -3644,7 +3643,6 @@ def load_agent_config(  # pylint: disable=too-many-branches,too-many-statements
             else:
                 data.pop("last_dispatch")
                 last_dispatch_migrated = True
-        history_path_migrated = migrate_history_db_path(data, workspace_dir)
         project_dir_migrated = migrate_project_directory_config(data)
 
         # Match the existing migration behavior: migrate this workspace only
@@ -3667,7 +3665,6 @@ def load_agent_config(  # pylint: disable=too-many-branches,too-many-statements
             access_control_migrated = False
 
         migrations_applied = (
-            history_path_migrated,
             project_dir_migrated,
             mail_credentials_migrated,
             weixin_migrated,

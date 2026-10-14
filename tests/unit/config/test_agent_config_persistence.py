@@ -123,12 +123,24 @@ def test_cache_detects_same_mtime_atomic_replacement(
     assert load_agent_config("agent").name == "New"
 
 
+@pytest.mark.parametrize(f"location", [f"relative", f"absolute", f"external"])
 def test_cache_returns_an_isolated_config_copy(
     tmp_path: Path,
     monkeypatch,
+    location: str,
 ) -> None:
     """Mutating one loaded config cannot change a later cache hit."""
-    _agent_path, _raw = _prepare_agent(tmp_path, monkeypatch)
+    agent_path, raw = _prepare_agent(tmp_path, monkeypatch)
+    database = agent_path.parent / f"history.db"
+    if location == f"external":
+        database = tmp_path / f"external.db"
+    database.write_bytes(b"existing database")
+    filename = f"history.db" if location == f"relative" else str(database)
+    raw[f"running"][f"light_context_config"][f"scroll_config"][
+        f"db_filename"
+    ] = filename
+    original = json.dumps(raw)
+    agent_path.write_text(original, encoding=f"utf-8")
     first = load_agent_config("agent")
     first.description = "updated"
 
@@ -136,6 +148,11 @@ def test_cache_returns_an_isolated_config_copy(
 
     assert second is not first
     assert second.description == ""
+    assert second.running.light_context_config.scroll_config.db_filename == (
+        filename.replace(f"\\", f"/")
+    )
+    assert agent_path.read_text(encoding=f"utf-8") == original
+    assert database.read_bytes() == b"existing database"
 
 
 def test_stale_loaded_config_cannot_overwrite_external_update(

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Workspace-bound path handling for the durable history database."""
+"""Local path handling for the durable history database."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -21,6 +21,11 @@ from qwenpaw.config.history_path import (
         (" state/events.db ", "state/events.db"),
         (r"state\events.db", "state/events.db"),
         ("./history.db", "history.db"),
+        (f"../history.db", f"../history.db"),
+        (f"/tmp/history.db", f"/tmp/history.db"),
+        (f"C:/tmp/history.db", f"C:/tmp/history.db"),
+        (f"//server/share/history.db", f"//server/share/history.db"),
+        (f"~/history.db", f"~/history.db"),
     ],
 )
 def test_normalize_history_db_filename(
@@ -37,15 +42,10 @@ def test_normalize_history_db_filename(
         "   ",
         ".",
         "..",
-        "../history.db",
-        "state/../../history.db",
-        "/tmp/history.db",
-        r"C:\tmp\history.db",
-        r"\\server\share\history.db",
-        "~/history.db",
+        f"invalid\0.db",
     ],
 )
-def test_normalize_history_db_filename_rejects_unsafe_paths(
+def test_normalize_history_db_filename_rejects_invalid_paths(
     value: str,
 ) -> None:
     with pytest.raises(ValueError):
@@ -57,25 +57,27 @@ def test_scroll_config_normalizes_and_validates_history_path() -> None:
     assert config.db_filename == "state/events.db"
 
     with pytest.raises(ValidationError):
-        ScrollContextConfig(db_filename="../history.db")
+        ScrollContextConfig(db_filename=f" ")
 
 
-def test_resolve_history_db_path_stays_in_workspace(
+@pytest.mark.parametrize(
+    f"filename",
+    [f"state/events.db", f"../events.db", f"absolute", f"~/events.db"],
+)
+def test_resolve_history_db_path(
     tmp_path: Path,
+    filename: str,
 ) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
 
-    assert (
-        resolve_history_db_path(
-            workspace,
-            "state/events.db",
-        )
-        == workspace / "state" / "events.db"
-    )
+    if filename == f"absolute":
+        filename = str(tmp_path / f"external.db")
+    expected = (workspace / Path(filename).expanduser()).resolve()
+    assert resolve_history_db_path(workspace, filename) == expected
 
 
-def test_resolve_history_db_path_rejects_symlink_escape(
+def test_resolve_history_db_path_follows_external_symlink(
     tmp_path: Path,
 ) -> None:
     workspace = tmp_path / "workspace"
@@ -88,5 +90,7 @@ def test_resolve_history_db_path_rejects_symlink_escape(
     except OSError:
         pytest.skip("directory symlinks are unavailable")
 
-    with pytest.raises(ValueError, match="outside"):
-        resolve_history_db_path(workspace, "linked/history.db")
+    assert (
+        resolve_history_db_path(workspace, f"linked/history.db")
+        == (outside / f"history.db").resolve()
+    )

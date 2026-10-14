@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Locate SQLite scroll history safely inside an agent workspace."""
+"""Locate SQLite history and prepare portable backup configuration."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ from pathlib import Path
 
 from ...config.history_path import (
     DEFAULT_HISTORY_DB_FILENAME,
-    migrate_history_db_path,
     resolve_history_db_path,
 )
 
@@ -18,20 +17,29 @@ logger = logging.getLogger(__name__)
 SQLITE_SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
 
 
-def history_agent_config_bytes(workspace: Path) -> bytes:
+def history_agent_config_bytes(
+    workspace: Path,
+    archive_filename: str,
+) -> bytes:
     """Normalize the archive config without rewriting the live workspace."""
     content = (workspace / f"agent.json").read_bytes()
     try:
         data = json.loads(content)
     except (UnicodeDecodeError, json.JSONDecodeError):
         return content
-    if migrate_history_db_path(data, workspace):
+    config = data
+    for key in (f"running", f"light_context_config", f"scroll_config"):
+        if not isinstance(config, dict):
+            return content
+        config = config.get(key)
+    if isinstance(config, dict):
+        config[f"db_filename"] = archive_filename
         return json.dumps(data, ensure_ascii=False, indent=2).encode(f"utf-8")
     return content
 
 
 def configured_history_db_path(workspace: Path) -> Path:
-    """Return the configured in-workspace history path without side effects.
+    """Return the configured history path without side effects.
 
     Backup code must not call the normal agent-config loader because that
     loader can migrate or rewrite configuration. Invalid or missing config
@@ -43,7 +51,6 @@ def configured_history_db_path(workspace: Path) -> Path:
     if agent_json.is_file():
         try:
             data = json.loads(agent_json.read_text(encoding="utf-8"))
-            migrate_history_db_path(data, workspace)
             configured = (
                 data.get("running", {})
                 .get("light_context_config", {})
@@ -68,3 +75,19 @@ def history_sidecar_paths(db_path: Path) -> set[Path]:
         Path(str(db_path) + suffix).resolve()
         for suffix in SQLITE_SIDECAR_SUFFIXES
     }
+
+
+def archive_history_db_filename(workspace: Path, db_path: Path) -> str:
+    """Choose a portable snapshot path without replacing workspace files."""
+    if db_path.is_relative_to(workspace):
+        return db_path.relative_to(workspace).as_posix()
+    filename = DEFAULT_HISTORY_DB_FILENAME
+    index = 0
+    while any(
+        (workspace / f"{filename}{suffix}").exists()
+        or (workspace / f"{filename}{suffix}").is_symlink()
+        for suffix in (f"", *SQLITE_SIDECAR_SUFFIXES)
+    ):
+        index += 1
+        filename = f"history-{index}.db"
+    return filename
