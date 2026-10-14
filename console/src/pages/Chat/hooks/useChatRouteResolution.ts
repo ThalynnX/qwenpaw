@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api from "../../../api";
 import { useAgentStore } from "../../../stores/agentStore";
 import { useSessionListStore } from "../../../stores/sessionListStore";
 import sessionApi, { type SessionOwnerToken } from "../sessionApi";
 
 interface ResolutionState {
-  referenceId: string;
+  visit: object;
   owner: SessionOwnerToken;
   error: unknown;
 }
@@ -24,8 +24,6 @@ export function useChatRouteResolution(
   const [resolution, setResolution] = useState<ResolutionState | null>(null);
   const [retryVersion, setRetryVersion] = useState(0);
   const agentSwitchTarget = useRef<AgentSwitchTarget | null>(null);
-  const referenceRef = useRef(referenceId);
-  referenceRef.current = referenceId;
   const hasReference = !!referenceId && referenceId !== "new";
   // Persisted SDK display IDs may be runtime aliases of another Chat.
   // Only canonical Chat IDs and genuine local drafts can skip resolution.
@@ -39,9 +37,20 @@ export function useChatRouteResolution(
           sessionApi.isUnresolvedLocalSession(referenceId ?? "")))
     );
   });
+  const invalidationVersion = useSessionListStore(() =>
+    sessionApi.getRouteResolutionVersion(),
+  );
+  // Re-entering a link or losing its listed identity requires a fresh result
+  // from the first render, before the previous effect can be cleaned up.
+  const visit = useMemo(
+    () => ({ referenceId, known, retryVersion, invalidationVersion }),
+    [referenceId, known, retryVersion, invalidationVersion],
+  );
+  const visitRef = useRef(visit);
+  visitRef.current = visit;
   const currentResolution =
     resolution !== null &&
-    resolution.referenceId === referenceId &&
+    resolution.visit === visit &&
     sessionApi.isActiveOwner(resolution.owner)
       ? resolution
       : null;
@@ -54,7 +63,7 @@ export function useChatRouteResolution(
     const owner = sessionApi.getActiveOwner();
     const isCurrent = () =>
       !controller.signal.aborted &&
-      referenceRef.current === referenceId &&
+      visitRef.current === visit &&
       sessionApi.isActiveOwner(owner);
 
     void api
@@ -74,16 +83,16 @@ export function useChatRouteResolution(
         }
         const nextOwner = sessionApi.getActiveOwner();
         sessionApi.registerResolvedChat(chat, nextOwner);
-        setResolution({ referenceId, owner: nextOwner, error: null });
+        setResolution({ visit, owner: nextOwner, error: null });
       })
       .catch((error: unknown) => {
-        if (isCurrent()) setResolution({ referenceId, owner, error });
+        if (isCurrent()) setResolution({ visit, owner, error });
       });
 
     return () => controller.abort();
     // Losing a listed Chat's identity requires resolution again. Ordinary
     // list refreshes leave this boolean unchanged and keep requests intact.
-  }, [referenceId, selectedAgent, retryVersion, known]);
+  }, [referenceId, selectedAgent, known, visit]);
 
   const retry = useCallback(() => {
     setResolution(null);

@@ -674,15 +674,16 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     try {
       const session = await this.getSession(sessionId, signal);
 
-      // A preload that completes after an agent switch must fail like an
-      // aborted request: resolving normally would let the caller navigate
-      // the new agent to the stale session and mark it as preferred.
-      if (!this.isActiveOwner(owner)) {
-        throw new DOMException("Aborted", "AbortError");
-      }
-
+      // A preload must not navigate or repopulate an alias after its Agent
+      // or canonical Chat identity changes while history is loading.
       const extendedSession = session as ExtendedSession;
       const realId = extendedSession.realId || null;
+      if (
+        !this.isActiveOwner(owner) ||
+        this.getEffectiveSessionId(sessionId) !== (realId ?? session.id)
+      ) {
+        throw new DOMException("Aborted", "AbortError");
+      }
 
       // Cache the result so subsequent getSession calls return immediately.
       const entry = { session, owner };
@@ -739,13 +740,33 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
 
   /** Route metadata survives lists that exclude the selected archived Chat. */
   private resolvedRouteSession: ExtendedSession | null = null;
+  private routeResolutionVersion = 0;
+
+  /** Notify route aliases when their cached existence proof is invalidated. */
+  getRouteResolutionVersion(): number {
+    return this.routeResolutionVersion;
+  }
 
   registerResolvedChat(chat: ChatSpec, owner: SessionOwnerToken): void {
-    if (this.isActiveOwner(owner)) {
-      this.resolvedRouteSession = {
-        ...chatSpecToSession(chat),
-        realId: chat.id,
-      };
+    if (!this.isActiveOwner(owner)) return;
+    const previousId = this.getEffectiveSessionId(chat.id);
+    this.resolvedRouteSession = {
+      ...chatSpecToSession(chat),
+      realId: chat.id,
+    };
+    if (previousId !== chat.id) {
+      // A confirmed Chat UUID supersedes another Chat's SDK display alias.
+      // Drop alias-keyed work and restore the displaced row's canonical ID.
+      this.sessionRequests.delete(chat.id);
+      this.sessionResultCache.delete(chat.id);
+      this.lastSelectedIds.delete(chat.id);
+      this.sessionList = this.sessionList.map((session) => {
+        const existing = session as ExtendedSession;
+        return existing.id === chat.id && existing.realId
+          ? { ...existing, id: existing.realId }
+          : session;
+      });
+      syncSessionsGlobal([...this.sessionList]);
     }
   }
 
@@ -896,6 +917,7 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     this.visibleSessionId = undefined;
     this.activeOwner = { agentId: "", generation: 0 };
     this.resolvedRouteSession = null;
+    this.routeResolutionVersion = 0;
     this.sessionListRequest = null;
     this.invalidateSessionCreation();
     this.resolvePromise = null;
@@ -1154,13 +1176,19 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
   }
 
   private findSession(id: string): ExtendedSession | undefined {
-    const direct = this.sessionList.find(
-      (x) => x.id === id || (x as ExtendedSession).realId === id,
+    // Canonical IDs, including resolved archived Chats, precede SDK aliases.
+    const canonical = this.sessionList.find(
+      (x) => ((x as ExtendedSession).realId ?? x.id) === id,
     ) as ExtendedSession | undefined;
-    if (direct) return direct;
+    if (canonical) return canonical;
 
     const resolved = this.resolvedRouteSession;
     if (resolved?.id === id || resolved?.realId === id) return resolved;
+
+    const display = this.sessionList.find((x) => x.id === id) as
+      | ExtendedSession
+      | undefined;
+    if (display) return display;
 
     // Runtime session_id values are opaque. Most locally-created values use
     // the timestamp-random format, but imported/auto-registered Chats may use
@@ -1260,6 +1288,20 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
   private applyChatsToSessionList(
     chats: ChatSpec[],
   ): IAgentScopeRuntimeWebUISession[] {
+    const resolvedId = this.resolvedRouteSession?.id;
+    if (
+      resolvedId &&
+      this.sessionList.some(
+        (session) =>
+          ((session as ExtendedSession).realId ?? session.id) === resolvedId,
+      ) &&
+      !chats.some((chat) => chat.id === resolvedId)
+    ) {
+      // A listed Chat disappeared: let the route distinguish archive from
+      // deletion. Never-listed archived Chats retain their resolved identity.
+      this.resolvedRouteSession = null;
+      this.routeResolutionVersion++;
+    }
     // Capture the leading unresolved local session (the one just created via
     // createSession). It won't appear in the backend list until the first
     // message is sent; without this it would be wiped on every getSessionList
@@ -1343,7 +1385,7 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
       // Page refresh: URL may contain an opaque runtime session_id while the
       // backend list exposes only Chat UUIDs. UUID-looking runtime IDs are
       // valid too, so match by value rather than by the old timestamp shape.
-      if (idx < 0) {
+      if (idx < 0 && this.resolvedRouteSession?.id !== preferredId) {
         const runtimeMatches = this.sessionList
           .map((s, index) => ({ s: s as ExtendedSession, index }))
           .filter(({ s }) => s.sessionId === preferredId);
@@ -1471,9 +1513,14 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     const owner = this.getActiveOwner();
 
     // Check short-lived result cache first (populated by preloadSession).
-    // Entries from a previous ownership epoch are never served.
+    // Entries must still belong to the same owner and canonical Chat.
     const cached = this.sessionResultCache.get(sessionId);
-    if (cached && this.isActiveOwner(cached.owner)) {
+    if (
+      cached &&
+      this.isActiveOwner(cached.owner) &&
+      this.getEffectiveSessionId(sessionId) ===
+        ((cached.session as ExtendedSession).realId ?? cached.session.id)
+    ) {
       this.applySessionView(cached.session as ExtendedSession, owner);
       return cached.session;
     }
@@ -1494,6 +1541,12 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
       const session = await requestPromise;
       const extendedSession = session as ExtendedSession;
       const realId = extendedSession.realId || null;
+      if (
+        this.isActiveOwner(owner) &&
+        this.getEffectiveSessionId(sessionId) !== (realId ?? session.id)
+      ) {
+        throw new DOMException("Aborted", "AbortError");
+      }
 
       // Only trigger onSessionSelected if the result still belongs to the
       // active ownership epoch and neither the displayId nor the realId has
@@ -1552,7 +1605,13 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
       signal,
       include_app_owned: false,
     });
-    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    if (
+      signal?.aborted ||
+      (this.isActiveOwner(owner) &&
+        this.getEffectiveSessionId(displayId) !== backendId)
+    ) {
+      throw new DOMException("Aborted", "AbortError");
+    }
     if (this.isActiveOwner(owner)) {
       for (const id of new Set([displayId, backendId])) {
         useMessageQueueStore
@@ -1841,6 +1900,7 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
       this.resolvedRouteSession?.id === canonicalId
     ) {
       this.resolvedRouteSession = null;
+      this.routeResolutionVersion++;
     }
 
     const resolvedId = existing?.realId ?? sessionId;

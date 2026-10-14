@@ -223,6 +223,7 @@ vi.mock("./sessionApi", () => ({
       mockResolvedRoutes.set(`${mockSelectedAgent()}:${chat.id}`, chat);
       mockResolvedRoutes.set(`${mockSelectedAgent()}:${chat.session_id}`, chat);
     }),
+    getRouteResolutionVersion: vi.fn(() => 0),
     bindToOwner: vi.fn(() => ({
       getSession: (id: string) => mockSdkHistoryLoad(id),
       getSessionList: vi.fn(async () => []),

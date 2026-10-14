@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import api, { type ChatSpec } from "../../../api";
+import api, { type ChatHistory, type ChatSpec } from "../../../api";
 import { ApiError } from "../../../api/request";
 import { menuRegistry } from "../../../plugins/registry/store";
 import { useAgentStore } from "../../../stores/agentStore";
@@ -23,6 +23,16 @@ function chat(id = TARGET): ChatSpec {
     created_at: null,
     updated_at: null,
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
 }
 
 function mount(referenceId?: string) {
@@ -317,6 +327,165 @@ describe("chat route ownership resolution", () => {
     expect(useAgentStore.getState().selectedAgent).toBe("b");
     expect(sessionApi.getSessionIdentity(TARGET).chatId).toBe(TARGET);
   });
+
+  it.each([false, true])(
+    "opens a same-agent archived Chat over a cached display alias (preloaded=%s)",
+    async (preloaded) => {
+      const original = "11111111-1111-4111-8111-111111111111";
+      vi.spyOn(api, "listChats").mockResolvedValue([
+        { ...chat(original), session_id: TARGET },
+      ]);
+      const get = vi.spyOn(api, "getChat").mockResolvedValue({
+        messages: [],
+        status: "idle",
+      });
+      sessionApi.preferredChatId = TARGET;
+      await sessionApi.getSessionList();
+      expect(sessionApi.getSessionIdentity(TARGET).chatId).toBe(original);
+      if (preloaded) await sessionApi.preloadSession(TARGET);
+      get.mockClear();
+      vi.spyOn(api, "resolveChat").mockResolvedValue({
+        agent_id: "a",
+        chat: { ...chat(), archived: true },
+      });
+      const { result } = mount(TARGET);
+
+      await waitFor(() => expect(result.current.blocked).toBe(false));
+      expect(sessionApi.getSessionIdentity(TARGET).chatId).toBe(TARGET);
+      await expect(sessionApi.getSession(TARGET)).resolves.toMatchObject({
+        realId: TARGET,
+        sessionId: `runtime-${TARGET}`,
+      });
+      expect(get).toHaveBeenCalledExactlyOnceWith(TARGET, expect.any(Object));
+
+      sessionApi.preferredChatId = TARGET;
+      await act(async () => {
+        syncSessionsGlobal(await sessionApi.getSessionList());
+      });
+      expect(useSessionListStore.getState().sessions).toMatchObject([
+        { id: original },
+      ]);
+      expect(sessionApi.getSessionIdentity(TARGET).chatId).toBe(TARGET);
+    },
+  );
+
+  it("rejects a late preload for an alias claimed by a canonical Chat", async () => {
+    const original = "11111111-1111-4111-8111-111111111111";
+    vi.spyOn(api, "listChats").mockResolvedValue([
+      { ...chat(original), session_id: TARGET },
+    ]);
+    sessionApi.preferredChatId = TARGET;
+    await sessionApi.getSessionList();
+    const pending = deferred<ChatHistory>();
+    const get = vi.spyOn(api, "getChat").mockImplementation(async (id) => {
+      if (id === original) return pending.promise;
+      return { messages: [], status: "idle" };
+    });
+    const stale = Promise.allSettled([sessionApi.preloadSession(TARGET)]);
+    vi.spyOn(api, "resolveChat").mockResolvedValue({
+      agent_id: "a",
+      chat: { ...chat(), archived: true },
+    });
+    const { result } = mount(TARGET);
+    await waitFor(() => expect(result.current.blocked).toBe(false));
+    const fresh = sessionApi.getSession(TARGET);
+    pending.resolve({ messages: [], status: "idle" });
+
+    await expect(fresh).resolves.toMatchObject({ realId: TARGET });
+    expect(await stale).toMatchObject([
+      { status: "rejected", reason: { name: "AbortError" } },
+    ]);
+    expect(get).toHaveBeenCalledWith(TARGET, expect.any(Object));
+    await expect(sessionApi.getSession(TARGET)).resolves.toMatchObject({
+      realId: TARGET,
+    });
+  });
+
+  it.each([404, 409])(
+    "blocks every render of a repeated alias while its new resolution awaits %s",
+    async (status) => {
+      const alias = `runtime-${TARGET}`;
+      const pending = deferred<{ agent_id: string; chat: ChatSpec }>();
+      const resolve = vi
+        .spyOn(api, "resolveChat")
+        .mockResolvedValueOnce({ agent_id: "a", chat: chat() })
+        .mockReturnValueOnce(pending.promise);
+      const renders: boolean[] = [];
+      const { result, rerender } = renderHook(
+        ({ referenceId }) => {
+          const { selectedAgent } = useAgentStore();
+          const resolution = useChatRouteResolution(referenceId, selectedAgent);
+          renders.push(resolution.blocked);
+          return resolution;
+        },
+        { initialProps: { referenceId: alias } },
+      );
+      await waitFor(() => expect(result.current.blocked).toBe(false));
+      rerender({ referenceId: "new" });
+      renders.length = 0;
+      rerender({ referenceId: alias });
+
+      expect(resolve).toHaveBeenCalledTimes(2);
+      expect(renders.length).toBeGreaterThan(0);
+      expect(renders.every(Boolean)).toBe(true);
+      await act(async () => {
+        pending.reject(new ApiError(status, "Unavailable Chat reference"));
+      });
+      expect(result.current.blocked).toBe(true);
+      expect(result.current.error).toMatchObject({ status });
+    },
+  );
+
+  it.each([
+    [TARGET, "archived"],
+    [TARGET, "deleted"],
+    [`runtime-${TARGET}`, "archived"],
+    [`runtime-${TARGET}`, "deleted"],
+  ] as const)(
+    "revalidates a cold-resolved link %s when its Chat is %s",
+    async (referenceId, outcome) => {
+      const pending = deferred<{ agent_id: string; chat: ChatSpec }>();
+      const resolve = vi
+        .spyOn(api, "resolveChat")
+        .mockResolvedValueOnce({ agent_id: "a", chat: chat() })
+        .mockReturnValueOnce(pending.promise);
+      const list = vi.spyOn(api, "listChats").mockResolvedValue([chat()]);
+      const { result } = mount(referenceId);
+      await waitFor(() => expect(result.current.blocked).toBe(false));
+      await act(async () => {
+        syncSessionsGlobal(await sessionApi.getSessionList());
+      });
+      expect(useSessionListStore.getState().sessions).toHaveLength(1);
+      list.mockResolvedValue([]);
+      await act(async () => {
+        syncSessionsGlobal(await sessionApi.getSessionList());
+      });
+
+      expect(resolve).toHaveBeenCalledTimes(2);
+      expect(result.current.blocked).toBe(true);
+      await act(async () => {
+        if (outcome === "archived") {
+          pending.resolve({
+            agent_id: "a",
+            chat: { ...chat(), archived: true },
+          });
+        } else {
+          pending.reject(new ApiError(404, "Chat not found"));
+        }
+      });
+      expect(result.current.blocked).toBe(outcome === "deleted");
+      if (outcome === "deleted") {
+        expect(result.current.error).toMatchObject({ status: 404 });
+      } else {
+        expect(result.current.error).toBeNull();
+        expect(sessionApi.getSessionIdentity(TARGET).chatId).toBe(TARGET);
+      }
+      await act(async () => {
+        syncSessionsGlobal(await sessionApi.getSessionList());
+      });
+      expect(resolve).toHaveBeenCalledTimes(2);
+    },
+  );
 
   it("keeps not-found links blocked and can retry the same reference", async () => {
     const resolve = vi

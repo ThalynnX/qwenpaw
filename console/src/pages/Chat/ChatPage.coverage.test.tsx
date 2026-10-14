@@ -232,6 +232,7 @@ vi.mock("./sessionApi", () => ({
       (owner: { agentId: string }) => owner.agentId === mockSelectedAgent(),
     ),
     registerResolvedChat: vi.fn(),
+    getRouteResolutionVersion: vi.fn(() => 0),
     bindToOwner: vi.fn(() => ({
       getSession: vi.fn(async (id: string) => ({ id, name: id, messages: [] })),
       getSessionList: vi.fn(async () => []),
