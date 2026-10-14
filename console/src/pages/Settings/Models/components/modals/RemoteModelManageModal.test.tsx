@@ -491,22 +491,4 @@ describe("model pool switches", () => {
     fireEvent.click(screen.getByText("models.addModel"));
     expect(screen.getAllByRole("dialog")).toHaveLength(2);
   });
-  it("adds a decision model through the existing model form", async () => {
-    const user = userEvent.setup();
-    api.addModel.mockResolvedValue(provider);
-    await render({ chat_model: "" });
-    await user.click(screen.getByText("models.addModel"));
-    const dialog = within(screen.getAllByRole("dialog")[1]);
-    await user.type(dialog.getByLabelText("models.modelIdLabel"), "jev-latest");
-    expect(dialog.queryByText("preview")).not.toBeInTheDocument();
-    await user.click(dialog.getByRole("button", { name: "confirm" }));
-    await waitFor(() =>
-      expect(api.addModel).toHaveBeenCalledWith("openrouter", {
-        id: "jev-latest",
-        name: "jev-latest",
-        model_type: "decision",
-        template_id: undefined,
-      }),
-    );
-  });
 });

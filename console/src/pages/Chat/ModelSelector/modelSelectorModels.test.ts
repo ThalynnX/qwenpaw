@@ -1,8 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   buildEligibleProviders,
-  buildDiscoveryCandidates,
-  buildHiddenCandidates,
   modelKey,
   splitProvidersByTier,
 } from "./modelSelectorModels";
@@ -62,35 +60,6 @@ describe("modelSelectorModels (#5784 压缩阈值跨 provider 校验)", () => {
   });
 
   describe("buildEligibleProviders", () => {
-    it("filters decision models within mixed providers and excludes decision-only services", () => {
-      const decision = {
-        ...makeModel("decision", 32768),
-        model_type: "decision" as const,
-      };
-      const providers = [
-        makeProvider({ models: [makeModel("chat", 32768), decision] }),
-        makeProvider({ id: "typesafe", chat_model: "", models: [decision] }),
-      ];
-      const eligible = buildEligibleProviders(providers);
-      expect(eligible).toHaveLength(1);
-      expect(eligible[0].models.map((model) => model.id)).toEqual(["chat"]);
-      expect(
-        buildEligibleProviders(providers, "decision").map((p) =>
-          p.models.map((m) => m.id),
-        ),
-      ).toEqual([["decision"], ["decision"]]);
-      const pool = makeProvider({
-        discovered_models: [makeModel("chat", 32768), decision],
-      });
-      expect(
-        buildDiscoveryCandidates([pool], "decision").map((m) => m.model.id),
-      ).toEqual(["decision"]);
-      pool.hidden_model_ids = ["chat", "decision"];
-      expect(
-        buildHiddenCandidates([pool], "decision").map((m) => m.model.id),
-      ).toEqual(["decision"]);
-    });
-
     it("两个 provider 有同名 model 时，各自保留自己的 max_input_length", () => {
       const sharedModelId = "shared-model";
       const providers: ProviderInfo[] = [

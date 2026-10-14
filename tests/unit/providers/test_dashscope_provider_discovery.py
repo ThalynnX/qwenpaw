@@ -99,7 +99,6 @@ async def test_native_directory_paginates_and_reads_capabilities(monkeypatch):
     )
     assert len(requests) == 2
     assert [card.id for card in cards] == [f"chat-1", f"chat-2"]
-    assert all(card.model_type == "chat" for card in cards)
     assert cards[0].supports_image is True
     assert cards[0].supports_audio is False
     assert cards[0].supports_tool_calling is True

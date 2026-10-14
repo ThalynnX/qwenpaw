@@ -483,10 +483,8 @@ def test_patch_agent_model_settings_preserves_active_model(
         thinking_level="high",
     )
 
-    client.app.state.provider_manager = MagicMock()
     calls = []
     with (
-        patch("qwenpaw.app.routers.agents.validate_model_slot"),
         patch(
             "qwenpaw.app.routers.agents.mutate_agent_config",
             side_effect=_agent_transaction(existing, calls),

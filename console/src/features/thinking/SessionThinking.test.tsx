@@ -9,12 +9,6 @@ import {
 } from "./sessionThinkingApi";
 import { resetSessionModel } from "../session-settings/sessionModel";
 import { SessionThinking } from "./SessionThinking";
-import { loadDecisionSettings } from "../session-settings/sessionDecision";
-
-vi.mock("../session-settings/sessionDecision", () => ({
-  loadDecisionSettings: vi.fn(),
-  saveDecisionSettings: vi.fn(),
-}));
 
 vi.mock("./sessionThinkingApi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./sessionThinkingApi")>()),
@@ -60,21 +54,6 @@ it("shows the Hub catalog name in the trigger and panel instead of its routing I
   );
   expect(await screen.findAllByText("Organization Qwen")).toHaveLength(2);
   expect(screen.queryByText(model)).not.toBeInTheDocument();
-  expect(screen.queryByRole("switch")).not.toBeInTheDocument();
-  expect(screen.queryByRole("tab")).not.toBeInTheDocument();
-  vi.mocked(loadDecisionSettings).mockResolvedValue({
-    enabled: false,
-    configured: true,
-    override: false,
-  });
-  fireEvent.click(
-    screen.getByRole("button", { name: "chat.sessionSettings.advanced" }),
-  );
-  await waitFor(() => expect(screen.getByRole("switch")).toBeEnabled());
-  expect(loadDecisionSettings).toHaveBeenCalledWith("agent", {
-    sessionId: "session",
-    chatId: "chat",
-  });
 });
 
 it("restores the default model directly even when thinking is unsupported", async () => {

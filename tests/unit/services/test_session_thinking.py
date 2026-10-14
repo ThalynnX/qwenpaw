@@ -13,10 +13,7 @@ from qwenpaw.app.chats.api import (
     set_chat_model,
     set_chat_thinking,
 )
-from qwenpaw.app.routers.console import (
-    _persist_pending_model_settings,
-    _persist_pending_project_dirs,
-)
+from qwenpaw.app.routers.console import _persist_pending_project_dirs
 
 from qwenpaw.app.chats.manager import ChatManager
 from qwenpaw.app.chats.models import ChatSpec
@@ -168,7 +165,6 @@ async def test_model_preferences_restore_independently(tmp_path):
         id=f"agent",
         name=f"Agent",
         active_model=ModelSlotConfig(provider_id=f"p", model=f"default"),
-        decision_model=ModelSlotConfig(provider_id="p", model="decision"),
     )
     workspace = SimpleNamespace(chat_manager=manager, agent_id=f"agent")
     ctx = SimpleNamespace(
@@ -193,7 +189,6 @@ async def test_model_preferences_restore_independently(tmp_path):
         )
         snapshot = await apply_session_thinking(ctx, config)
         assert snapshot.active_model.model == model
-        assert snapshot.decision_model == config.decision_model
         assert snapshot.thinking_level == level
         assert config.active_model.model == f"default"
         assert config.thinking_level == f"inherit"
@@ -432,16 +427,9 @@ async def test_hub_personal_session_selection_and_reasoning(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("first_turn", [False, True])
-@pytest.mark.parametrize(
-    "model_info",
-    [None, SimpleNamespace(name="Decision", model_type="decision")],
-)
 async def test_invalid_personal_selection_is_not_persisted(
     tmp_path,
     monkeypatch,
-    first_turn,
-    model_info,
 ):
     monkeypatch.setenv(f"QWENPAW_HUB_MODEL_TOKEN", f"token")
     config = AgentProfileConfig(id=f"agent", name=f"Agent")
@@ -458,16 +446,14 @@ async def test_invalid_personal_selection_is_not_persisted(
         patch(f"qwenpaw.services.session_thinking.managed_slot") as hub,
     ):
         provider = factory.return_value.get_provider.return_value
-        provider.get_model_info.return_value = model_info
-        selected = ModelSlotConfig(provider_id="kilo", model="unavailable")
-        workspace = SimpleNamespace(agent_id="agent", chat_manager=manager)
+        provider.get_model_info.return_value = None
         with pytest.raises(HTTPException) as failure:
-            if first_turn:
-                await _persist_pending_model_settings(
-                    workspace, chat, {"session_model": selected.model_dump()}
-                )
-            else:
-                await set_chat_model(chat.id, selected, manager, workspace)
+            await set_chat_model(
+                chat.id,
+                ModelSlotConfig(provider_id=f"kilo", model=f"missing"),
+                manager,
+                SimpleNamespace(agent_id=f"agent"),
+            )
         assert failure.value.status_code == 422
         hub.assert_not_called()
         assert not (await manager.get_chat(chat.id)).meta.get(

@@ -56,9 +56,6 @@ class _FakeProvider(SimpleNamespace):
         """Return the stub's already configured model information."""
         return self.get_model_info(model_id)
 
-    def validate_chat_model(self, _model_id):
-        pass
-
 
 def _patched_load_agent_config(_agent_id):  # noqa: ARG001
     """Return fake agent config with an overridable active model."""
@@ -390,7 +387,6 @@ def test_global_model_switch_during_construction_keeps_context(
         for provider_id in ("dashscope", next_provider_id)
     }
     manager = object.__new__(ProviderManager)
-    manager.default_models = {}
     manager.active_model = ModelSlotConfig(
         provider_id="dashscope",
         model="model-a",
@@ -779,7 +775,7 @@ def test_invalid_fallback_slots_are_skipped(monkeypatch):
                 _FakeChatModel(f"default-provider/{model_name}")
             ),
         ),
-        "known-provider": _FakeProvider(
+        "known-provider": SimpleNamespace(
             enabled=True,
             get_model_info=lambda _model_name: None,
         ),

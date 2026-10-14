@@ -221,7 +221,6 @@ class TestListModels:
         def _model(mid):
             return SimpleNamespace(
                 id=mid,
-                model_type="chat",
                 supports_image=False,
                 supports_video=False,
             )
