@@ -127,6 +127,7 @@ def build_scroll_components(
     workspace_dir: Any,
     model: Any,
     session_id: str,
+    context_generation: int = 0,
     agent_id: str | None = None,
     offloader: Any = None,
 ) -> ScrollComponents | None:
@@ -188,9 +189,15 @@ def build_scroll_components(
         recall_loop_guard = RecallLoopGuard()
         scratch_root = str(Path(workspace_dir) / ".scroll")
 
+        history_session_id = (
+            session_id
+            if context_generation <= 0
+            else f"{session_id}\x1fcontext:{context_generation}"
+        )
         manager = ScrollContextManager(
             history=history,
-            session_id=session_id,
+            session_id=history_session_id,
+            archive_session_id=session_id,
             agent_id=agent_id,
             # Legacy dialog archive is opt-in; only hand the manager an
             # offloader when configured, so by default scroll writes nothing
@@ -202,7 +209,7 @@ def build_scroll_components(
         )
         tool = make_recall_history_python(
             history_db_path=str(history.path),
-            session_id=session_id,
+            session_id=history_session_id,
             agent_id=agent_id,
             scratch_root=scratch_root,
             timeout_s=sc.repl_timeout_s,
@@ -214,7 +221,7 @@ def build_scroll_components(
         # sandboxed REPL is unavailable.
         recall = make_recall_history(
             history_db_path=str(history.path),
-            session_id=session_id,
+            session_id=history_session_id,
             agent_id=agent_id,
             loop_guard=recall_loop_guard,
             page_max_bytes=trc.pruning_recent_msg_max_bytes,
