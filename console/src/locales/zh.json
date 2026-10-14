@@ -2404,7 +2404,7 @@
     "providersTitle": "提供商",
     "providersDescription": "为每个提供商配置 API 密钥和端点。",
     "llmTitle": "模型",
-    "defaultLlm": "默认LLM",
+    "defaultLlm": "全局默认模型",
     "notConfiguredYet": "尚未配置",
     "llmDescription": "在这里设置全局默认的 LLM 模型。你也可以在聊天页面为具体 Agent 单独选择使用的模型。",
     "configureProvider": "配置 {{name}}",
@@ -2526,9 +2526,26 @@
     "paidGroup": "付费",
     "localCustomGroup": "本地 & 自定义",
     "cloudGroup": "云端提供商",
+    "providerVariants": {
+      "dashscope": "DashScope",
+      "chat_completions": "Chat Completions",
+      "responses": "Responses API",
+      "open_platform": "开放平台",
+      "open_platform_cn": "开放平台（中国区）",
+      "open_platform_intl": "开放平台（国际区）",
+      "coding_plan": "Coding Plan",
+      "coding_plan_cn": "Coding（中国区）",
+      "coding_plan_intl": "Coding（国际区）",
+      "token_plan": "Token Plan",
+      "token_plan_intl": "Token（国际区）",
+      "china": "中国区",
+      "international": "国际区"
+    },
     "configuredGroup": "已配置",
     "configuredOnline": "个提供商在线",
     "noConfigured": "尚未配置任何提供商，请在下方选择一个开始使用",
+    "noSearchResultsTitle": "未找到匹配的提供商",
+    "noSearchResults": "没有与“{{query}}”匹配的提供商，请尝试其他关键词。",
     "goConfigureBtn": "去配置",
     "availableGroup": "可用提供商",
     "clickToConfigure": "点击配置",
@@ -5667,7 +5684,7 @@
     "modelSource": {
       "session": "当前会话指定",
       "agent": "跟随 Agent 模型",
-      "global": "跟随默认 LLM"
+      "global": "跟随全局模型"
     }
   },
   "runtimeDesign": {

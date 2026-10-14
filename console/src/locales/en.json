@@ -2544,7 +2544,7 @@
     "providersTitle": "Providers",
     "providersDescription": "Configure API keys and endpoints for each provider.",
     "llmTitle": "Models",
-    "defaultLlm": "Default LLM",
+    "defaultLlm": "Global default model",
     "notConfiguredYet": "Not configured",
     "llmDescription": "Set the global default LLM model from an authorized provider. You can choose a specific model for each Agent in the Chat page.",
     "configureProvider": "Configure {{name}}",
@@ -2666,9 +2666,26 @@
     "paidGroup": "Paid",
     "localCustomGroup": "Local & Custom",
     "cloudGroup": "Cloud Providers",
+    "providerVariants": {
+      "dashscope": "DashScope",
+      "chat_completions": "Chat Completions",
+      "responses": "Responses API",
+      "open_platform": "Open Platform",
+      "open_platform_cn": "Open Platform (China)",
+      "open_platform_intl": "Open Platform (International)",
+      "coding_plan": "Coding Plan",
+      "coding_plan_cn": "Coding (China)",
+      "coding_plan_intl": "Coding (International)",
+      "token_plan": "Token Plan",
+      "token_plan_intl": "Token (International)",
+      "china": "China",
+      "international": "International"
+    },
     "configuredGroup": "Configured",
     "configuredOnline": "providers online",
     "noConfigured": "No providers configured yet. Select one below to get started.",
+    "noSearchResultsTitle": "No matching providers",
+    "noSearchResults": "No providers match \"{{query}}\". Try another search.",
     "goConfigureBtn": "Configure a Provider",
     "availableGroup": "Available Providers",
     "clickToConfigure": "Click to configure",
@@ -5647,7 +5664,7 @@
     "modelSource": {
       "session": "Conversation model",
       "agent": "Agent default",
-      "global": "Default LLM"
+      "global": "Use global model"
     }
   },
   "runtimeDesign": {

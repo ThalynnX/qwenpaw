@@ -14,7 +14,14 @@ import {
 import { useMatch, useSearchParams } from "react-router-dom";
 import { Button, Input, Modal } from "@agentscope-ai/design";
 import { Alert } from "antd";
-import { Plus, Search, RefreshCw, Plug, ChevronRight } from "lucide-react";
+import {
+  Plus,
+  Search,
+  SearchX,
+  RefreshCw,
+  Plug,
+  ChevronRight,
+} from "lucide-react";
 import { useProviders } from "./useProviders";
 import {
   LoadingState,
@@ -295,12 +302,20 @@ function ModelsPage() {
 
   const configuredCloudProviderCount = useMemo(
     () =>
-      countConfiguredProviders([
-        ...cloudConfiguredGrouped.flatMap((g) => g.providers),
-        ...cloudConfiguredUngrouped,
-      ]),
-    [cloudConfiguredGrouped, cloudConfiguredUngrouped],
+      countConfiguredProviders(
+        providers.filter(
+          (provider) => !provider.is_local && !provider.is_custom,
+        ),
+      ),
+    [providers],
   );
+  const hasSearchQuery = deferredSearchQuery.trim().length > 0;
+  const activeTabHasSearchResults =
+    activeTab === "cloud"
+      ? cloudConfiguredGrouped.length > 0 ||
+        cloudConfiguredUngrouped.length > 0 ||
+        cloudAvailableGroups.length > 0
+      : localConfigured.length > 0 || localAvailable.length > 0;
 
   const renderProviderCards = (list: ProviderInfo[]) =>
     list.map((provider, index) => (
@@ -317,7 +332,10 @@ function ModelsPage() {
 
   return (
     <motion.div
-      className={styles.settingsPage}
+      className={[
+        styles.settingsPage,
+        isSettingsEntry ? styles.settingsEntry : "",
+      ].join(" ")}
       animate={{
         scale: !reducedMotion && (configOpen || modelsOpen) ? 0.995 : 1,
       }}
@@ -370,35 +388,37 @@ function ModelsPage() {
             <div hidden={scopeTab !== "global"}>
               {/* ---- Providers Section ---- */}
               <div className={styles.providersBlock}>
+                <section className={styles.globalModelSummary}>
+                  <div className={styles.globalModelSummaryCopy}>
+                    <span>{t("models.defaultLlm")}</span>
+                    <p>{t("models.llmDescription")}</p>
+                  </div>
+                  <ModelChoice
+                    value={activeModels?.active_llm}
+                    label={
+                      activeHubModel?.name ||
+                      activeModels?.active_llm?.model ||
+                      "—"
+                    }
+                    onChange={async (slot) => {
+                      try {
+                        await providerApi.setActiveLlm({
+                          ...slot,
+                          scope: "global",
+                        });
+                        await fetchAll(false);
+                      } catch (error) {
+                        message.error(String(error));
+                      }
+                    }}
+                  />
+                </section>
                 <div className={styles.sectionHeaderRow}>
                   <PageHeader
                     current={t("models.providersTitle")}
                     className={styles.providersPageHeader}
                   />
                   <div className={styles.headerRight}>
-                    <div className={styles.globalModelRow}>
-                      <span>{t("models.defaultLlm")}</span>
-                      <ModelChoice
-                        value={activeModels?.active_llm}
-                        label={
-                          activeHubModel?.name ||
-                          activeModels?.active_llm?.model ||
-                          "—"
-                        }
-                        onChange={async (slot) => {
-                          try {
-                            await providerApi.setActiveLlm({
-                              ...slot,
-                              scope: "global",
-                            });
-                            await fetchAll(false);
-                          } catch (error) {
-                            message.error(String(error));
-                          }
-                        }}
-                      />
-                    </div>
-
                     {/* ---- Search ---- */}
                     <div className={styles.searchRow}>
                       <Input
@@ -466,7 +486,21 @@ function ModelsPage() {
                 </div>
 
                 {/* ---- Tab Content ---- */}
-                {activeTab === "cloud" && (
+                {hasSearchQuery && !activeTabHasSearchResults ? (
+                  <div className={styles.searchEmpty} role="status">
+                    <span className={styles.searchEmptyIcon} aria-hidden="true">
+                      <SearchX size={22} strokeWidth={1.6} />
+                    </span>
+                    <div>
+                      <h3>{t("models.noSearchResultsTitle")}</h3>
+                      <p>
+                        {t("models.noSearchResults", {
+                          query: deferredSearchQuery.trim(),
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                ) : activeTab === "cloud" ? (
                   <>
                     {/* Cloud Configured */}
                     <div className={styles.panelSection}>
@@ -544,6 +578,8 @@ function ModelsPage() {
                               <ProviderIcon
                                 providerId={g.firstProvider.id}
                                 size={24}
+                                decorative
+                                loading="lazy"
                               />
                               <span className={styles.availableItemName}>
                                 {g.name}
@@ -565,9 +601,7 @@ function ModelsPage() {
                       </div>
                     )}
                   </>
-                )}
-
-                {activeTab === "local" && (
+                ) : (
                   <>
                     {/* Local Configured */}
                     {localConfigured.length > 0 && (
@@ -608,6 +642,8 @@ function ModelsPage() {
                               <ProviderIcon
                                 providerId={provider.id}
                                 size={24}
+                                decorative
+                                loading="lazy"
                               />
                               <span className={styles.availableItemName}>
                                 {provider.name}
@@ -663,7 +699,7 @@ function ModelsPage() {
               })}
               footer={null}
               onCancel={() => setVariantSelectGroup(null)}
-              destroyOnClose
+              destroyOnHidden
             >
               <div className={styles.variantList}>
                 {variantSelectGroup?.providers.map((p) => (
@@ -675,7 +711,7 @@ function ModelsPage() {
                       handleOpenConfig(p);
                     }}
                   >
-                    <ProviderIcon providerId={p.id} size={24} />
+                    <ProviderIcon providerId={p.id} size={24} decorative />
                     <span className={styles.variantItemName}>{p.name}</span>
                     {p.is_free_tier && (
                       <span className={styles.freeTag}>FREE</span>

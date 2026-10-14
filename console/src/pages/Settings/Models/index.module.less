@@ -77,6 +77,45 @@
   margin-top: 0;
 }
 
+.settingsPage .globalModelSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 18px 24px 6px;
+  padding: 18px 20px;
+  border: 1px solid var(--app-accent-border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--app-accent) 4%, var(--models-surface));
+}
+
+.settingsPage .globalModelSummaryCopy {
+  min-width: 0;
+
+  > span {
+    color: var(--models-text);
+    font-size: var(--app-font-body);
+    font-weight: 600;
+  }
+
+  > p {
+    max-width: 680px;
+    margin: 4px 0 0;
+    color: var(--models-text-muted);
+    font-size: var(--app-font-secondary);
+    line-height: 1.5;
+  }
+}
+
+.settingsPage .globalModelSummary > :last-child {
+  max-width: min(360px, 45%);
+  flex: 0 1 auto;
+
+  > button {
+    width: 100%;
+  }
+}
+
 .settingsPage .sectionHeaderRow {
   align-items: center;
   padding: 18px 24px 14px;
@@ -374,6 +413,46 @@
   text-align: left;
 }
 
+.settingsPage .searchEmpty {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0 24px 24px;
+  padding: 28px 20px;
+  border: 1px solid var(--model-hairline);
+  border-radius: 16px;
+  background: var(--models-surface-muted);
+}
+
+.settingsPage .searchEmpty h3,
+.settingsPage .searchEmpty p {
+  margin: 0;
+}
+
+.settingsPage .searchEmpty h3 {
+  color: var(--models-text);
+  font-size: calc(15px * var(--app-font-scale));
+  font-weight: 600;
+}
+
+.settingsPage .searchEmpty p {
+  margin-top: 4px;
+  color: var(--models-text-muted);
+  font-size: var(--app-font-secondary);
+}
+
+.settingsPage .searchEmptyIcon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  place-items: center;
+  border: 1px solid var(--model-hairline);
+  border-radius: 12px;
+  color: var(--models-text-muted);
+  background: var(--models-surface);
+}
+
 .settingsPage .emptyConfigured h3 {
   margin: 0 0 4px;
   color: var(--models-text);
@@ -419,6 +498,16 @@
     width: 100%;
     justify-content: flex-start;
   }
+
+  .settingsPage .globalModelSummary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settingsPage .globalModelSummary > :last-child {
+    width: 100%;
+    max-width: none;
+  }
 }
 
 @media (max-width: 768px) {
@@ -449,9 +538,15 @@
 
   .settingsPage .tabsNav,
   .settingsPage .panelSection,
-  .settingsPage .panelSectionDashed {
+  .settingsPage .panelSectionDashed,
+  .settingsPage .searchEmpty {
     margin-right: 16px;
     margin-left: 16px;
+  }
+
+  .settingsPage .globalModelSummary {
+    margin: 14px 16px 4px;
+    padding: 16px;
   }
 
   .settingsPage .providerCards {
@@ -479,6 +574,17 @@
   flex: 1;
   overflow-y: auto;
   min-height: 0;
+}
+
+.settingsEntry {
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+}
+
+.settingsEntry .content {
+  flex: none;
+  overflow: visible;
 }
 
 .breadcrumbHeader {
@@ -1094,7 +1200,49 @@
 
 .groupCardKeyInput {
   display: flex;
+  align-items: center;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.groupCardKeyField {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--models-text);
+  font: inherit;
+}
+
+.groupCardKeyField::placeholder {
+  color: var(--models-text-faint);
+}
+
+.groupCardMono:focus-within {
+  border-color: var(--app-accent-border);
+  box-shadow: 0 0 0 2px var(--app-accent-faint);
+}
+
+.groupCardKeyActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.groupCardKeyCancelBtn {
+  composes: groupCardChangeBtn;
+  color: var(--models-text-muted);
+}
+
+.groupCardChangeBtn:disabled,
+.groupCardKeyCancelBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* Actions */
@@ -2374,6 +2522,7 @@
   .tabsNav {
     margin: 0 12px 12px;
     overflow-x: auto;
+    overflow-y: hidden;
     gap: 0;
   }
 
@@ -2828,30 +2977,6 @@
   box-shadow: 0 1px 4px rgb(0 0 0 / 6%);
 }
 
-.globalModelRow {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  font-size: var(--app-font-secondary);
-}
-
-.headerRight .globalModelRow {
-  width: auto;
-  margin: 0;
-  padding: 0 8px;
-  gap: 8px;
-  min-width: 0;
-  background: transparent;
-  border: 0;
-  > span {
-    white-space: nowrap;
-    font-size: var(--app-font-caption);
-    color: var(--app-text-tertiary);
-  }
-  button {
-    max-width: 240px;
-  }
-}
 @media (max-width: 900px) {
   .settingsPage .headerRight {
     flex-wrap: wrap;
