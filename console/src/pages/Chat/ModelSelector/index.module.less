@@ -1418,6 +1418,18 @@
   }
 }
 
+.manageDoneButton {
+  width: auto;
+  min-width: 64px;
+  gap: 5px;
+  padding-inline: 10px;
+  background: var(--app-accent-soft);
+  color: var(--app-accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+}
+
 .providerHeading {
   display: flex;
   align-items: center;
@@ -1765,6 +1777,12 @@
     background: var(--app-accent-soft);
     color: var(--app-accent);
   }
+}
+
+.embedded .manageButton.manageDoneButton {
+  width: auto;
+  min-width: 60px;
+  padding-inline: 8px;
 }
 
 .manageModelsEntry {

@@ -217,6 +217,59 @@ describe("ModelSelector", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("exits inline model management without changing the model pool", async () => {
+    renderWithProviders(<ModelSelector />);
+    await screen.findAllByText("GPT-4");
+    fireEvent.click(
+      screen.getByRole("button", { name: "chat.modelSelectTooltip" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "modelSelector.manageModels" }),
+    );
+    expect(await screen.findByTestId("candidate-picker")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "common.done" }),
+    ).toHaveTextContent("common.done");
+
+    fireEvent.click(screen.getByRole("button", { name: "common.done" }));
+
+    expect(screen.queryByTestId("candidate-picker")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: "modelSelector.removeFromSelector GPT-4",
+      }),
+    ).not.toBeInTheDocument();
+    expect(providerApi.updateModelPool).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "modelSelector.manageModels" }),
+    ).toBeInTheDocument();
+  });
+
+  it("collapses provider candidates without leaving model management", async () => {
+    renderWithProviders(<ModelSelector />);
+    await screen.findAllByText("GPT-4");
+    fireEvent.click(
+      screen.getByRole("button", { name: "chat.modelSelectTooltip" }),
+    );
+    const manageProvider = await screen.findByRole("button", {
+      name: "modelSelector.manageModels",
+    });
+    fireEvent.click(manageProvider);
+    expect(await screen.findByTestId("candidate-picker")).toBeInTheDocument();
+
+    fireEvent.click(manageProvider);
+
+    expect(screen.queryByTestId("candidate-picker")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "common.done" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "modelSelector.removeFromSelector GPT-4",
+      }),
+    ).toBeDisabled();
+  });
+
   it("keeps the existing selector and toggles per-row editing controls", async () => {
     renderWithProviders(<ModelSelector />);
     await screen.findAllByText("GPT-4");
