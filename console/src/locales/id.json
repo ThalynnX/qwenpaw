@@ -1283,6 +1283,7 @@
     "turnCanceled": "Dihentikan"
   },
   "modelSelector": {
+    "noFallback": "Tidak digunakan",
     "selectModel": "Pilih model",
     "noConfiguredModels": "Tidak ada model yang dikonfigurasi",
     "noFreeModels": "Tidak ada model gratis tersedia",
@@ -3664,6 +3665,12 @@
     "providersTitle": "Penyedia",
     "providersDescription": "Konfigurasi API key dan endpoint untuk setiap penyedia.",
     "llmTitle": "Model",
+    "defaultModels": "Model default",
+    "defaultChatModel": "Model percakapan",
+    "defaultDecisionModel": "Model keputusan",
+    "noDefaultModel": "Belum diatur",
+    "followGlobal": "Ikuti pengaturan global",
+    "agentOverride": "Hanya agen ini",
     "defaultLlm": "LLM Default",
     "notConfiguredYet": "Belum dikonfigurasi",
     "llmDescription": "Atur model LLM default global dari penyedia yang diotorisasi. Anda dapat memilih model tertentu untuk setiap Agen di halaman Chat.",

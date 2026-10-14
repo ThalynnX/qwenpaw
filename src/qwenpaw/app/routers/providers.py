@@ -57,7 +57,9 @@ from ...providers.hub_managed import (
 from ...utils.io_utils import run_sync_io
 from ...utils.logging import sanitize_log_value
 from ...providers.openrouter_provider import OpenRouterProvider
-from ...config.config import ModelSlotConfig
+from ...config.config import ModelSlotConfig, ModelType
+
+from .model_validation import validate_model_slot as _validate_model_slot
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +124,7 @@ def _active_models_info(
             )
     return ActiveModelsInfo(
         active_llm=active_llm,
+        default_models=manager.default_models,
         effective_max_input_length=effective_max_input_length,
     )
 
@@ -211,7 +214,7 @@ class CreateCustomProviderRequest(BaseModel):
 
 
 class AddModelRequest(BaseModel):
-    model_type: Literal["chat", "decision"] = "chat"
+    model_type: ModelType = "chat"
     template_id: str | None = None
     id: str = Field(...)
     name: str = Field(...)
@@ -238,6 +241,7 @@ class AddModelRequest(BaseModel):
 
 
 class ModelConfigRequest(BaseModel):
+    model_type: ModelType = "chat"
     thinking_control: ThinkingControl | None = None
     supports_image: bool | None = None
     supports_video: bool | None = None
@@ -295,45 +299,6 @@ class ModelConfigRequest(BaseModel):
         default=None,
         description="Reasoning effort level (low/medium/high).",
     )
-
-
-def _validate_model_slot(
-    manager: ProviderManager,
-    provider_id: str,
-    model_id: str,
-) -> None:
-    """Validate that the provider and model exist without mutating state."""
-    provider = manager.get_provider(provider_id)
-    if provider is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Provider '{provider_id}' not found.",
-        )
-    if not provider.has_model(model_id):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Model '{model_id}' not found in provider "
-                f"'{provider_id}'."
-            ),
-        )
-    try:
-        provider.validate_chat_model(model_id)
-    except AppBaseException as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    model_info = provider.get_model_info(model_id)
-    if model_info and model_info.availability_status in {
-        "permission_denied",
-        "model_not_found",
-        "incompatible_api",
-    }:
-        reason = (
-            model_info.availability_message or model_info.availability_status
-        )
-        raise HTTPException(
-            status_code=400,
-            detail=f"Model '{model_id}' cannot be activated: {reason}",
-        )
 
 
 async def _load_agent_model(
@@ -768,6 +733,8 @@ async def add_model_endpoint(
         ):
             if field in body.model_fields_set:
                 model_payload[field] = getattr(body, field)
+        if "model_type" in body.model_fields_set:
+            model_payload["config_overrides"] = ["model_type"]
         provider = await manager.add_model_to_provider(
             provider_id=provider_id,
             model_info=ModelInfo(**model_payload),
@@ -933,6 +900,26 @@ async def configure_model(
     except (ValueError, AppBaseException) as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return provider_info
+
+
+@router.put("/defaults/{model_type}", response_model=ActiveModelsInfo)
+async def set_default_model(
+    model_type: ModelType,
+    body: ModelSlotConfig | None = Body(default=None),
+    manager: ProviderManager = Depends(get_provider_manager),
+) -> ActiveModelsInfo:
+    """Set or clear a global default without changing agent overrides."""
+    try:
+        if body and hub_mode() and body.provider_id == PROVIDER_ID:
+            await run_sync_io(managed_slot, body, explicit=True)
+        await manager.set_default_model(model_type, body)
+    except (ValueError, AppBaseException) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return await run_sync_io(
+        _active_models_info,
+        manager,
+        await run_sync_io(manager.get_active_model),
+    )
 
 
 @router.get(

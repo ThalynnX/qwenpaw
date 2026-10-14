@@ -2184,6 +2184,7 @@
     "currentAgentLlmCallsTooltip": "Số lượt trợ lý có metadata sử dụng đã ghi nhận của agent hiện tại (không phải số lời gọi API thô; phiên cũ có thể hiển thị 0)"
   },
   "modelSelector": {
+    "noFallback": "Không sử dụng",
     "placeholder": "Chọn mô hình",
     "searchPlaceholder": "Tìm kiếm mô hình...",
     "noModels": "Không có mô hình nào",
@@ -2945,6 +2946,12 @@
     "providersTitle": "Nhà cung cấp",
     "providersDescription": "Cấu hình API key và endpoint cho từng nhà cung cấp.",
     "llmTitle": "Mô hình",
+    "defaultModels": "Mô hình mặc định",
+    "defaultChatModel": "Mô hình hội thoại",
+    "defaultDecisionModel": "Mô hình quyết định",
+    "noDefaultModel": "Chưa đặt",
+    "followGlobal": "Theo cài đặt chung",
+    "agentOverride": "Chỉ trợ lý này",
     "defaultLlm": "LLM mặc định",
     "llmDescription": "Đặt mô hình LLM mặc định toàn cục. Bạn có thể chọn mô hình riêng cho từng Agent ở trang Trò chuyện.",
     "configureProvider": "Cấu hình {{name}}",

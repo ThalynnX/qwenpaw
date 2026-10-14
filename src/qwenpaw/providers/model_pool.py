@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
 
+from ..config.config import ModelType
 from .model_info import ModelInfo, release_date
 
 if TYPE_CHECKING:
@@ -20,6 +21,7 @@ class ModelPoolQuery(BaseModel):
 
     tab: Literal["all", "candidates", "selected"] = f"all"
     search: str = f""
+    model_type: ModelType | None = None
     billing: Literal["all", "free", "paid", "unknown", "pro"] = f"all"
     capability: Literal[
         "all",
@@ -75,6 +77,8 @@ def model_pool_page(
     # Each independent filter rejects without altering other filter semantics.
     # pylint: disable-next=too-many-return-statements
     def matches(card: ModelInfo) -> bool:
+        if query.model_type and card.model_type != query.model_type:
+            return False
         if query.tab != f"all" and (
             (card.id in selected) != (query.tab == f"selected")
         ):

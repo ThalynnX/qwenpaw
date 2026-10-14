@@ -26,7 +26,7 @@ from qwenpaw.providers.provider import (
 
 
 def _make_manager() -> MagicMock:
-    return MagicMock(name="ProviderManager")
+    return MagicMock(name="ProviderManager", default_models={})
 
 
 def _openrouter_provider() -> OpenRouterProvider:

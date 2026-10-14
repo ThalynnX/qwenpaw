@@ -310,11 +310,50 @@
 .popover {
   width: 100%;
 }
+.sessionTabs {
+  min-height: 0;
+  :global(.ant-tabs-nav),
+  :global(.qwenpaw-tabs-nav) {
+    flex-shrink: 0;
+    margin: 0 12px 8px;
+  }
+  :global(.ant-tabs-content-holder),
+  :global(.qwenpaw-tabs-content-holder),
+  :global(.ant-tabs-content),
+  :global(.qwenpaw-tabs-content),
+  :global(.ant-tabs-tabpane-active),
+  :global(.qwenpaw-tabs-tabpane-active) {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+}
+.decisionPicker {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  &:disabled {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+}
+.sessionHint {
+  padding: 8px 12px;
+  border-top: 1px solid var(--app-border-subtle);
+  color: var(--app-text-tertiary);
+  font-size: var(--app-font-caption);
+  flex-shrink: 0;
+}
 .back {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 0 4px;
+  > :last-child {
+    margin-left: auto;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .control *,

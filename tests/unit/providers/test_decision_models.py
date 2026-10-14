@@ -123,6 +123,7 @@ async def test_model_type_lifecycle(manager, provider_id, monkeypatch):
             id="decision",
             name="Decision",
             model_type="decision",
+            config_overrides=["model_type"],
         ),
     )
     provider = ProviderManager().get_provider(provider_id)
@@ -133,10 +134,19 @@ async def test_model_type_lifecycle(manager, provider_id, monkeypatch):
     )
     assert cards[0].model_type == "decision"
 
-    with pytest.raises(ProviderError, match="cannot be changed"):
-        await manager.update_model_config(
-            provider_id, "decision", {"model_type": "chat"}
-        )
+    await manager.update_model_config(
+        provider_id, "decision", {"model_type": "chat"}
+    )
+    assert (
+        ProviderManager()
+        .get_provider(provider_id)
+        .get_model_info("decision")
+        .model_type
+        == "chat"
+    )
+    await manager.update_model_config(
+        provider_id, "decision", {"model_type": "decision"}
+    )
     with pytest.raises(ProviderError, match="already exists"):
         await manager.add_model_to_provider(
             provider_id, ModelInfo(id="decision", name="Chat")
@@ -185,3 +195,385 @@ async def test_runtime_rejects_decision_model(manager, monkeypatch):
                 provider_id="mixed", model="decision"
             ),
         )
+
+
+@pytest.mark.parametrize(
+    "provider_id,model_id,automatic,override",
+    [
+        ("typesafe", "jev-latest", "decision", "chat"),
+        ("dashscope", "qwen-max", "chat", "decision"),
+    ],
+)
+async def test_model_type_override_survives_sync(
+    manager, monkeypatch, provider_id, model_id, automatic, override
+):
+    provider = manager.get_provider(provider_id)
+    monkeypatch.setattr(
+        type(provider),
+        "fetch_models",
+        AsyncMock(
+            return_value=[
+                ModelInfo(id=model_id, name=model_id, model_type=automatic)
+            ]
+        ),
+    )
+    await manager.update_model_config(
+        provider_id, model_id, {"model_type": override}
+    )
+    await manager.discover_provider_models(provider_id)
+    restored = ProviderManager().get_provider(provider_id)
+    model = restored.get_model_info(
+        model_id
+    ) or restored.get_discovered_model_info(model_id)
+    assert model.model_type == override
+    assert "model_type" in model.config_overrides
+    assert (
+        next(
+            m for m in restored.discovery_candidates() if m.id == model_id
+        ).model_type
+        == override
+    )
+
+
+def test_model_type_config_api(manager):
+    from qwenpaw.app.routers import providers as routes
+
+    app = FastAPI()
+    app.state.provider_manager = manager
+    app.include_router(routes.router)
+    with TestClient(app) as client:
+        path = "/models/typesafe/models/jev-latest/config"
+        assert (
+            client.put(path, json={"model_type": "invalid"}).status_code == 422
+        )
+        assert client.put(path, json={"model_type": "chat"}).status_code == 200
+        assert (
+            manager.get_provider("typesafe")
+            .get_model_info("jev-latest")
+            .model_type
+            == "chat"
+        )
+        assert client.put(path, json={"model_type": None}).status_code == 422
+        assert (
+            client.put(path, json={"model_type": "decision"}).status_code
+            == 200
+        )
+        assert (
+            manager.get_provider("typesafe")
+            .get_model_info("jev-latest")
+            .model_type
+            == "decision"
+        )
+
+
+async def test_automatic_type_follows_discovery(manager, monkeypatch):
+    provider = manager.get_provider("typesafe")
+    monkeypatch.setattr(
+        type(provider),
+        "fetch_models",
+        AsyncMock(return_value=[ModelInfo(id="jev-latest", name="JEV")]),
+    )
+    await manager.discover_provider_models("typesafe")
+    model = (
+        ProviderManager().get_provider("typesafe").get_model_info("jev-latest")
+    )
+    assert model.model_type == "chat"
+
+
+@pytest.mark.parametrize(
+    "provider_id,model_id", [("typesafe", "jev-latest"), ("mixed", "decision")]
+)
+async def test_global_defaults_are_independent_and_persist(
+    manager, monkeypatch, provider_id, model_id
+):
+    from qwenpaw.config.config import ModelSlotConfig
+    from qwenpaw.app.routers import providers as routes
+
+    monkeypatch.setattr(manager, "maybe_probe_multimodal", lambda *_: None)
+    await manager.add_model_to_provider(
+        "mixed",
+        ModelInfo(id="decision", name="Decision", model_type="decision"),
+    )
+    chat = ModelSlotConfig(provider_id="mixed", model="chat")
+    decision = ModelSlotConfig(provider_id=provider_id, model=model_id)
+    app = FastAPI()
+    app.state.provider_manager = manager
+    app.include_router(routes.router)
+    with TestClient(app) as client:
+        assert (
+            client.put(
+                "/models/defaults/chat", json=chat.model_dump()
+            ).status_code
+            == 200
+        )
+        response = client.put(
+            "/models/defaults/decision", json=decision.model_dump()
+        )
+        assert response.status_code == 200
+        assert response.json()["default_models"] == {
+            "chat": chat.model_dump(),
+            "decision": decision.model_dump(),
+        }
+        assert response.json()["active_llm"] == chat.model_dump()
+        restored = ProviderManager()
+        assert restored.get_default_model("decision") == decision
+        assert restored.get_active_model() == chat
+        for model_type, wrong in [("decision", chat), ("chat", decision)]:
+            assert (
+                client.put(
+                    f"/models/defaults/{model_type}", json=wrong.model_dump()
+                ).status_code
+                == 400
+            )
+        assert (
+            client.put(
+                "/models/defaults/image", json=chat.model_dump()
+            ).status_code
+            == 422
+        )
+        response = client.put("/models/defaults/decision", json=None)
+        assert response.status_code == 200
+        restored = ProviderManager()
+        assert restored.get_default_model("decision") is None
+        assert restored.get_active_model() == chat
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "type",
+        "delete_model",
+        "disable_provider",
+        "delete_provider",
+        "deselect",
+        "deselect_all",
+    ],
+)
+async def test_invalid_decision_default_is_cleared(manager, change):
+    from qwenpaw.config.config import ModelSlotConfig
+
+    await manager.add_model_to_provider(
+        "mixed",
+        ModelInfo(id="decision", name="Decision", model_type="decision"),
+    )
+    chat = manager.get_active_model()
+    await manager.set_default_model(
+        "decision", ModelSlotConfig(provider_id="mixed", model="decision")
+    )
+    if change == "type":
+        await manager.update_model_config(
+            "mixed", "decision", {"model_type": "chat"}
+        )
+    elif change == "delete_model":
+        await manager.delete_model_from_provider("mixed", "decision")
+    elif change == "disable_provider":
+        await manager.update_provider_async("mixed", {"enabled": False})
+    elif change == "delete_provider":
+        await manager.remove_custom_provider_async("mixed")
+    elif change == "deselect":
+        await manager.update_model_pool("mixed", "decision", selected=False)
+    else:
+        await manager.select_all_models("mixed", selected=False)
+    assert manager.get_default_model("decision") is None
+    assert ProviderManager().get_default_model("decision") is None
+    assert manager.get_active_model() == chat
+
+
+async def test_decision_default_write_failure_preserves_previous_choice(
+    manager, monkeypatch
+):
+    from qwenpaw.config.config import ModelSlotConfig
+
+    slot = ModelSlotConfig(provider_id="typesafe", model="jev-latest")
+    await manager.set_default_model("decision", slot)
+    await manager.add_model_to_provider(
+        "typesafe", ModelInfo(id="other", name="Other", model_type="decision")
+    )
+    replacement = ModelSlotConfig(provider_id="typesafe", model="other")
+
+    def fail(*_):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(manager, "save_active_model", fail)
+    with pytest.raises(OSError, match="disk full"):
+        await manager.set_default_model("decision", replacement)
+    assert manager.get_default_model("decision") == slot
+    assert ProviderManager().get_default_model("decision") == slot
+
+
+def test_model_pool_filters_type_before_pagination():
+    from qwenpaw.providers.model_pool import ModelPoolQuery, model_pool_page
+
+    provider = OpenAIProvider(
+        id="mixed",
+        name="Mixed",
+        models=[
+            ModelInfo(id="chat", name="Chat"),
+            ModelInfo(id="decision", name="Decision", model_type="decision"),
+        ],
+    )
+    page = model_pool_page(
+        provider, ModelPoolQuery(model_type="decision", limit=1)
+    )
+    assert page.total == 1
+    assert [model.id for model in page.models] == ["decision"]
+
+
+@pytest.fixture
+def agent_model_client(manager, monkeypatch):
+    from qwenpaw.app.routers import agents as routes
+    from qwenpaw.config.config import AgentProfileConfig, ModelSlotConfig
+
+    monkeypatch.setattr(manager, "maybe_probe_multimodal", lambda *_: None)
+    provider = manager.get_provider("mixed")
+    provider.models.append(
+        ModelInfo(id="decision", name="Decision", model_type="decision")
+    )
+    chat = ModelSlotConfig(provider_id="mixed", model="chat")
+    decision = ModelSlotConfig(provider_id="mixed", model="decision")
+    manager.default_models.update(chat=chat, decision=decision)
+    saved = {"config": AgentProfileConfig(id="bot", name="Bot")}
+
+    def mutate(agent_id, callback):
+        assert agent_id == "bot"
+        candidate = saved["config"].model_copy(deep=True)
+        callback(candidate)
+        saved["config"] = candidate
+        return candidate
+
+    monkeypatch.setattr(routes, "mutate_agent_config", mutate)
+    monkeypatch.setattr(routes, "schedule_agent_reload", lambda *_: None)
+    app = FastAPI()
+    app.state.provider_manager = manager
+    app.include_router(routes.router)
+    with TestClient(app) as client:
+        yield client, saved, chat, decision
+
+
+def test_agent_model_overrides_save_and_inherit(manager, agent_model_client):
+    from qwenpaw.config.config import AgentProfileConfig, ModelSlotConfig
+
+    client, saved, chat, decision = agent_model_client
+    assert manager.get_default_model("decision", saved["config"]) == decision
+    response = client.patch(
+        "/agents/bot/model-settings",
+        json={
+            "active_model": chat.model_dump(),
+            "decision_model": decision.model_dump(),
+            "fallback_policy": {"enabled": False},
+        },
+    )
+    assert response.status_code == 200
+    # The agent.json representation preserves both overrides on reload.
+    restored = AgentProfileConfig.model_validate_json(
+        saved["config"].model_dump_json(exclude_none=True)
+    )
+    assert restored.decision_model == decision
+    assert restored.active_model == chat
+    assert manager.default_models == {"chat": chat, "decision": decision}
+
+    next_global = ModelSlotConfig(provider_id="typesafe", model="jev-latest")
+    manager.default_models["decision"] = next_global
+    assert manager.get_default_model("decision", restored) == decision
+    response = client.patch(
+        "/agents/bot/model-settings", json={"decision_model": None}
+    )
+    assert response.status_code == 200
+    assert saved["config"].active_model == chat
+    assert (
+        manager.get_default_model("decision", saved["config"]) == next_global
+    )
+    assert manager.get_default_model("chat", saved["config"]) == chat
+    manager.default_models["decision"] = None
+    assert manager.get_default_model("decision", saved["config"]) is None
+
+
+@pytest.mark.parametrize(
+    ("field", "model"),
+    [
+        ("active_model", "decision"),
+        ("decision_model", "chat"),
+        ("subagent_model", "decision"),
+        ("fallback_models", "decision"),
+        ("decision_fallback_models", "chat"),
+    ],
+)
+def test_agent_model_settings_reject_wrong_type_atomically(
+    agent_model_client, field, model
+):
+    client, saved, _, _ = agent_model_client
+    slot = {"provider_id": "mixed", "model": model}
+    response = client.patch(
+        "/agents/bot/model-settings",
+        json={
+            field: [slot] if field.endswith("fallback_models") else slot,
+            "thinking_level": "high",
+        },
+    )
+    assert response.status_code == 400
+    assert "model" in response.json()["detail"]
+    assert saved["config"].thinking_level == "inherit"
+    assert saved["config"].decision_model is None
+
+
+def test_agent_model_settings_reject_unknown_decision_model(
+    agent_model_client,
+):
+    client, saved, _, _ = agent_model_client
+    response = client.patch(
+        "/agents/bot/model-settings",
+        json={"decision_model": {"provider_id": "mixed", "model": "missing"}},
+    )
+    assert response.status_code == 400
+    assert saved["config"].decision_model is None
+
+
+def test_agent_fallbacks_persist_and_clear_independently(agent_model_client):
+    from qwenpaw.config.config import AgentProfileConfig
+
+    client, saved, chat, decision = agent_model_client
+    response = client.patch(
+        "/agents/bot/model-settings",
+        json={
+            "fallback_models": [chat.model_dump()],
+            "fallback_policy": {"enabled": True, "target_scope": "free_only"},
+            "decision_fallback_models": [decision.model_dump()],
+            "decision_fallback_policy": {"enabled": False},
+        },
+    )
+    assert response.status_code == 200
+    restored = AgentProfileConfig.model_validate_json(
+        saved["config"].model_dump_json(exclude_none=True)
+    )
+    assert restored.fallback_models == [chat]
+    assert restored.decision_fallback_models == [decision]
+    assert restored.fallback_policy.enabled
+    assert not restored.decision_fallback_policy.enabled
+    assert response.json()["decision_fallback_models"] == [
+        decision.model_dump()
+    ]
+    response = client.patch(
+        "/agents/bot/model-settings",
+        json={
+            "decision_fallback_models": [],
+            "decision_fallback_policy": {"enabled": True},
+        },
+    )
+    assert response.status_code == 200
+    assert saved["config"].decision_fallback_models == []
+    assert saved["config"].decision_fallback_policy.enabled
+    assert saved["config"].fallback_models == [chat]
+    assert saved["config"].fallback_policy.target_scope == "free_only"
+
+
+@pytest.mark.parametrize(
+    "field", ["decision_fallback_models", "decision_fallback_policy"]
+)
+def test_decision_fallback_fields_reject_null(agent_model_client, field):
+    client, saved, _, _ = agent_model_client
+    response = client.patch(
+        "/agents/bot/model-settings",
+        json={field: None, "thinking_level": "high"},
+    )
+    assert response.status_code == 422
+    assert saved["config"].thinking_level == "inherit"

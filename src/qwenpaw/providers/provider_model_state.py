@@ -110,8 +110,6 @@ def restore_model_state(model: ModelInfo, state: dict[str, Any]) -> None:
     output_source = state.get("max_output_length_source")
     restore_output_capability = output_source in {"api", "adapter", "user"}
     for field in PERSISTED_MODEL_STATE_FIELDS:
-        if field == "model_type" and model.source != "user":
-            continue
         if field in {
             "generate_kwargs",
             "max_input_length_configured",

@@ -1,11 +1,12 @@
 import { ModelPickerPopover } from "../../pages/Chat/ModelSelector/ModelPickerPopover";
 import { useEffect, useRef, useState } from "react";
-import { Spin, Tooltip } from "antd";
+import { Spin, Tabs, Tooltip } from "antd";
 import { ChevronDown, ArrowLeft, RotateCcw, Plug } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAppMessage } from "@/hooks/useAppMessage";
 import { ThinkingIndicator } from "./ThinkingIndicator";
 import { ThinkingControl } from "./ThinkingControl";
+import { SessionDecisionModelPicker } from "./SessionDecisionModelPicker";
 import {
   readPendingThinking,
   sessionThinkingApi,
@@ -35,6 +36,7 @@ export function SessionThinking({
   const [view, setView] = useState<ThinkingView>();
   const [open, setOpen] = useState(false);
   const [choosing, setChoosing] = useState(false);
+  const [modelTab, setModelTab] = useState("chat");
   const [preview, setPreview] = useState<ThinkingPreference>();
   const [busy, setBusy] = useState(false);
   const revision = useRef(0);
@@ -44,6 +46,7 @@ export function SessionThinking({
   useEffect(() => {
     setOpen(false);
     setChoosing(false);
+    setModelTab("chat");
     setView(undefined);
     setPreview(undefined);
     setBusy(false);
@@ -151,69 +154,105 @@ export function SessionThinking({
   const showPicker = choosing || !view?.model;
   return (
     <ModelPickerPopover
-      picker={showPicker}
+      picker={modelTab === "decision" || showPicker}
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
         if (!next) {
           setChoosing(false);
+          setModelTab("chat");
           setPreview(undefined);
         }
         if (next) void load();
       }}
       content={
-        <div className={showPicker ? styles.picker : styles.popover}>
-          {showPicker ? (
-            <>
-              {(view?.model || canReset) && (
-                <div className={styles.back}>
-                  {view?.model && (
-                    <button
-                      type="button"
-                      className={styles.iconButton}
-                      aria-label={t("common.back")}
-                      onClick={() => setChoosing(false)}
-                    >
-                      <ArrowLeft size={17} />
-                    </button>
-                  )}
-                  {resetModelButton}
-                </div>
-              )}
-              <ModelSelector
-                embedded
-                sessionId={sessionId}
-                chatId={chatId}
-                onSelected={() => {
-                  setChoosing(false);
-                  void load();
-                }}
-              />
-            </>
-          ) : (
-            <Spin spinning={busy}>
-              {view?.model && (
-                <ThinkingControl
-                  control={view.control}
-                  value={value}
-                  effective={view.effective}
-                  modelLabel={
-                    view.model_name ||
-                    (view.provider_id === "hub-managed"
-                      ? undefined
-                      : view.model) ||
-                    t("modelSelector.selectModel")
-                  }
-                  resetAction={resetModelButton}
-                  onChooseModel={() => setChoosing(true)}
-                  onPreview={setPreview}
-                  onChange={(next) => void save(next)}
-                  disabled={busy}
-                />
-              )}
-            </Spin>
-          )}
-        </div>
+        <>
+          <Tabs
+            className={styles.sessionTabs}
+            activeKey={modelTab}
+            onChange={setModelTab}
+            destroyOnHidden
+            items={[
+              {
+                key: "chat",
+                label: t("models.defaultChatModel"),
+                children: (
+                  <div className={showPicker ? styles.picker : styles.popover}>
+                    {showPicker ? (
+                      <>
+                        {(view?.model || canReset) && (
+                          <div className={styles.back}>
+                            {view?.model && (
+                              <button
+                                type="button"
+                                className={styles.iconButton}
+                                aria-label={t("common.back")}
+                                onClick={() => setChoosing(false)}
+                              >
+                                <ArrowLeft size={17} />
+                              </button>
+                            )}
+                            {resetModelButton}
+                          </div>
+                        )}
+                        <ModelSelector
+                          embedded
+                          sessionId={sessionId}
+                          chatId={chatId}
+                          onSelected={() => {
+                            setChoosing(false);
+                            void load();
+                          }}
+                        />
+                      </>
+                    ) : (
+                      <Spin spinning={busy}>
+                        {view?.model && (
+                          <ThinkingControl
+                            control={view.control}
+                            value={value}
+                            effective={view.effective}
+                            modelLabel={
+                              view.model_name ||
+                              (view.provider_id === "hub-managed"
+                                ? undefined
+                                : view.model) ||
+                              t("modelSelector.selectModel")
+                            }
+                            resetAction={resetModelButton}
+                            onChooseModel={() => setChoosing(true)}
+                            onPreview={setPreview}
+                            onChange={(next) => void save(next)}
+                            disabled={busy}
+                          />
+                        )}
+                      </Spin>
+                    )}
+                  </div>
+                ),
+              },
+              {
+                key: "decision",
+                label: t("models.defaultDecisionModel"),
+                children: (
+                  <SessionDecisionModelPicker
+                    key={identity}
+                    agentId={agentId}
+                    sessionId={sessionId}
+                    chatId={chatId}
+                    onSelected={() => {
+                      setOpen(false);
+                      setModelTab("chat");
+                    }}
+                  />
+                ),
+              },
+            ]}
+          />
+          <div className={styles.sessionHint}>
+            {t("thinkingControl.sessionHint")}
+          </div>
+        </>
       }
     >
       <button

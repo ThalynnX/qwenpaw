@@ -4,6 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "@/test/common_setup";
 import ModelSelector from "./index";
 import { AgentModelSettings } from "./AgentModelSettings";
+import { ModelChoice } from "./ModelChoice";
+import { ModelFallbackSettings } from "./ModelFallbackSettings";
 import { useTurnUsageStore } from "../turnUsageStore";
 
 vi.mock("./ProviderCandidatePicker", () => ({
@@ -197,6 +199,92 @@ describe("ModelSelector", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("restores inheritance from the selector without activating a model", async () => {
+    const reset = vi.fn();
+    const onChange = vi.fn();
+    renderWithProviders(
+      <ModelChoice
+        ariaLabel="decision-default"
+        modelType="decision"
+        label="Inherited"
+        onChange={onChange}
+        resetOption={{ label: "Follow global", onReset: reset }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "decision-default" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Follow global" }),
+    );
+    expect(reset).toHaveBeenCalledOnce();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(providerApi.setActiveLlm).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "decision-default" }),
+    ).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("picks decision models without changing the chat selection", async () => {
+    const decision = {
+      ...mockProvider.models[0],
+      id: "jev",
+      name: "JEV",
+      model_type: "decision" as const,
+    };
+    vi.mocked(providerApi.listProviders).mockResolvedValue([
+      { ...mockProvider, models: [...mockProvider.models, decision] },
+    ]);
+    const pick = vi.fn();
+    renderWithProviders(
+      <ModelSelector
+        embedded
+        modelType="decision"
+        onPick={pick}
+        selectedSlot={null}
+      />,
+    );
+    fireEvent.click(await screen.findByText("JEV"));
+    expect(pick).toHaveBeenCalledWith(mockProvider.id, "jev");
+    expect(screen.queryByText("GPT-4")).not.toBeInTheDocument();
+    expect(providerApi.setActiveLlm).not.toHaveBeenCalled();
+  });
+
+  it("filters fallback candidates by model type without activating the chat model", async () => {
+    const provider = {
+      ...mockProvider,
+      models: [
+        ...mockProvider.models,
+        {
+          ...mockProvider.models[0],
+          id: "jev",
+          name: "JEV",
+          model_type: "decision" as const,
+        },
+      ],
+    };
+    vi.mocked(providerApi.listProviders).mockResolvedValue([provider]);
+    const change = vi.fn();
+    renderWithProviders(
+      <ModelFallbackSettings
+        models={[]}
+        enabled={false}
+        modelType="decision"
+        providers={[provider]}
+        onChange={change}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "modelSelector.chooseFallback" }),
+    );
+    const option = await screen.findByText("JEV");
+    expect(screen.queryByText("GPT-4")).not.toBeInTheDocument();
+    fireEvent.click(option);
+    expect(change).toHaveBeenCalledWith(
+      [{ provider_id: "openai", model: "jev" }],
+      true,
+    );
+    expect(providerApi.setActiveLlm).not.toHaveBeenCalled();
   });
 
   it("opens inline model management from the provider footer", async () => {
@@ -1483,7 +1571,7 @@ describe("ModelSelector", () => {
         name: /modelSelector.agentModelSettings/,
       }),
     );
-    await screen.findByLabelText("modelSelector.enableFallback");
+    await screen.findByRole("button", { name: "modelSelector.chooseFallback" });
 
     view.rerender(
       <AgentModelSettings
@@ -1556,7 +1644,7 @@ describe("ModelSelector", () => {
         ? Promise.resolve({
             id: "agent-b",
             name: "Agent B",
-            fallback_models: [],
+            fallback_models: [{ provider_id: "openai", model: "gpt-4" }],
             fallback_policy: { enabled: false, target_scope: "configured" },
             subagent_model: null,
             thinking_level: "inherit",
@@ -1591,8 +1679,10 @@ describe("ModelSelector", () => {
       }),
     );
     expect(
-      await screen.findByLabelText("modelSelector.enableFallback"),
-    ).not.toBeChecked();
+      await screen.findByRole("button", {
+        name: "modelSelector.chooseFallback",
+      }),
+    ).toHaveTextContent("modelSelector.noFallback");
 
     oldAgentResponse.resolve({
       id: "default",
@@ -1604,8 +1694,8 @@ describe("ModelSelector", () => {
     });
     await waitFor(() => {
       expect(
-        screen.getByLabelText("modelSelector.enableFallback"),
-      ).not.toBeChecked();
+        screen.getByRole("button", { name: "modelSelector.chooseFallback" }),
+      ).toHaveTextContent("modelSelector.noFallback");
     });
   });
 
@@ -1646,7 +1736,7 @@ describe("ModelSelector", () => {
         name: /modelSelector.agentModelSettings/,
       }),
     );
-    await screen.findByLabelText("modelSelector.enableFallback");
+    await screen.findByRole("button", { name: "modelSelector.chooseFallback" });
     await user.click(screen.getByRole("button", { name: /common.save/ }));
 
     view.rerender(<AgentModelSettings agentId="agent-b" {...settingsProps} />);
@@ -1656,13 +1746,15 @@ describe("ModelSelector", () => {
       }),
     );
     expect(
-      await screen.findByLabelText("modelSelector.enableFallback"),
-    ).not.toBeChecked();
+      await screen.findByRole("button", {
+        name: "modelSelector.chooseFallback",
+      }),
+    ).toHaveTextContent("modelSelector.noFallback");
 
     oldSave.resolve({
       id: "default",
       name: "Default",
-      fallback_models: [],
+      fallback_models: [{ provider_id: "openai", model: "gpt-4" }],
       fallback_policy: { enabled: true, target_scope: "configured" },
       subagent_model: null,
       thinking_level: "inherit",
@@ -1670,8 +1762,8 @@ describe("ModelSelector", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByLabelText("modelSelector.enableFallback"),
-      ).not.toBeChecked();
+        screen.getByRole("button", { name: "modelSelector.chooseFallback" }),
+      ).toHaveTextContent("modelSelector.noFallback");
     });
   });
 
@@ -1702,8 +1794,10 @@ describe("ModelSelector", () => {
     );
 
     expect(
-      await screen.findByLabelText("modelSelector.enableFallback"),
-    ).toBeChecked();
+      await screen.findByRole("button", {
+        name: "modelSelector.chooseFallback",
+      }),
+    ).toHaveTextContent("modelSelector.noFallback");
   });
 
   it("does not invent thinking controls for undeclared active models", async () => {

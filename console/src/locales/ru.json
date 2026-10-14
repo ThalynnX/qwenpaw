@@ -1853,6 +1853,7 @@
     "retry": "Повторить"
   },
   "modelSelector": {
+    "noFallback": "Не использовать",
     "selectModel": "Выбрать модель",
     "noConfiguredModels": "Нет настроенных моделей",
     "noFreeModels": "Нет доступных бесплатных моделей",
@@ -1906,6 +1907,12 @@
     "providersTitle": "Провайдеры",
     "providersDescription": "Настройте API-ключи и endpoints для каждого провайдера.",
     "llmTitle": "Модели",
+    "defaultModels": "Модели по умолчанию",
+    "defaultChatModel": "Модель чата",
+    "defaultDecisionModel": "Модель решений",
+    "noDefaultModel": "Не задано",
+    "followGlobal": "Использовать глобальные",
+    "agentOverride": "Только этот агент",
     "defaultLlm": "LLM по умолчанию",
     "llmDescription": "Здесь задается глобальная модель LLM по умолчанию у авторизованного провайдера. Для конкретного Agent модель можно выбрать отдельно на странице Chat.",
     "configureProvider": "Настроить {{name}}",

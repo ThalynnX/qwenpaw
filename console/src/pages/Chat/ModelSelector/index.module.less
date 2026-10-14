@@ -843,6 +843,7 @@
 .panel,
 .trigger,
 .oauthModalContent,
+.settingsSurface,
 .agentModelSettings,
 .agentSelectDropdown {
   .model-surface-tokens();
@@ -1653,7 +1654,10 @@
   margin-top: 14px;
   padding-top: 14px;
   border-top: 1px solid var(--app-border-subtle);
+}
 
+.settingsSurface,
+.agentModelSettings[data-surface="settings"] {
   .agentSettingsBody {
     gap: 6px;
     padding: 0;
@@ -1700,6 +1704,7 @@
 }
 
 @media (max-width: 600px) {
+  .settingsSurface,
   .agentModelSettings[data-surface="settings"] {
     .settingLine {
       align-items: flex-start;
@@ -1714,6 +1719,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .settingsSurface .settingLine,
   .agentModelSettings[data-surface="settings"] .settingLine {
     transition: none;
   }
@@ -1816,5 +1822,42 @@
   :global(.qwenpaw-picker-fade-appear-active),
   :global(.qwenpaw-picker-fade-leave-active) {
     transition-duration: 0.01ms;
+  }
+}
+
+.modelChoiceDetailed {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--app-border-subtle);
+  background: var(--app-surface-subtle);
+  min-height: 56px;
+}
+.modelChoiceText {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--app-text-tertiary);
+    font-size: var(--app-font-caption);
+  }
+}
+.modelChoiceReset {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--app-border-subtle);
+  background: transparent;
+  color: var(--app-text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  &:hover {
+    background: var(--app-fill);
   }
 }

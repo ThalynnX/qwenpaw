@@ -1,4 +1,4 @@
-import type { ModelInfo, ProviderInfo } from "../../../api/types";
+import type { ModelInfo, ModelType, ProviderInfo } from "../../../api/types";
 
 export interface EligibleProvider {
   id: string;
@@ -49,6 +49,7 @@ export function modelKey(providerId: string, modelId: string): string {
 
 export function buildEligibleProviders(
   providers: ProviderInfo[],
+  modelType: ModelType = "chat",
 ): EligibleProvider[] {
   return providers
     .filter((provider) => {
@@ -56,10 +57,10 @@ export function buildEligibleProviders(
       const hasModels = [
         ...(provider.models ?? []),
         ...(provider.extra_models ?? []),
-      ].some((model) => model.model_type !== "decision");
+      ].some((model) => (model.model_type ?? "chat") === modelType);
       if (!hasModels && provider.chat_model === "") return false;
-      if (provider.id === "hub-managed") return true;
-      if (provider.is_free_tier) return true;
+      if (provider.id === "hub-managed" && modelType === "chat") return true;
+      if (provider.is_free_tier && modelType === "chat") return true;
       if (!hasModels) return false;
       if (provider.require_api_key === false) return Boolean(provider.base_url);
       if (provider.is_custom) return Boolean(provider.base_url);
@@ -72,7 +73,7 @@ export function buildEligibleProviders(
       models: [
         ...(provider.models ?? []),
         ...(provider.extra_models ?? []),
-      ].filter((model) => model.model_type !== "decision"),
+      ].filter((model) => (model.model_type ?? "chat") === modelType),
       is_free_tier: provider.is_free_tier,
       is_custom: provider.is_custom,
       is_local: provider.is_local,
@@ -85,6 +86,7 @@ export function buildEligibleProviders(
 
 export function buildDiscoveryCandidates(
   providers: ProviderInfo[],
+  modelType: ModelType = "chat",
 ): CandidateModel[] {
   const configured = new Set(
     providers.flatMap((provider) =>
@@ -99,7 +101,7 @@ export function buildDiscoveryCandidates(
       (provider.discovered_models ?? [])
         .filter(
           (model) =>
-            model.model_type !== "decision" &&
+            (model.model_type ?? "chat") === modelType &&
             !configured.has(modelKey(provider.id, model.id)) &&
             !(provider.hidden_model_ids ?? []).includes(model.id),
         )
@@ -109,6 +111,7 @@ export function buildDiscoveryCandidates(
 
 export function buildHiddenCandidates(
   providers: ProviderInfo[],
+  modelType: ModelType = "chat",
 ): CandidateModel[] {
   return providers
     .filter((provider) => provider.enabled !== false)
@@ -116,7 +119,8 @@ export function buildHiddenCandidates(
       const hidden = new Set(provider.hidden_model_ids ?? []);
       return (provider.discovered_models ?? [])
         .filter(
-          (model) => model.model_type !== "decision" && hidden.has(model.id),
+          (model) =>
+            (model.model_type ?? "chat") === modelType && hidden.has(model.id),
         )
         .map((model) => ({ provider, model }));
     });

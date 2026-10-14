@@ -22,6 +22,7 @@ from .models import (
 from .repo import BaseChatRepository
 from ..channels.schema import DEFAULT_CHANNEL
 from ...providers.thinking import ThinkingPreference
+from ...config.config import ModelType
 from ...utils.logging import sanitize_log_value
 
 logger = logging.getLogger(__name__)
@@ -453,7 +454,9 @@ class ChatManager:  # pylint: disable=too-many-public-methods
             await self._repo.upsert_chat(updated)
             return updated
 
-    async def set_session_model(self, chat_id: str, model: dict | None):
+    async def set_session_model(
+        self, chat_id: str, model: dict | None, model_type: ModelType = "chat"
+    ):
         """Persist a model override without changing agent defaults."""
         async with self._lock:
             existing = await self._repo.get_chat(chat_id)
@@ -461,11 +464,13 @@ class ChatManager:  # pylint: disable=too-many-public-methods
                 return None
             meta = dict(existing.meta or {})
             runtime = dict(meta.get(f"runtime_context") or {})
+            key = "model" if model_type == "chat" else "decision_model"
             if model is None:
-                runtime.pop(f"model", None)
-                runtime.pop(f"thinking", None)
+                runtime.pop(key, None)
+                if model_type == "chat":
+                    runtime.pop(f"thinking", None)
             else:
-                runtime[f"model"] = model
+                runtime[key] = model
             meta[f"runtime_context"] = runtime
             updated = existing.model_copy(update={f"meta": meta})
             updated.updated_at = datetime.now(timezone.utc)

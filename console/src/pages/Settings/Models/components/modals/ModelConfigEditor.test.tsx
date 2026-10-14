@@ -135,17 +135,66 @@ describe("ModelConfigEditor output limits", () => {
 describe("ModelConfigEditor decision models", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("shows the decision model hint without chat settings", () => {
+  it("shows the model type selector without chat settings", () => {
     renderEditor(createModel({ model_type: "decision", source: "user" }));
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: "models.modelType" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByLabelText("Generation config"),
     ).not.toBeInTheDocument();
     expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
-    expect(screen.getByText("models.decisionModelHint")).toBeInTheDocument();
+    expect(screen.getByText("models.modelTypeDecision")).toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Save/i })).toBeDisabled();
+  });
+});
+
+describe("ModelConfigEditor type overrides", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("switches a chat model to decision without sending chat settings", async () => {
+    vi.mocked(api.configureModel).mockResolvedValue(provider);
+    const user = userEvent.setup();
+    renderEditor(createModel({ model_type: "chat" }));
+    await user.click(
+      screen.getByRole("combobox", { name: "models.modelType" }),
+    );
+    expect(screen.getAllByRole("option")).toHaveLength(2);
+    await user.click(screen.getByText("models.modelTypeDecision"));
     expect(
-      screen.queryByRole("button", { name: /Save/i }),
+      screen.queryByLabelText("Generation config"),
     ).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Save/i }));
+    await waitFor(() =>
+      expect(api.configureModel).toHaveBeenCalledWith("openai", "test-model", {
+        model_type: "decision",
+      }),
+    );
+  });
+
+  it("selects chat to show and save chat settings", async () => {
+    vi.mocked(api.configureModel).mockResolvedValue(provider);
+    const user = userEvent.setup();
+    renderEditor(
+      createModel({
+        model_type: "decision",
+        config_overrides: ["model_type"],
+      }),
+    );
+    await user.click(
+      screen.getByRole("combobox", { name: "models.modelType" }),
+    );
+    await user.click(screen.getByText("models.modelTypeChat"));
+    expect(screen.getByLabelText("Generation config")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Save/i }));
+    await waitFor(() =>
+      expect(api.configureModel).toHaveBeenCalledWith(
+        "openai",
+        "test-model",
+        expect.objectContaining({ model_type: "chat" }),
+      ),
+    );
   });
 });
 

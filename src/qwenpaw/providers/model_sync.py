@@ -64,7 +64,6 @@ def reconcile_models(
             if field in type(old).model_fields:
                 setattr(current, field, getattr(old, field))
         current.config_overrides = list(old.config_overrides)
-        current.model_type = old.model_type
         current.auto_enabled = old.auto_enabled
         if old.billing == f"free" or old.requires_paid_confirmation:
             current.requires_paid_confirmation = (

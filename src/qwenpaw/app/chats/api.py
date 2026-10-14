@@ -34,10 +34,10 @@ from ...services.project_directory import (
 )
 from ...providers.thinking import ThinkingPreference
 from ...services.session_thinking import (
-    session_model,
     thinking_view,
 )
-from ...config.config import ModelSlotConfig
+from ...services.session_models import decision_model_view, session_model
+from ...config.config import ModelSlotConfig, ModelType
 from ...checkpoints.runtime import RUNTIME as CHECKPOINT_RUNTIME
 
 logger = logging.getLogger(__name__)
@@ -729,6 +729,44 @@ async def get_default_thinking(
     return await thinking_view(workspace, model_override=selected)
 
 
+@router.get("/model-default")
+async def get_default_session_model(
+    model_type: ModelType = "chat",
+    provider_id: str | None = None,
+    model: str | None = None,
+    workspace=Depends(get_workspace),
+):
+    """Preview a new conversation's model of the requested type."""
+    selected = (
+        ModelSlotConfig(provider_id=provider_id, model=model)
+        if provider_id and model
+        else None
+    )
+    resolve = thinking_view if model_type == "chat" else decision_model_view
+    view = await resolve(workspace, model_override=selected)
+    if selected and view["model"] is None:
+        raise HTTPException(422, "Model is unavailable for this model type")
+    return view
+
+
+@router.get("/{chat_id}/model")
+async def get_chat_model(
+    chat_id: str,
+    model_type: ModelType = "chat",
+    mgr: ChatManager = Depends(get_chat_manager),
+    workspace=Depends(get_workspace),
+):
+    """Read the effective model and whether this session overrides it."""
+    if model_type == "chat":
+        return await get_chat_thinking(chat_id, mgr, workspace)
+    chat = await mgr.get_chat(chat_id)
+    if chat is None:
+        raise HTTPException(404, "Chat not found")
+    return await decision_model_view(
+        workspace, model_override=session_model(chat.meta, model_type)
+    )
+
+
 @router.get(f"/{{chat_id}}/thinking")
 async def get_chat_thinking(
     chat_id: str,
@@ -783,9 +821,11 @@ async def set_chat_model(
     model: ModelSlotConfig | None = Body(None),
     mgr: ChatManager = Depends(get_chat_manager),
     workspace=Depends(get_workspace),
+    model_type: ModelType = "chat",
 ):
     """Select the model for this conversation only."""
-    view = await thinking_view(workspace, model_override=model)
+    resolve = thinking_view if model_type == "chat" else decision_model_view
+    view = await resolve(workspace, model_override=model)
     if model is not None and (view[f"provider_id"], view[f"model"]) != (
         model.provider_id,
         model.model,
@@ -794,14 +834,11 @@ async def set_chat_model(
     chat = await mgr.set_session_model(
         chat_id,
         model.model_dump() if model else None,
+        model_type,
     )
     if chat is None:
         raise HTTPException(404, f"Chat not found")
-    return await thinking_view(
-        workspace,
-        model_override=session_model(chat.meta),
-        meta=chat.meta,
-    )
+    return await get_chat_model(chat_id, model_type, mgr, workspace)
 
 
 # ----- Existing CRUD endpoints -----

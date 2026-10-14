@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """Resolve persistent session thinking without mutating agent defaults."""
 
-from ..config.config import ModelSlotConfig, load_agent_config
+from ..config.config import load_agent_config
+from .session_models import session_model
 from ..providers.provider_manager import ProviderManager
 from ..providers.provider import Provider
 from ..providers.dashscope_provider import DashScopeProvider
@@ -169,12 +170,6 @@ def _resolve_model_default_thinking(provider: Provider, model: str):
     return ThinkingPreference()
 
 
-def session_model(meta: dict | None) -> ModelSlotConfig | None:
-    """Read the selected model owned by this conversation."""
-    raw = ((meta or {}).get(f"runtime_context") or {}).get(f"model")
-    return ModelSlotConfig.model_validate(raw) if raw is not None else None
-
-
 def session_preference(
     meta: dict | None,
     model_key: str = f"",
@@ -240,7 +235,7 @@ async def thinking_view(
             if provider is None or not provider.enabled:
                 return None, None, ThinkingControl(), None, None, None
         info = provider.get_model_info(slot.model)
-        if info is None:
+        if info is None or getattr(info, "model_type", "chat") == "decision":
             return None, None, ThinkingControl(), None, None, None
         name = info.name
         return (
@@ -314,6 +309,9 @@ async def apply_session_thinking(ctx, config):
     selected = session_model(chat.meta) if chat else None
     config = await run_sync_io(_with_session_model, config, selected)
     if chat:
+        decision = session_model(chat.meta, "decision")
+        if decision is not None:
+            config = config.model_copy(update={"decision_model": decision})
 
         def selected_key():
             slot = config.active_model or (

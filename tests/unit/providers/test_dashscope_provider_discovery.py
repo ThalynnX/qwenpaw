@@ -56,24 +56,6 @@ async def test_dashscope_fetch_models_filters_non_chat_entries(
     assert [model.id for model in models] == ["qwen3-max"]
 
 
-def test_native_directory_recognizes_decision_model_with_text_modality():
-    card = dashscope_discovery.model_card(
-        {
-            "model": "decision-model-preview",
-            "capabilities": ["TG"],
-            "features": [],
-            "inference_metadata": {"request_modality": ["Text"]},
-            "model_info": {
-                "context_window": 65536,
-                "max_input_tokens": 65536,
-            },
-        },
-    )
-    assert card.model_type == "decision"
-    assert card.supports_multimodal is False
-    assert card.input_token_limit == 65536
-
-
 async def test_native_directory_paginates_and_reads_capabilities(monkeypatch):
     requests = []
 

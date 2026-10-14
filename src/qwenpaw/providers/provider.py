@@ -533,12 +533,6 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
             (m for m in self.models if m.id == model_info.id),
             None,
         )
-        if (
-            existing is not None
-            and not was_removed
-            and existing.model_type != model_info.model_type
-        ):
-            return False, "Model type cannot be changed after adding it"
         if existing is not None and not self.automatically_listed(existing):
             for field in model_info.model_fields_set:
                 setattr(existing, field, getattr(model_info, field))
@@ -731,7 +725,7 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
                     if field in ModelInfo.model_fields
                 }
                 overrides.update(
-                    model_type=getattr(configured, "model_type", "chat"),
+                    model_type=configured.model_type,
                     config_overrides=getattr(
                         configured, "config_overrides", []
                     ),
@@ -1098,13 +1092,12 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
         for model in Provider.all_models(self) + self.discovered_models:
             if model.id == model_id:
                 changed_fields: list[str] = []
-                if (
-                    config.get("model_type", model.model_type)
-                    != model.model_type
-                ):
-                    raise ProviderError(
-                        message="Model type cannot be changed after adding it",
-                    )
+                if "model_type" in config:
+                    value = config["model_type"]
+                    if value not in ("chat", "decision"):
+                        raise ValueError("model_type must be chat or decision")
+                    model.model_type = value
+                    changed_fields.append("model_type")
                 for field in (
                     f"supports_image",
                     f"supports_video",

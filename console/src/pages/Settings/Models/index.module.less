@@ -2828,28 +2828,15 @@
   box-shadow: 0 1px 4px rgb(0 0 0 / 6%);
 }
 
-.globalModelRow {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  font-size: var(--app-font-secondary);
-}
+.globalDefaults {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  gap: 8px 24px;
+  padding: 12px 24px;
 
-.headerRight .globalModelRow {
-  width: auto;
-  margin: 0;
-  padding: 0 8px;
-  gap: 8px;
-  min-width: 0;
-  background: transparent;
-  border: 0;
   > span {
-    white-space: nowrap;
-    font-size: var(--app-font-caption);
-    color: var(--app-text-tertiary);
-  }
-  button {
-    max-width: 240px;
+    grid-column: 1 / -1;
+    color: var(--app-text-secondary);
   }
 }
 @media (max-width: 900px) {

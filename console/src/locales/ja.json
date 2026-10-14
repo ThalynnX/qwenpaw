@@ -1853,6 +1853,7 @@
     "retry": "再試行"
   },
   "modelSelector": {
+    "noFallback": "使用しない",
     "selectModel": "モデルを選択",
     "noConfiguredModels": "設定済みモデルがありません",
     "noFreeModels": "利用可能な無料モデルがありません",
@@ -1906,6 +1907,12 @@
     "providersTitle": "プロバイダー",
     "providersDescription": "各プロバイダーのAPIキーとエンドポイントを設定します。",
     "llmTitle": "モデル",
+    "defaultModels": "デフォルトモデル",
+    "defaultChatModel": "チャットモデル",
+    "defaultDecisionModel": "判定モデル",
+    "noDefaultModel": "未設定",
+    "followGlobal": "グローバル設定に従う",
+    "agentOverride": "このエージェントのみ",
     "defaultLlm": "デフォルト LLM",
     "llmDescription": "ここではグローバル既定の LLM モデルを設定します。Chat ページでは各 Agent ごとに使用するモデルを個別に選択できます。",
     "configureProvider": "{{name}} を設定",

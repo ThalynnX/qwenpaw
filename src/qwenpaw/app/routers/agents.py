@@ -33,6 +33,8 @@ from ..mail.driver_config import (
     sync_qwenpawmail_driver_card as _sync_qwenpawmail_driver_card,
 )
 from ..utils import safe_join, schedule_agent_reload
+from .model_validation import validate_model_slot
+from ...providers.hub_managed import PROVIDER_ID, hub_mode, managed_slot
 from ...config.config import (
     AgentMailConfig,
     AgentProfileConfig,
@@ -147,9 +149,12 @@ class AgentModelSettingsPatch(BaseModel):
     """Model-routing fields editable from the model settings page."""
 
     active_model: ModelSlotConfig | None = None
+    decision_model: ModelSlotConfig | None = None
 
     fallback_models: list[ModelSlotConfig] | None = None
     fallback_policy: FallbackPolicyConfig | None = None
+    decision_fallback_models: list[ModelSlotConfig] | None = None
+    decision_fallback_policy: FallbackPolicyConfig | None = None
     subagent_model: ModelSlotConfig | None = None
     thinking_level: (
         Literal[
@@ -173,6 +178,8 @@ class AgentModelSettingsPatch(BaseModel):
         non_nullable_fields = (
             "fallback_models",
             "fallback_policy",
+            "decision_fallback_models",
+            "decision_fallback_policy",
             "thinking_level",
         )
         null_fields = [
@@ -1322,6 +1329,31 @@ async def update_agent_model_settings(
     """Patch model-routing fields without overwriting other settings."""
     values = {field: getattr(body, field) for field in body.model_fields_set}
 
+    def validate_selections() -> None:
+        for field, model_type in (
+            ("active_model", "chat"),
+            ("decision_model", "decision"),
+            ("subagent_model", "chat"),
+            ("fallback_models", "chat"),
+            ("decision_fallback_models", "decision"),
+        ):
+            value = values.get(field)
+            slots = value if isinstance(value, list) else [value]
+            for slot in slots:
+                if slot is not None:
+                    validate_model_slot(
+                        request.app.state.provider_manager,
+                        slot.provider_id,
+                        slot.model,
+                        model_type,
+                    )
+
+    active_model = values.get("active_model")
+    if active_model and active_model.provider_id == PROVIDER_ID and hub_mode():
+        await run_sync_io(managed_slot, active_model, explicit=True)
+
+    await run_sync_io(validate_selections)
+
     def apply_settings(existing_config: AgentProfileConfig) -> None:
         AgentProfileConfig.model_validate(
             {
@@ -1342,6 +1374,11 @@ async def update_agent_model_settings(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except AppBaseException as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    active_model = values.get("active_model")
+    if active_model and active_model.provider_id != PROVIDER_ID:
+        request.app.state.provider_manager.maybe_probe_multimodal(
+            active_model.provider_id, active_model.model
+        )
     schedule_agent_reload(request, agentId)
     return updated
 

@@ -22,11 +22,15 @@ QwenPaw also provides the QwenPaw-Flash series for local deployment. It includes
 
 ## Decision Models
 
-Models have a **Chat** or **Decision** type; existing configurations default to Chat. Choose the type when manually adding a model. It is fixed afterward; remove and re-add a manually added model to change its type. The same provider can contain both types, including DashScope.
+Models have a **Chat** or **Decision** type. Set the type when adding a model or change it in the model's configuration if its discovered type is incorrect. The same provider can contain both types, including DashScope. Image, audio, video, and tool-call support remain separate model capabilities.
 
 Configure **TypeSafe** with its API key and provider URL (default: `https://api.typesafe.ai/v1`), then discover and add JEV models. Provider connection tests use the model list; model connection tests send a minimal native decision request.
 
-Decision models display a type label and are excluded from chat selectors and execution. They share the provider's endpoint and credentials and have no chat generation settings. For decision models in OpenAI-compatible providers, connection tests currently verify only provider connectivity. Configuring a decision model does not enable automatic tool selection; runtime decision integration is follow-up work.
+In **Settings → Models**, choose separate global defaults for chat and decision models. Under **Current Agent**, the two tabs configure each type's model and fallback list; changes save immediately. An unset agent model inherits its global default.
+
+The chat composer's model menu also has **Chat Model** and **Decision Model** tabs. Selections affect only the current conversation, taking precedence over agent and global defaults. Use **Restore default model** to remove a conversation override. The chat tab retains its thinking controls, and each tab lists only models of that type.
+
+Decision models share the provider's endpoint and credentials and have no chat generation settings. For decision models in OpenAI-compatible providers, connection tests currently verify only provider connectivity. Selecting a decision model or configuring its fallbacks does not enable automatic tool selection or decision execution; that runtime integration is follow-up work.
 
 ## QwenPaw Local (llama.cpp) Configuration
 

@@ -2022,6 +2022,7 @@
     "emptyValue": "String vazia"
   },
   "modelSelector": {
+    "noFallback": "Não usar",
     "selectModel": "Selecionar Modelo",
     "noConfiguredModels": "Nenhum modelo configurado",
     "noFreeModels": "Nenhum modelo gratuito disponível",
@@ -2133,6 +2134,12 @@
     "providersTitle": "Providers",
     "providersDescription": "Configure API keys and endpoints for each provider.",
     "llmTitle": "Modelos",
+    "defaultModels": "Modelos padrão",
+    "defaultChatModel": "Modelo de conversa",
+    "defaultDecisionModel": "Modelo de decisão",
+    "noDefaultModel": "Não definido",
+    "followGlobal": "Usar padrão global",
+    "agentOverride": "Somente este agente",
     "defaultLlm": "Padrao LLM",
     "llmDescription": "Set the global default LLM model from an authorized provider. You can choose a specific model for each Agent in the Chat page.",
     "configureProvider": "Configure {{name}}",

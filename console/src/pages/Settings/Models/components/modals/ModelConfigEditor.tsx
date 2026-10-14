@@ -7,6 +7,7 @@ import { ThinkingCapabilityFields } from "./ThinkingCapabilityFields";
 import type { ThinkingControlSpec } from "@/features/thinking/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Switch } from "@agentscope-ai/design";
+import { Select } from "antd";
 import type { ModelInfo, ProviderInfo } from "../../../../../api/types";
 import api from "../../../../../api";
 import { useTranslation } from "react-i18next";
@@ -59,6 +60,8 @@ export function ModelConfigEditor({
     ThinkingControlSpec | null | undefined
   >();
   const [capabilities, setCapabilities] = useState<CapabilityOverrides>({});
+  const [modelType, setModelType] = useState<ModelInfo["model_type"]>();
+  const isDecision = (modelType ?? model.model_type) === "decision";
   const configuredMaxTokens = requestMaxTokens(model);
 
   const [maxTokens, setMaxTokens] = useState<number | null>(
@@ -95,6 +98,7 @@ export function ModelConfigEditor({
 
   useEffect(() => {
     setCapabilities({});
+    setModelType(undefined);
     setThinkingDeclaration(undefined);
     setText(initialText);
     setMaxTokens(configuredMaxTokens);
@@ -106,6 +110,8 @@ export function ModelConfigEditor({
     setReasoningEffort(model.reasoning_effort ?? null);
     setDirty(false);
   }, [
+    model.id,
+    model.model_type,
     initialText,
     configuredMaxTokens,
     resolvedContext,
@@ -135,7 +141,7 @@ export function ModelConfigEditor({
   }, []);
 
   const handleSave = async () => {
-    const trimmed = text.trim();
+    const trimmed = isDecision ? "" : text.trim();
     let parsed: Record<string, unknown> = {};
     if (trimmed) {
       try {
@@ -158,16 +164,23 @@ export function ModelConfigEditor({
     setSaving(true);
     try {
       const updated = await api.configureModel(providerId, model.id, {
-        ...capabilities,
-        ...(thinkingDeclaration !== undefined
-          ? { thinking_control: thinkingDeclaration }
+        ...(modelType !== undefined ? { model_type: modelType } : {}),
+        ...(!isDecision
+          ? {
+              ...capabilities,
+              ...(thinkingDeclaration !== undefined
+                ? { thinking_control: thinkingDeclaration }
+                : {}),
+              ...(maxInputLengthDirty
+                ? { max_input_length: maxInputLength }
+                : {}),
+              generate_kwargs: parsed,
+              relay_reasoning: relayReasoning,
+              thinking_enabled: thinkingEnabled,
+              thinking_budget: thinkingBudget,
+              reasoning_effort: reasoningEffort,
+            }
           : {}),
-        ...(maxInputLengthDirty ? { max_input_length: maxInputLength } : {}),
-        generate_kwargs: parsed,
-        relay_reasoning: relayReasoning,
-        thinking_enabled: thinkingEnabled,
-        thinking_budget: thinkingBudget,
-        reasoning_effort: reasoningEffort,
       });
       message.success(t("models.modelConfigSaved", { name: model.name }));
       setDirty(false);
@@ -186,12 +199,50 @@ export function ModelConfigEditor({
     }
   };
 
-  if (model.model_type === "decision") {
-    return <p>{t("models.decisionModelHint")}</p>;
+  const modelTypeField = (
+    <div className={styles.typeField}>
+      <span>{t("models.modelType")}</span>
+      <Select
+        size="small"
+        style={{ width: 128 }}
+        aria-label={t("models.modelType")}
+        value={modelType ?? model.model_type ?? "chat"}
+        options={[
+          { value: "chat", label: t("models.modelTypeChat") },
+          { value: "decision", label: t("models.modelTypeDecision") },
+        ]}
+        onChange={(value) => {
+          setModelType(value);
+          setDirty(true);
+        }}
+      />
+    </div>
+  );
+  const saveButton = (
+    <div className={styles.actions}>
+      <Button
+        type="primary"
+        size="small"
+        loading={saving}
+        disabled={!dirty}
+        onClick={handleSave}
+      >
+        {t("models.save")}
+      </Button>
+    </div>
+  );
+  if (isDecision) {
+    return (
+      <div className={styles.editor}>
+        {modelTypeField}
+        {saveButton}
+      </div>
+    );
   }
 
   return (
     <div className={styles.editor}>
+      {modelTypeField}
       <InteractiveCard as="section" tilt={0} className={styles.capabilities}>
         <ModelCapabilitiesFields
           model={model}
@@ -317,17 +368,7 @@ export function ModelConfigEditor({
           />
         </details>
       </InteractiveCard>
-      <div className={styles.actions}>
-        <Button
-          type="primary"
-          size="small"
-          loading={saving}
-          disabled={!dirty}
-          onClick={handleSave}
-        >
-          {t("models.save")}
-        </Button>
-      </div>
+      {saveButton}
     </div>
   );
 }

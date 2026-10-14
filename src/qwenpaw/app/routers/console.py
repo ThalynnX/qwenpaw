@@ -32,10 +32,10 @@ from qwenpaw.tool_calls import CancelReason
 from qwenpaw.utils.timeout import resolve_stream_task_timeout
 from ...providers.thinking import ThinkingPreference
 from ...services.session_thinking import (
-    session_model,
     session_preference,
     thinking_view,
 )
+from ...services.session_models import decision_model_view, session_model
 from ...config.config import ModelSlotConfig
 from ...utils.logging import LOG_FILE_PATH, sanitize_log_value
 from ..agent_context import get_agent_for_request
@@ -137,18 +137,27 @@ def _extract_placeholder_name(content_parts: list) -> tuple[str, str]:
 
 async def _persist_pending_model_settings(workspace, chat, request_context):
     """Bind first-turn model and reasoning before building the runtime."""
-    pending_model = request_context.pop(f"session_model", None)
-    if pending_model is not None and session_model(chat.meta) is None:
+    for model_type, key in (
+        ("chat", "session_model"),
+        ("decision", "session_decision_model"),
+    ):
+        pending_model = request_context.pop(key, None)
+        if pending_model is None or session_model(chat.meta, model_type):
+            continue
         try:
             selected = ModelSlotConfig.model_validate(pending_model)
         except ValueError as exc:
             raise HTTPException(422, f"Invalid session model") from exc
-        view = await thinking_view(workspace, model_override=selected)
+        resolve = (
+            thinking_view if model_type == "chat" else decision_model_view
+        )
+        view = await resolve(workspace, model_override=selected)
         if view[f"model"] is None:
             raise HTTPException(422, f"Model provider is unavailable")
         chat = await workspace.chat_manager.set_session_model(
             chat.id,
             selected.model_dump(),
+            model_type,
         )
         if chat is None:
             raise HTTPException(409, f"Session disappeared before saving")

@@ -1,4 +1,5 @@
 import { ModelChoice } from "./ModelChoice";
+import { ModelFallbackSettings } from "./ModelFallbackSettings";
 import { ThinkingControl } from "@/features/thinking/ThinkingControl";
 import type {
   ThinkingPreference,
@@ -13,7 +14,6 @@ import {
   Settings2,
   RotateCcw,
 } from "lucide-react";
-import { Switch } from "antd";
 import { useTranslation } from "react-i18next";
 
 import { agentsApi } from "@/api/modules/agents";
@@ -34,6 +34,7 @@ interface SettingsProvider {
 
 interface AgentModelSettingsProps {
   expanded?: boolean;
+  disabled?: boolean;
   agentId?: string;
   providers: SettingsProvider[];
   activeProviderId?: string;
@@ -83,6 +84,7 @@ function supportsThinking(_provider: SettingsProvider, model: ModelInfo) {
 export function AgentModelSettings({
   agentId,
   expanded = false,
+  disabled = false,
   providers,
   activeProviderId,
   activeModelId,
@@ -98,6 +100,7 @@ export function AgentModelSettings({
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const busy = disabled || saving;
   const [config, setConfig] = useState<AgentProfileConfig | null>(null);
   const [fallbackEnabled, setFallbackEnabled] = useState(true);
   const [fallbackKeys, setFallbackKeys] = useState<string[]>([]);
@@ -237,8 +240,6 @@ export function AgentModelSettings({
     if (next) await loadConfig(true);
   };
 
-  const [choosingFallback, setChoosingFallback] = useState(false);
-  const [fallbackIndex, setFallbackIndex] = useState(0);
   useEffect(() => {
     if (expanded && agentId) {
       setOpen(true);
@@ -384,7 +385,7 @@ export function AgentModelSettings({
                     setThinking(next);
                     notifyDraft({ thinking: next });
                   }}
-                  disabled={saving}
+                  disabled={busy}
                 />
               )}
               <div className={styles.settingLine}>
@@ -396,7 +397,7 @@ export function AgentModelSettings({
                     optionByKey.get(subagentKey)?.label ??
                     (subagentKey || t("modelSelector.sameAsPrimary"))
                   }
-                  disabled={saving}
+                  disabled={busy}
                   onChange={(slot) => {
                     const key = pickSlot(slot);
                     setSubagentKey(key);
@@ -406,7 +407,7 @@ export function AgentModelSettings({
                 <button
                   type="button"
                   aria-label={t("modelSelector.sameAsPrimary")}
-                  disabled={!subagentKey || saving}
+                  disabled={!subagentKey || busy}
                   onClick={() => {
                     setSubagentKey(EMPTY_KEY);
                     notifyDraft({ subagentKey: EMPTY_KEY });
@@ -415,55 +416,21 @@ export function AgentModelSettings({
                   <RotateCcw size={15} />
                 </button>
               </div>
-              <div className={styles.settingLine}>
-                <span>{t("modelSelector.enableFallback")}</span>
-                <Switch
-                  aria-label={t("modelSelector.enableFallback")}
-                  size="small"
-                  checked={fallbackEnabled}
-                  disabled={saving}
-                  onChange={(next) => {
-                    if (next && !fallbackKeys.length) {
-                      setChoosingFallback(true);
-                      return;
-                    }
-                    setFallbackEnabled(next);
-                    notifyDraft({ fallbackEnabled: next });
-                  }}
-                />
-              </div>
-              {(fallbackEnabled || choosingFallback) &&
-                (fallbackKeys.length ? fallbackKeys : [EMPTY_KEY]).map(
-                  (key, index) => (
-                    <div className={styles.settingLine} key={index}>
-                      <span>{t("modelSelector.chooseFallback")}</span>
-                      <ModelChoice
-                        ariaLabel={t("modelSelector.chooseFallback")}
-                        open={choosingFallback && fallbackIndex === index}
-                        onOpenChange={(next) => {
-                          setFallbackIndex(index);
-                          setChoosingFallback(next);
-                        }}
-                        value={slotByKey.get(key)}
-                        label={
-                          optionByKey.get(key)?.label ??
-                          (key || t("modelSelector.chooseFallback"))
-                        }
-                        disabled={saving}
-                        onChange={(slot) => {
-                          const keys = [...fallbackKeys];
-                          keys[index] = pickSlot(slot);
-                          setFallbackKeys(keys);
-                          setFallbackEnabled(true);
-                          notifyDraft({
-                            fallbackKeys: keys,
-                            fallbackEnabled: true,
-                          });
-                        }}
-                      />
-                    </div>
-                  ),
-                )}
+              <ModelFallbackSettings
+                models={fallbackKeys.flatMap((key) => {
+                  const slot = slotByKey.get(key);
+                  return slot ? [slot] : [];
+                })}
+                enabled={fallbackEnabled}
+                providers={providers}
+                disabled={busy}
+                onChange={(models, enabled) => {
+                  const keys = models.map(pickSlot);
+                  setFallbackKeys(keys);
+                  setFallbackEnabled(enabled);
+                  notifyDraft({ fallbackKeys: keys, fallbackEnabled: enabled });
+                }}
+              />
               {agentId && (
                 <button
                   type="button"
@@ -473,7 +440,7 @@ export function AgentModelSettings({
                       ? "common.save"
                       : "modelSelector.saveAgentSettings",
                   )}
-                  disabled={saving}
+                  disabled={busy}
                   onClick={save}
                 >
                   {saving ? (
