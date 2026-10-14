@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,99}$"
+    },
+    "visibility": {
+      "enum": ["public", "private"]
+    },
+    "date": {
+      "type": "string",
+      "format": "timestamp"
+    },
+    "index_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "sdk_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "source_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "workflow_url": {
+      "type": "string",
+      "format": "public-https-url"
+    },
+    "benchmarks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "enum": ["gaia", "spreadsheetbench-verified", "swebench-verified"]
+          },
+          "revision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "domains": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "enum": ["research", "office", "coding"]
+            }
+          },
+          "expected": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": ["id", "revision", "domains", "expected"]
+      }
+    },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "provider": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "harness": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "trajectory_url": {
+            "type": "string",
+            "format": "public-https-url"
+          },
+          "benchmarks": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "benchmark": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "scored": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "score": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "mean_runtime_seconds": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "mean_model_cost_usd": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "cost_source": {
+                  "enum": [
+                    "reported",
+                    "snapshot_estimated",
+                    "litellm_estimated",
+                    "unknown"
+                  ]
+                },
+                "cost_basis": {
+                  "enum": ["exact", "upper_bound", "unknown"]
+                }
+              },
+              "required": [
+                "benchmark",
+                "scored",
+                "score",
+                "mean_runtime_seconds",
+                "mean_model_cost_usd",
+                "cost_source",
+                "cost_basis"
+              ]
+            }
+          }
+        },
+        "required": ["model", "provider", "harness", "benchmarks"]
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "visibility",
+    "date",
+    "index_version",
+    "sdk_version",
+    "source_sha",
+    "benchmarks",
+    "records"
+  ]
+}

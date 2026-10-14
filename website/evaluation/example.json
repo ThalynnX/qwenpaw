@@ -1,0 +1,66 @@
+{
+  "$schema": "./schema.json",
+  "schema_version": 1,
+  "id": "qwenpaw-v-next-example",
+  "visibility": "public",
+  "date": "2026-10-14T00:00:00Z",
+  "index_version": "index-v1",
+  "sdk_version": "v-next",
+  "source_sha": "0000000000000000000000000000000000000000",
+  "benchmarks": [
+    {
+      "id": "gaia",
+      "revision": "replace-with-dataset-revision",
+      "domains": ["research"],
+      "expected": 165
+    },
+    {
+      "id": "spreadsheetbench-verified",
+      "revision": "replace-with-dataset-revision",
+      "domains": ["office"],
+      "expected": 400
+    },
+    {
+      "id": "swebench-verified",
+      "revision": "replace-with-dataset-revision",
+      "domains": ["coding"],
+      "expected": 500
+    }
+  ],
+  "records": [
+    {
+      "model": "your-model-id",
+      "provider": "your-provider",
+      "harness": "QwenPaw",
+      "benchmarks": [
+        {
+          "benchmark": "gaia",
+          "scored": 0,
+          "score": null,
+          "mean_runtime_seconds": null,
+          "mean_model_cost_usd": null,
+          "cost_source": "unknown",
+          "cost_basis": "unknown"
+        },
+        {
+          "benchmark": "spreadsheetbench-verified",
+          "scored": 0,
+          "score": null,
+          "mean_runtime_seconds": null,
+          "mean_model_cost_usd": null,
+          "cost_source": "unknown",
+          "cost_basis": "unknown"
+        },
+        {
+          "benchmark": "swebench-verified",
+          "scored": 0,
+          "score": null,
+          "mean_runtime_seconds": null,
+          "mean_model_cost_usd": null,
+          "cost_source": "unknown",
+          "cost_basis": "unknown"
+        }
+      ]
+    }
+  ]
+}
