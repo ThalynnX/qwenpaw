@@ -761,6 +761,14 @@ window.QwenPaw.chat.request.render("my-plugin", ({ data, fallback }) => {
 });
 ```
 
+### Assistant Code Blocks and Submission
+
+`chat.codeBlock(pluginId, language, Component)` registers a renderer for fenced code blocks in assistant message text. User messages, reasoning and tool results keep their default renderers. The component receives `source`, `language`, block-level `isStreaming`, stable `messageId`/`blockId`, the originating `agentId`/`sessionId`, and `fallback()`. Keep component identity stable as `source` grows. The last registration for a language wins; disposing it restores the previous registration. `chat.disposeAll(pluginId)` also removes code-block renderers.
+
+`await chat.submit(pluginId, { query, agentId, sessionId })` enqueues an ordinary user message in the originating, currently open conversation. It preserves composer text and attachments and reuses the host request/stream/history pipeline. Resolution means queue admission, not completion of an Agent turn; unavailable Chat, stale routing and full queues reject. Do not submit again merely because a queued request has not finished.
+
+`host.openExternalLink(url)` exposes the host's validated browser/desktop link opener. Plugins should additionally restrict schemes appropriate to their own actions.
+
 ### Tool-Call Rendering — `chat.toolRender`
 
 ```tsx
