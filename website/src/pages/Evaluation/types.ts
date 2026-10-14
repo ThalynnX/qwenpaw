@@ -102,10 +102,17 @@ export function money(
         maximumFractionDigits: cost < 0.01 ? 4 : 3,
       }).format(cost);
 }
-export function safeWorkflow(url: string): string | undefined {
-  return /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/actions\/runs\/\d+$/.test(
-    url,
-  )
-    ? url
-    : undefined;
+export function safeWorkflow(value: string): string | undefined {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash
+      ? value
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }

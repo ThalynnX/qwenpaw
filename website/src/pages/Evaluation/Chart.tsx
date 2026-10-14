@@ -54,7 +54,9 @@ export default function Chart({
     );
     const known = shown.filter((r) => r.cost !== null && r.cost > 0);
     const missing = shown.filter((r) => r.cost === null || r.cost === 0);
-    const pareto = frontier(shown.filter((r) => best.has(r.id)));
+    const pareto = frontier(shown.filter((r) => best.has(r.id))).filter(
+      (r) => r.cost! > 0,
+    );
     const low = known.length
       ? Math.log10(Math.min(...known.map((r) => r.cost!))) - 0.22
       : -2;

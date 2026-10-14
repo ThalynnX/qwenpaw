@@ -216,6 +216,8 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
           <h1>{t("runTitle")}</h1>
           {loading ? (
             <p>{t("loading")}</p>
+          ) : error ? (
+            <p role="alert">{t(error)}</p>
           ) : !detail ? (
             <p>{t("notFound")}</p>
           ) : (
@@ -375,7 +377,7 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
               {t(error)}
             </p>
           )}
-          {!data.runs.length && (
+          {!error && !data.runs.length && (
             <p className="evaluation-notice">
               {loading ? t("loading") : t("empty")}
             </p>

@@ -25,7 +25,8 @@ export function bestRows(rows: Row[], compareHarnesses: boolean): Set<string> {
 export function frontier(rows: Row[]): Row[] {
   return rows
     .filter(
-      (r) => r.score !== null && r.cost !== null && r.cost > 0 && !r.upperBound,
+      (r) =>
+        r.score !== null && r.cost !== null && r.cost >= 0 && !r.upperBound,
     )
     .filter(
       (r, _, candidates) =>
