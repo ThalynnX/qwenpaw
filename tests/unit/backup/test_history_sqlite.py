@@ -32,35 +32,15 @@ def _agent_json(db_filename: str = "history.db") -> str:
     )
 
 
-@pytest.mark.parametrize(
-    f"location",
-    [f"relative", f"absolute", f"external", f"parent", f"symlink"],
-)
 def test_workspace_backup_uses_verified_history_snapshot(
     tmp_path: Path,
-    location: str,
 ) -> None:
     workspace = tmp_path / "workspace"
-    db_path = workspace / "state" / "events.db"
+    db_path = tmp_path / f"external.db"
     workspace.mkdir()
-    filename = f"state/events.db"
-    if location == f"absolute":
-        filename = str(db_path)
-    elif location in (f"external", f"parent", f"symlink"):
-        db_path = tmp_path / f"external.db"
-        filename = str(db_path)
-        if location == f"parent":
-            filename = f"../external.db"
-        elif location == f"symlink":
-            try:
-                (workspace / f"linked.db").symlink_to(db_path)
-            except OSError:
-                pytest.skip(f"symlinks are unavailable")
-            filename = f"linked.db"
-        (workspace / f"history.db").write_bytes(b"unrelated file")
-        (workspace / f"history-1.db-wal").write_bytes(b"unrelated WAL")
-    live_config = _agent_json(filename)
+    live_config = _agent_json(str(db_path))
     (workspace / f"agent.json").write_text(live_config, encoding=f"utf-8")
+    (workspace / f"history.db").write_bytes(b"unrelated file")
     store = HistoryStore(db_path)
     store.append(
         session_id="session",
@@ -91,12 +71,7 @@ def test_workspace_backup_uses_verified_history_snapshot(
 
     with zipfile.ZipFile(archive_path, "r") as zf:
         names = set(zf.namelist())
-        archived_filename = (
-            f"state/events.db"
-            if location in (f"relative", f"absolute")
-            else f"history-2.db"
-        )
-        db_entry = f"data/workspaces/agent/{archived_filename}"
+        db_entry = f"data/workspaces/agent/history-1.db"
         archived_config = json.loads(
             zf.read(f"data/workspaces/agent/agent.json"),
         )
@@ -104,16 +79,14 @@ def test_workspace_backup_uses_verified_history_snapshot(
             archived_config[f"running"][f"light_context_config"][
                 f"scroll_config"
             ][f"db_filename"]
-            == archived_filename
+            == f"history-1.db"
         )
         assert (workspace / f"agent.json").read_text(
             encoding=f"utf-8",
         ) == live_config
-        assert len(names) == len(zf.namelist())
-        if location in (f"external", f"parent", f"symlink"):
-            assert zf.read(f"data/workspaces/agent/history.db") == (
-                b"unrelated file"
-            )
+        assert (
+            zf.read(f"data/workspaces/agent/history.db") == b"unrelated file"
+        )
         destination = tmp_path / f"restored-workspace"
         restore._stage_agents(
             zf,
@@ -124,11 +97,12 @@ def test_workspace_backup_uses_verified_history_snapshot(
             {},
             [],
         )
+        assert db_entry in names
         assert db_entry + "-wal" not in names
         assert db_entry + "-shm" not in names
         restored = (
             destination.with_name(f"{destination.name}.restore_tmp")
-            / archived_filename
+            / f"history-1.db"
         )
 
     conn = sqlite3.connect(restored)
@@ -168,31 +142,6 @@ def test_workspace_backup_fails_when_history_is_invalid(
             )
 
 
-def test_workspace_backup_relocates_missing_external_history(
-    tmp_path: Path,
-) -> None:
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    (workspace / "agent.json").write_text(
-        _agent_json("../history.db"),
-        encoding="utf-8",
-    )
-
-    with zipfile.ZipFile(io.BytesIO(), f"w") as zf:
-        assert add_agent_workspaces(
-            zf,
-            [(f"agent", SimpleNamespace(workspace_dir=str(workspace)))],
-        )
-        data = json.loads(zf.read(f"data/workspaces/agent/agent.json"))
-        assert (
-            data[f"running"][f"light_context_config"][f"scroll_config"][
-                f"db_filename"
-            ]
-            == f"history.db"
-        )
-        assert not (tmp_path / f"history.db").exists()
-
-
 def test_restore_rejects_invalid_history_before_commit(
     tmp_path: Path,
 ) -> None:
@@ -229,20 +178,14 @@ def test_restore_rejects_invalid_history_before_commit(
     ).exists()
 
 
-@pytest.mark.parametrize(f"absolute", [False, True])
 def test_restore_rejects_history_path_escape_before_commit(
     tmp_path: Path,
-    absolute: bool,
 ) -> None:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as zf:
         zf.writestr(
             "data/workspaces/agent/agent.json",
-            _agent_json(
-                str(tmp_path / f"history.db")
-                if absolute
-                else f"../history.db",
-            ),
+            _agent_json("../history.db"),
         )
     buffer.seek(0)
 

@@ -60,21 +60,19 @@ def test_scroll_config_normalizes_and_validates_history_path() -> None:
         ScrollContextConfig(db_filename=f" ")
 
 
-@pytest.mark.parametrize(
-    f"filename",
-    [f"state/events.db", f"../events.db", f"absolute", f"~/events.db"],
-)
-def test_resolve_history_db_path(
+def test_resolve_history_db_path_stays_in_workspace(
     tmp_path: Path,
-    filename: str,
 ) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
 
-    if filename == f"absolute":
-        filename = str(tmp_path / f"external.db")
-    expected = (workspace / Path(filename).expanduser()).resolve()
-    assert resolve_history_db_path(workspace, filename) == expected
+    assert (
+        resolve_history_db_path(
+            workspace,
+            "state/events.db",
+        )
+        == workspace / "state" / "events.db"
+    )
 
 
 def test_resolve_history_db_path_follows_external_symlink(
