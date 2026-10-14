@@ -13,6 +13,8 @@ await tools.<name>(parameter=value); inspect describe_tool for exact arguments.
 Use the available web search tool for current facts before shell fallbacks.
 Read before editing, keep changes targeted, and run the relevant project
 checks.
+Tool media stays inside Python until explicitly shown with image(block),
+audio(block), or video(block). text/print cannot show media to the model.
 File paths and shell cwd default to the active project.
 """
 
@@ -43,10 +45,16 @@ Compose operations:
   isinstance(result, Exception), and emit successful evidence and errors.
 - For dependencies await the first result, derive the next arguments, then call
   the next tool. Filter, sort, deduplicate or aggregate before emitting output.
-- Only text(value), print(...), image(native_image_block), and the final
-  expression reach the model. Intermediate tool results stay inside the script.
-- image accepts inline image data or image blocks returned by enabled tools.
-  Read local/remote images through tools first; do not fabricate file URLs.
+- text(value), print(...), and the final expression output text/JSON only.
+  They do not show images, play audio, or send video to the model.
+- image(block), audio(block), video(block) output native data blocks with
+  matching image/*, audio/*, video/* source.media_type. Text and media retain
+  their output order. Intermediate tool results stay inside the script.
+- Calling view_image/view_audio/view_video alone does not show media to the
+  model. Explicitly output the returned data blocks with the matching helper.
+  Read local/remote media through tools first; do not fabricate file URLs.
+- Audio auto-transcription returns text: output block["text"] with text().
+  Native audio/video perception still requires a model supporting that input.
 
 Example: inspect two available contracts concurrently and emit only their
 names:
@@ -58,6 +66,16 @@ for result in results:
         text({{"error": str(result)}})
     else:
         text(result["name"])
+
+Example when view_image is enabled:
+r = await tools.view_image(image_path="/path/to/image.png")
+for block in r["content"]:
+    if block["type"] == "data":
+        image(block)
+    elif block["type"] == "text":
+        text(block["text"])
+Use the same loop with tools.view_audio(audio_path=...) and audio(block),
+or tools.view_video(video_path=...) and video(block). Preserve text hints too.
 
 The worker has time, memory and output limits. Await every task. Unfinished
 host calls are cancelled when the script exits; effects completed before an

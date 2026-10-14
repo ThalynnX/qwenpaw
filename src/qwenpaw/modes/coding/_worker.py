@@ -115,6 +115,8 @@ class Worker:
             "describe_tool": partial(self.call, "describe_tool"),
             "text": self.text,
             "image": lambda block: self.emit("image", value=block),
+            "audio": lambda block: self.emit("audio", value=block),
+            "video": lambda block: self.emit("video", value=block),
         }
         try:
             tree = ast.parse(initial["code"], filename="<run_code>")

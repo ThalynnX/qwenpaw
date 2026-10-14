@@ -259,8 +259,8 @@ class _Script:
             get_current_recent_max_bytes() or 16384,
             16 * 1024 * 1024,
         )
-        self.image_budget = 16 * 1024 * 1024
-        self.image_sources: set[str] = set()
+        self.media_budget = 16 * 1024 * 1024
+        self.media_sources: set[str] = set()
         self.catalog: dict[str, dict] = {}
         self.aliases: dict[str, str] = {}
         self.python_names: dict[str, str] = {}
@@ -327,10 +327,10 @@ class _Script:
         self.budget -= len(encoded)
         self.output.append(TextBlock(text=rendered))
 
-    def image(self, block: dict) -> None:
+    def media(self, kind: str, block: dict) -> None:
         data = DataBlock.model_validate(block)
-        if not data.source.media_type.startswith("image/"):
-            raise ValueError(f"image() expects an image data block")
+        if not data.source.media_type.startswith(f"{kind}/"):
+            raise ValueError(f"{kind}() expects a data block of type {kind}/*")
         source = hashlib.sha256(
             json.dumps(
                 data.source.model_dump(mode="json"),
@@ -340,15 +340,15 @@ class _Script:
         if (
             data.source.type == "url"
             and data.source.url.scheme != "data"
-            and source not in self.image_sources
+            and source not in self.media_sources
         ):
             raise ValueError(
-                f"image() expects inline data or an image returned by a tool; "
-                f"read host images through tools.view_image first.",
+                f"{kind}() expects inline data or media returned by a tool; "
+                f"read host media through the enabled tools first.",
             )
-        self.image_budget -= len(json.dumps(block).encode("utf-8"))
-        if self.image_budget < 0:
-            raise ValueError(f"Code image output exceeded 16 MiB")
+        self.media_budget -= len(json.dumps(block).encode("utf-8"))
+        if self.media_budget < 0:
+            raise ValueError(f"Code media output exceeded 16 MiB")
         self.output.append(data)
 
     async def invoke(self, name: str, *positional, **arguments) -> dict:
@@ -398,7 +398,7 @@ class _Script:
                 raise RuntimeError(json.dumps(result, ensure_ascii=False))
             for block in response.content:
                 if isinstance(block, DataBlock) and block.source.type == "url":
-                    self.image_sources.add(
+                    self.media_sources.add(
                         hashlib.sha256(
                             json.dumps(
                                 block.source.model_dump(mode="json"),
@@ -472,8 +472,8 @@ class _Script:
                 self.pending.add(task)
             elif packet["kind"] == "text":
                 self.text(packet["value"])
-            elif packet["kind"] == "image":
-                self.image(packet["value"])
+            elif packet["kind"] in ("image", "audio", "video"):
+                self.media(packet["kind"], packet["value"])
             elif packet["kind"] == "done":
                 if packet.get("error"):
                     raise RuntimeError(packet["error"])
