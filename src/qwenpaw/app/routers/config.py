@@ -36,6 +36,7 @@ from ...config.config import (
     SkillScannerConfig,
     SkillScannerWhitelistEntry,
     ThemeConfig,
+    JevServiceConfig,
 )
 from ...utils.io_utils import run_sync_io
 from ...config.timezone import normalize_tz
@@ -58,6 +59,41 @@ from .schemas_config import (
 )
 
 router = APIRouter(prefix="/config", tags=["config"])
+
+
+class JevServiceUpdate(JevServiceConfig):
+    api_key: str | None = None
+
+
+@router.get("/jev-service")
+async def get_jev_service() -> dict[str, Any]:
+    """Return global Jev settings without exposing the API key."""
+    from ...services.jev import get_api_key
+
+    config = await run_sync_io(load_config)
+    return {
+        "base_url": config.jev_service.base_url,
+        "configured": bool(await get_api_key()),
+    }
+
+
+@router.put("/jev-service")
+async def put_jev_service(body: JevServiceUpdate) -> dict[str, Any]:
+    """Update the shared endpoint and optionally replace its encrypted key."""
+    from ...services.jev import get_api_key, set_api_key
+
+    settings = JevServiceConfig(base_url=body.base_url)
+    if body.api_key is not None and body.api_key.strip():
+        await set_api_key(body.api_key)
+
+    def update(config: Any) -> None:
+        config.jev_service = settings
+
+    await run_sync_io(mutate_config, update)
+    return {
+        "base_url": settings.base_url,
+        "configured": bool(await get_api_key()),
+    }
 
 
 @router.get(

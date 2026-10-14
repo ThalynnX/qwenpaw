@@ -3239,6 +3239,43 @@ class ThemeConfig(BaseModel):
         return value
 
 
+class JevServiceConfig(BaseModel):
+    """Global TypeSafe Jev endpoint; credentials are stored separately."""
+
+    base_url: str = "https://api.typesafe.ai"
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_base_url(cls, value: str) -> str:
+        from urllib.parse import urlsplit
+
+        normalized = value.strip().rstrip("/")
+        parsed = urlsplit(normalized)
+        has_forbidden_parts = any(
+            (
+                parsed.username,
+                parsed.password,
+                parsed.query,
+                parsed.fragment,
+                parsed.path not in ("", "/"),
+            ),
+        )
+        is_local_http = parsed.scheme == "http" and parsed.hostname in {
+            "localhost",
+            "127.0.0.1",
+            "::1",
+        }
+        if (
+            not parsed.hostname
+            or has_forbidden_parts
+            or (parsed.scheme != "https" and not is_local_http)
+        ):
+            raise ValueError(
+                "Jev Base URL must be an HTTPS origin or local HTTP origin",
+            )
+        return normalized
+
+
 class Config(BaseModel):
     """Root config (config.json)."""
 
@@ -3249,6 +3286,7 @@ class Config(BaseModel):
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
     last_dispatch: Optional[LastDispatchConfig] = None
     security: SecurityConfig = Field(default_factory=SecurityConfig)
+    jev_service: JevServiceConfig = Field(default_factory=JevServiceConfig)
     acp: ACPConfig = Field(default_factory=ACPConfig)
     browser: BrowserConfig = Field(default_factory=BrowserConfig)
     theme: Optional[ThemeConfig] = None

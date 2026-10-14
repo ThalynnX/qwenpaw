@@ -32,6 +32,7 @@ const CheckpointsPage = lazyImportWithRetry("../../pages/Agent/Checkpoints");
 const MCPPage = lazyImportWithRetry("../../pages/Agent/MCP");
 const ACPPage = lazyImportWithRetry("../../pages/Agent/ACP");
 const ModelsPage = lazyImportWithRetry("../../pages/Settings/Models");
+const JevServicePage = lazyImportWithRetry("../../pages/Settings/JevService");
 const EnvironmentsPage = lazyImportWithRetry(
   "../../pages/Settings/Environments",
 );
@@ -88,6 +89,7 @@ export const BUILTIN_ROUTES: Route[] = [
   { id: "core.checkpoints", path: "/checkpoints", component: CheckpointsPage },
   { id: "core.agents", path: "/agents", component: AgentsPage },
   { id: "core.models", path: "/models", component: ModelsPage },
+  { id: "core.jev-service", path: "/jev-service", component: JevServicePage },
   {
     id: "core.environments",
     path: "/environments",

@@ -234,6 +234,15 @@ const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         Icon: Globe,
       },
       {
+        key: "jev-service",
+        labelKey: "nav.jevService",
+        fallback: "Jev Service",
+        descriptionKey: "settingsCenter.descriptions.jevService",
+        descriptionFallback: "Shared TypeSafe Jev connection",
+        routeId: "core.jev-service",
+        Icon: Plug,
+      },
+      {
         key: "security",
         labelKey: "nav.security",
         fallback: "Security",
