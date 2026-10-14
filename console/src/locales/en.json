@@ -3038,6 +3038,8 @@
     "sourceControl": "Source control",
     "preview": "Preview",
     "htmlPreview": "HTML preview",
+    "htmlReadOnlyTitle": "This page includes dynamic content",
+    "htmlReadOnlyNotice": "Dynamic content isn't available in this read-only preview. Open the file in your browser to view the full experience.",
     "openHtmlInBrowser": "Open in browser",
     "edit": "Edit",
     "selectFile": "Select a file to open",
