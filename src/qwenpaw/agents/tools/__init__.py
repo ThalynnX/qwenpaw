@@ -58,6 +58,7 @@ from .agent_management import (  # noqa: E402
     spawn_subagent,
 )  # noqa: E402
 from .delegate_external_agent import delegate_external_agent  # noqa: E402
+from .ask_user_question import ask_user_question  # noqa: E402
 from .migration_compatibility import (  # noqa: E402
     migration_compat_finalize,
     migration_compat_inspect,

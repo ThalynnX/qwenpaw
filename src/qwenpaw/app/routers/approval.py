@@ -60,6 +60,14 @@ class ApprovalActionRequest(BaseModel):
             "pattern). Omitted/unknown defaults to 'exact'."
         ),
     )
+    answer: Optional[str] = Field(
+        None,
+        description=(
+            "Free-text reply for interactive approvals such as "
+            "ask_user_question. Only meaningful for approve actions; "
+            "deny/cancel ignore it."
+        ),
+    )
 
 
 class ApprovalActionResponse(BaseModel):
@@ -143,6 +151,7 @@ async def post_approval_approve(
         ApprovalDecision.APPROVED,
         scope=scope,
         actor=_console_admin_actor(request, pending),
+        answer=body.answer,
     )
     if resolved is None:
         raise HTTPException(

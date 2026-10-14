@@ -95,6 +95,10 @@ class PendingApproval:
     # treated as EXACT by the governance consumer. Only meaningful when the
     # decision is APPROVED.
     scope: ApprovalScope | None = None
+    # Free-text answer supplied alongside APPROVED, used by interactive
+    # tools (see agents/tools/ask_user_question.py). Empty for plain
+    # approve/deny governance approvals.
+    answer: str = ""
 
 
 def _is_spawn_child_approval(pending: PendingApproval) -> bool:
@@ -328,6 +332,7 @@ class ApprovalService:
         scope: ApprovalScope | None = None,
         *,
         actor: ApprovalActor | None = None,
+        answer: str | None = None,
     ) -> PendingApproval | None:
         """Resolve pending approval by setting Future result.
 
@@ -339,6 +344,9 @@ class ApprovalService:
             actor: caller identity used by policies stricter than ``AGENT``.
                 Exact-requester approvals reject missing or mismatched actors.
                 Automatic timeout resolution is the only actor-free exception.
+            answer: optional free-text reply kept alongside ``APPROVED`` so
+                interactive tools can read the user's response off the
+                returned record. Ignored for non-APPROVED decisions.
 
         Returns None if another resolver won or the request expired.
         Expired requests resolve to TIMEOUT even when an approval arrives.
@@ -373,6 +381,8 @@ class ApprovalService:
             pending.status = decision.value
             pending.resolved_at = time.time()
             pending.scope = scope
+            if answer is not None and decision == ApprovalDecision.APPROVED:
+                pending.answer = answer
 
         # Set Future result outside lock
         if not pending.future.done():
