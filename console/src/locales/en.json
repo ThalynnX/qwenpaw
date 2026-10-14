@@ -5249,13 +5249,13 @@
     "compatWarningConfirm": "Install anyway"
   },
   "codingMode": {
-    "toolPresentationHelp": "Run enabled tools through Python. The model sees one execution tool; scripts retain access to enabled built-in, MCP and plugin tools with their existing permissions.",
+    "toolPresentationHelp": "When enabled, the agent uses a single code tool. It searches, processes files, and performs other tool operations by writing and running Python code.",
     "loadFailed": "Could not load Code Mode. Try again.",
     "updateFailed": "Could not save Code Mode. Try again.",
     "runCode": "Run Python",
     "script": "Script",
     "output": "Output",
-    "title": "Coding Mode",
+    "title": "Code Mode",
     "experimental": "Experimental Feature",
     "experimentalDesc": "Coding Mode transforms QwenPaw into a lightweight Web IDE with a code editor, file tree, Git integration, and AI-powered coding assistance.",
     "experimentalNote": "This feature is experimental and still under active development. Some functionality may be limited or change in future updates.",

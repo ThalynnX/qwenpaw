@@ -1279,7 +1279,7 @@
   margin: 20px 0 4px;
   padding-top: 20px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   border-top: 1px solid var(--app-border);
 }
@@ -1636,15 +1636,18 @@
   }
 }
 
-.codeModeSetting {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.runtimeToggle {
+  min-height: 72px;
+  margin-bottom: 0 !important;
 }
 
-.codeModeError {
-  display: block;
-  margin-top: 8px;
-  color: var(--app-error);
-  font-size: var(--app-font-secondary);
+.runtimeSwitch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  > span {
+    color: var(--app-text-tertiary);
+    font-size: var(--app-font-secondary);
+  }
 }

@@ -5269,13 +5269,13 @@
     "compatWarningConfirm": "仍然安装"
   },
   "codingMode": {
-    "toolPresentationHelp": "通过 Python 编排已启用的工具。模型只看到一个执行工具；脚本仍可调用已启用的内置、MCP 和插件工具，并沿用原有权限。",
+    "toolPresentationHelp": "开启后，智能体只使用一个代码工具。搜索、文件处理等操作，统一通过编写并执行 Python 代码完成。",
     "loadFailed": "无法加载代码模式，请重试。",
     "updateFailed": "Code Mode 保存失败，请重试。",
     "runCode": "执行 Python",
     "script": "代码",
     "output": "输出",
-    "title": "编程模式",
+    "title": "代码模式",
     "experimental": "实验性功能",
     "experimentalDesc": "编程模式将 QwenPaw 转变为一个轻量级 Web IDE，提供代码编辑器、文件树、Git 集成和 AI 辅助编程能力。",
     "experimentalNote": "该功能目前为实验性阶段，仍在持续开发中，部分功能可能受限或在后续版本中有所变动。",
