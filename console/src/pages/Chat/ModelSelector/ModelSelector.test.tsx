@@ -1486,6 +1486,7 @@ describe("ModelSelector", () => {
     expect(
       screen.queryByRole("button", { name: /common.save/ }),
     ).not.toBeInTheDocument();
+    expect(screen.getByText("thinkingControl.title")).toBeInTheDocument();
 
     await user.click(fallback);
 
@@ -1502,6 +1503,43 @@ describe("ModelSelector", () => {
         },
       }),
     );
+  });
+
+  it("enables fallback before the user opens model selection", async () => {
+    vi.mocked(agentsApi.getAgent).mockResolvedValue({
+      id: "default",
+      name: "Default",
+      fallback_models: [],
+      fallback_policy: { enabled: false, target_scope: "configured" },
+      subagent_model: null,
+      thinking_level: "inherit",
+    });
+    const user = userEvent.setup();
+    renderWithProviders(
+      <AgentModelSettings
+        expanded
+        autoSave
+        surface="settings"
+        agentId="default"
+        providers={await providerApi.listProviders()}
+        activeProviderId="openai"
+        activeModelId="gpt-4"
+      />,
+    );
+
+    const fallback = await screen.findByLabelText(
+      "modelSelector.enableFallback",
+    );
+    await user.click(fallback);
+
+    expect(fallback).toBeChecked();
+    const chooseModel = screen.getByRole("button", {
+      name: "modelSelector.chooseFallback",
+    });
+    expect(chooseModel).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(chooseModel);
+    expect(chooseModel).toHaveAttribute("aria-expanded", "true");
   });
 
   it("does not send a cached active model when saving settings", async () => {

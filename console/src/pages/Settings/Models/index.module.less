@@ -77,42 +77,22 @@
   margin-top: 0;
 }
 
-.settingsPage .globalModelSummary {
+.settingsPage .globalModelRow {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  margin: 18px 24px 6px;
-  padding: 18px 20px;
-  border: 1px solid var(--app-accent-border);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--app-accent) 4%, var(--models-surface));
-}
-
-.settingsPage .globalModelSummaryCopy {
+  gap: 8px;
   min-width: 0;
+  padding: 0 8px;
+  font-size: var(--app-font-secondary);
 
   > span {
-    color: var(--models-text);
-    font-size: var(--app-font-body);
-    font-weight: 600;
+    color: var(--app-text-tertiary);
+    font-size: var(--app-font-caption);
+    white-space: nowrap;
   }
 
-  > p {
-    max-width: 680px;
-    margin: 4px 0 0;
-    color: var(--models-text-muted);
-    font-size: var(--app-font-secondary);
-    line-height: 1.5;
-  }
-}
-
-.settingsPage .globalModelSummary > :last-child {
-  max-width: min(360px, 45%);
-  flex: 0 1 auto;
-
-  > button {
-    width: 100%;
+  button {
+    max-width: 240px;
   }
 }
 
@@ -498,16 +478,6 @@
     width: 100%;
     justify-content: flex-start;
   }
-
-  .settingsPage .globalModelSummary {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .settingsPage .globalModelSummary > :last-child {
-    width: 100%;
-    max-width: none;
-  }
 }
 
 @media (max-width: 768px) {
@@ -542,11 +512,6 @@
   .settingsPage .searchEmpty {
     margin-right: 16px;
     margin-left: 16px;
-  }
-
-  .settingsPage .globalModelSummary {
-    margin: 14px 16px 4px;
-    padding: 16px;
   }
 
   .settingsPage .providerCards {

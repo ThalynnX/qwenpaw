@@ -1684,6 +1684,16 @@
     background: var(--app-accent-soft);
   }
 
+  .thinkingSettingLine {
+    > section {
+      box-sizing: border-box;
+      min-width: 0;
+      width: min(440px, 62%);
+      margin-left: auto;
+      padding: 0;
+    }
+  }
+
   .modelChoiceButton:hover,
   .modelChoiceButton:focus-visible {
     background: transparent;
@@ -1720,6 +1730,17 @@
 
     .settingLine > span:first-child {
       width: 100%;
+    }
+
+    .thinkingSettingLine > section {
+      width: auto;
+      max-width: 100%;
+      flex: 1 1 100%;
+      margin-left: 0;
+    }
+
+    .settingLine > .pickerAnchor {
+      max-width: calc(100% - 36px);
     }
   }
 }

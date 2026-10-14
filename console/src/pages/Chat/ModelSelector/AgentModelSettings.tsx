@@ -240,8 +240,6 @@ export function AgentModelSettings({
     if (next) await loadConfig(true);
   };
 
-  const [choosingFallback, setChoosingFallback] = useState(false);
-  const [fallbackIndex, setFallbackIndex] = useState(0);
   useEffect(() => {
     if (expanded && agentId) {
       setOpen(true);
@@ -393,25 +391,49 @@ export function AgentModelSettings({
             </div>
           ) : (
             <>
-              {showThinking && (
-                <ThinkingControl
-                  tone={surface === "settings" ? "quiet" : "default"}
-                  control={
-                    activeOption?.thinkingControl ?? {
-                      kind: "unknown",
-                      efforts: [],
-                      supports_off: false,
+              {showThinking &&
+                (surface === "settings" ? (
+                  <div
+                    className={`${styles.settingLine} ${styles.thinkingSettingLine}`}
+                  >
+                    <span>{t("thinkingControl.title")}</span>
+                    <ThinkingControl
+                      tone="quiet"
+                      control={
+                        activeOption?.thinkingControl ?? {
+                          kind: "unknown",
+                          efforts: [],
+                          supports_off: false,
+                        }
+                      }
+                      value={thinking}
+                      onChange={(next) => {
+                        setThinking(next);
+                        notifyDraft({ thinking: next });
+                        schedulePersistence();
+                      }}
+                      disabled={saving}
+                    />
+                  </div>
+                ) : (
+                  <ThinkingControl
+                    tone="default"
+                    control={
+                      activeOption?.thinkingControl ?? {
+                        kind: "unknown",
+                        efforts: [],
+                        supports_off: false,
+                      }
                     }
-                  }
-                  value={thinking}
-                  onChange={(next) => {
-                    setThinking(next);
-                    notifyDraft({ thinking: next });
-                    schedulePersistence();
-                  }}
-                  disabled={saving}
-                />
-              )}
+                    value={thinking}
+                    onChange={(next) => {
+                      setThinking(next);
+                      notifyDraft({ thinking: next });
+                      schedulePersistence();
+                    }}
+                    disabled={saving}
+                  />
+                ))}
               <div className={styles.settingLine}>
                 <span>{t("modelSelector.subagentModel")}</span>
                 <ModelChoice
@@ -450,28 +472,19 @@ export function AgentModelSettings({
                   checked={fallbackEnabled}
                   disabled={saving}
                   onChange={(next) => {
-                    if (next && !fallbackKeys.length) {
-                      setChoosingFallback(true);
-                      return;
-                    }
                     setFallbackEnabled(next);
                     notifyDraft({ fallbackEnabled: next });
                     schedulePersistence();
                   }}
                 />
               </div>
-              {(fallbackEnabled || choosingFallback) &&
+              {fallbackEnabled &&
                 (fallbackKeys.length ? fallbackKeys : [EMPTY_KEY]).map(
                   (key, index) => (
                     <div className={styles.settingLine} key={index}>
                       <span>{t("modelSelector.chooseFallback")}</span>
                       <ModelChoice
                         ariaLabel={t("modelSelector.chooseFallback")}
-                        open={choosingFallback && fallbackIndex === index}
-                        onOpenChange={(next) => {
-                          setFallbackIndex(index);
-                          setChoosingFallback(next);
-                        }}
                         value={slotByKey.get(key)}
                         label={
                           optionByKey.get(key)?.label ??

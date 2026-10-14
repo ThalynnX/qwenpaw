@@ -98,25 +98,27 @@ export function AgentModelCard() {
         <>
           <div className={styles.choice}>
             <span>{t("models.primaryModel")}</span>
-            <ModelChoice
-              value={agent.active_model}
-              label={
-                agent.active_model?.model ||
-                t("thinkingControl.modelSource.global")
-              }
-              disabled={busy}
-              onChange={(value) => void saveModel(JSON.stringify(value))}
-            />
-            <Tooltip title={t("thinkingControl.modelSource.global")}>
-              <button
-                type="button"
-                disabled={busy || !agent.active_model}
-                aria-label={t("thinkingControl.modelSource.global")}
-                onClick={() => void saveModel()}
-              >
-                <RotateCcw size={16} />
-              </button>
-            </Tooltip>
+            <div className={styles.choiceControl}>
+              <ModelChoice
+                value={agent.active_model}
+                label={
+                  agent.active_model?.model ||
+                  t("thinkingControl.modelSource.global")
+                }
+                disabled={busy}
+                onChange={(value) => void saveModel(JSON.stringify(value))}
+              />
+              <Tooltip title={t("thinkingControl.modelSource.global")}>
+                <button
+                  type="button"
+                  disabled={busy || !agent.active_model}
+                  aria-label={t("thinkingControl.modelSource.global")}
+                  onClick={() => void saveModel()}
+                >
+                  <RotateCcw size={16} />
+                </button>
+              </Tooltip>
+            </div>
           </div>
           <AgentModelSettings
             expanded
