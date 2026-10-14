@@ -95,11 +95,6 @@ export interface MemoryGraphSnapshot {
   edges: MemoryGraphEdge[];
 }
 
-export interface FallbackPolicyConfig {
-  enabled: boolean;
-  target_scope: "configured" | "free_only";
-}
-
 export interface AgentProfileConfig {
   id: string;
   name: string;
@@ -116,7 +111,10 @@ export interface AgentProfileConfig {
   active_model?: ModelSlotConfig | null;
   decision_model?: ModelSlotConfig | null;
   fallback_models?: ModelSlotConfig[];
-  fallback_policy?: FallbackPolicyConfig;
+  fallback_policy?: {
+    enabled: boolean;
+    target_scope: "configured" | "free_only";
+  };
   subagent_model?: ModelSlotConfig | null;
   thinking_level?: ThinkingLevel;
   thinking_budget?: number | null;
@@ -135,7 +133,10 @@ export interface AgentModelSettingsPatch {
   active_model?: ModelSlotConfig | null;
   decision_model?: ModelSlotConfig | null;
   fallback_models?: ModelSlotConfig[];
-  fallback_policy?: FallbackPolicyConfig;
+  fallback_policy?: {
+    enabled: boolean;
+    target_scope: "configured" | "free_only";
+  };
   subagent_model?: ModelSlotConfig | null;
   thinking_level?: ThinkingLevel;
   thinking_budget?: number | null;
@@ -150,7 +151,10 @@ export interface CreateAgentRequest {
   skill_names?: string[];
   active_model?: ModelSlotConfig | null;
   fallback_models?: ModelSlotConfig[];
-  fallback_policy?: FallbackPolicyConfig;
+  fallback_policy?: {
+    enabled: boolean;
+    target_scope: "configured" | "free_only";
+  };
   subagent_model?: ModelSlotConfig | null;
   mail?: AgentMailConfig | null;
   backend?: AgentBackend;

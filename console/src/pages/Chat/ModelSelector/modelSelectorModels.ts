@@ -51,37 +51,36 @@ export function buildEligibleProviders(
   providers: ProviderInfo[],
   modelType: ModelType = "chat",
 ): EligibleProvider[] {
-  return providers
-    .filter((provider) => {
-      if (provider.enabled === false) return false;
-      const hasModels = [
-        ...(provider.models ?? []),
-        ...(provider.extra_models ?? []),
-      ].some((model) => (model.model_type ?? "chat") === modelType);
-      if (!hasModels && provider.chat_model === "") return false;
-      if (provider.id === "hub-managed" && modelType === "chat") return true;
-      if (provider.is_free_tier && modelType === "chat") return true;
-      if (!hasModels) return false;
-      if (provider.require_api_key === false) return Boolean(provider.base_url);
-      if (provider.is_custom) return Boolean(provider.base_url);
-      if (provider.require_api_key ?? true) return Boolean(provider.api_key);
-      return true;
-    })
-    .map((provider) => ({
-      id: provider.id,
-      name: provider.name,
-      models: [
-        ...(provider.models ?? []),
-        ...(provider.extra_models ?? []),
-      ].filter((model) => (model.model_type ?? "chat") === modelType),
-      is_free_tier: provider.is_free_tier,
-      is_custom: provider.is_custom,
-      is_local: provider.is_local,
-      supports_oauth: provider.supports_oauth,
-      oauth_connected: provider.oauth_connected,
-      has_api_key: Boolean(provider.api_key),
-      require_api_key: provider.require_api_key,
-    }));
+  return providers.flatMap((provider) => {
+    if (provider.enabled === false) return [];
+    const models = [
+      ...(provider.models ?? []),
+      ...(provider.extra_models ?? []),
+    ].filter((model) => (model.model_type ?? "chat") === modelType);
+    const managedOrFreeChat =
+      modelType === "chat" &&
+      (provider.id === "hub-managed" || provider.is_free_tier);
+    const configured =
+      provider.is_custom || provider.require_api_key === false
+        ? Boolean(provider.base_url)
+        : Boolean(provider.api_key);
+    if (!models.length && provider.chat_model === "") return [];
+    if (!managedOrFreeChat && (!models.length || !configured)) return [];
+    return [
+      {
+        id: provider.id,
+        name: provider.name,
+        models,
+        is_free_tier: provider.is_free_tier,
+        is_custom: provider.is_custom,
+        is_local: provider.is_local,
+        supports_oauth: provider.supports_oauth,
+        oauth_connected: provider.oauth_connected,
+        has_api_key: Boolean(provider.api_key),
+        require_api_key: provider.require_api_key,
+      },
+    ];
+  });
 }
 
 export function buildDiscoveryCandidates(

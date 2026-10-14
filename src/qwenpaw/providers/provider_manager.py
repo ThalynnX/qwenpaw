@@ -685,17 +685,17 @@ class ProviderManager(
             )
         if not provider.enabled:
             raise ProviderError(message=f"Provider is disabled")
-        if not provider.has_model(model_id):
+        model_info = provider.get_model_info(model_id)
+        if model_info is None:
             raise ModelNotFoundException(
                 model_name=f"{provider_id}/{model_id}",
                 details={"provider_id": provider_id, "model_id": model_id},
             )
-        model_info = provider.get_model_info(model_id)
         if model_info.model_type != model_type:
             raise ProviderError(
                 message=f"Model '{model_id}' is not a {model_type} model"
             )
-        if model_info and model_info.availability_status in {
+        if model_info.availability_status in {
             "permission_denied",
             "model_not_found",
             "incompatible_api",
@@ -954,17 +954,12 @@ class ProviderManager(
         else:
             await self._mutate_provider_async(provider_id, update)
             if selected is False:
-                for model_type, slot in list(self.default_models.items()):
-                    if (
-                        slot
-                        and slot.provider_id == provider_id
-                        and slot.model == model_id
-                    ):
-                        await self.clear_active_model_async(
-                            provider_id,
-                            model_type=model_type,
-                            model_id=model_id,
-                        )
+                for model_type in self.default_models:
+                    await self.clear_active_model_async(
+                        provider_id,
+                        model_type=model_type,
+                        model_id=model_id,
+                    )
         provider = await run_sync_io(self.get_provider, provider_id)
         if provider is None:
             raise ProviderError(message=f"Provider '{provider_id}' not found")
