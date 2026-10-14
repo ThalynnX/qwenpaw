@@ -10,6 +10,7 @@ import { screen, fireEvent, waitFor } from "@testing-library/react";
 import React from "react";
 import { Link } from "react-router-dom";
 import { renderWithProviders } from "@/test/common_setup";
+import type { ApprovalCardProps } from "../../components/ApprovalCard/ApprovalCard";
 
 // ---- Hoisted mocks ---------------------------------------------------------
 
@@ -121,8 +122,14 @@ vi.mock("./components", () => ({
 }));
 
 vi.mock("../../components/ApprovalCard/ApprovalCard", () => ({
-  ApprovalCard: ({ requestId }: { requestId: string }) => (
-    <div data-testid={`approval-card-${requestId}`} />
+  ApprovalCard: ({ requestId, questions, onApprove }: ApprovalCardProps) => (
+    <div data-testid={`approval-card-${requestId}`}>
+      {questions?.length ? (
+        <button onClick={() => onApprove(requestId, undefined, "inbox-answer")}>
+          Submit question from inbox
+        </button>
+      ) : null}
+    </div>
   ),
 }));
 
@@ -304,6 +311,46 @@ beforeEach(() => {
 // ---- Tests -----------------------------------------------------------------
 
 describe("InboxPage", () => {
+  it("forwards question answers from the inbox to the owning root session", async () => {
+    makeInboxData([]);
+    mocks.sendApprovalCommand.mockResolvedValue({ success: true });
+    mocks.approvals = [
+      {
+        request_id: "question-1",
+        session_id: "subagent-session",
+        root_session_id: "root-session",
+        questions: [
+          {
+            question: "Which scope?",
+            header: "Scope",
+            options: [
+              { label: "Console", description: "Update the web UI" },
+              { label: "CLI", description: "Update the terminal" },
+            ],
+          },
+        ],
+      },
+    ];
+
+    renderWithProviders(<InboxPage />, {
+      initialEntries: ["/inbox?tab=approvals"],
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Submit question from inbox" }),
+    );
+
+    await waitFor(() => {
+      expect(mocks.sendApprovalCommand).toHaveBeenCalledWith(
+        "approve",
+        "question-1",
+        "root-session",
+        undefined,
+        undefined,
+        "inbox-answer",
+      );
+    });
+  });
+
   it("renders the messages tab with push cards", async () => {
     makeInboxData([pushMsg("m1"), pushMsg("m2")]);
     renderWithProviders(<InboxPage />);

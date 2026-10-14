@@ -64,6 +64,10 @@ def _guarded_tool_init(
 ) -> None:
     from agentscope.tool import FunctionTool
 
+    descriptor = getattr(func, "_tool_descriptor", None)
+    schema = (getattr(descriptor, "metadata", None) or {}).get("input_schema")
+    if schema is not None:
+        kwargs.setdefault("input_schema", schema)
     FunctionTool.__init__(self, func, **kwargs)
     self._qp_agent_id = agent_id  # pylint: disable=protected-access
     # pylint: disable=protected-access

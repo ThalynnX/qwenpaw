@@ -4564,6 +4564,13 @@
     "runtimeRestartFailed": "Falha ao reiniciar o ambiente"
   },
   "approval": {
+    "questionTitle": "Precisamos da sua resposta",
+    "otherAnswer": "Outra opção — digite sua resposta",
+    "yourAnswer": "Sua resposta",
+    "submitAnswer": "Enviar resposta",
+    "previousQuestion": "Pergunta anterior",
+    "nextQuestion": "Próxima pergunta",
+    "questionProgress": "{{current}} / {{total}}",
     "title": "Seguranca Approval Obrigatorio",
     "tool": "Tool",
     "severity": "Severity",

@@ -33,6 +33,29 @@ export interface InboxTrace {
   error?: string;
 }
 
+// Mirrors agentscope.tool.AskUserParams as serialized by the backend
+// (agents/tools/ask_user_question.py), so these stay the framework's
+// snake_case names instead of a console-only dialect.
+export interface ApprovalQuestionOption {
+  label: string;
+  description: string;
+  preview?: string | null;
+}
+
+export interface ApprovalQuestion {
+  question: string;
+  header: string;
+  context?: string | null;
+  options: ApprovalQuestionOption[];
+  multi_select?: boolean;
+}
+
+export interface ApprovalQuestionAnswer {
+  question: string;
+  selected: string[];
+  other: string | null;
+}
+
 export interface PendingApproval {
   request_id: string;
   session_id: string;
@@ -46,6 +69,9 @@ export interface PendingApproval {
   findings_count: number;
   findings_summary: string;
   tool_params: Record<string, unknown>;
+  // Structured questions for interactive approvals (ask_user_question).
+  // Absent on governance approvals, which keep their existing shape.
+  questions?: ApprovalQuestion[];
   created_at: number;
   timeout_seconds: number;
   // One-line rationale emitted by the agent before requesting the tool

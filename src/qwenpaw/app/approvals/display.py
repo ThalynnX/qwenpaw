@@ -17,7 +17,7 @@ def approval_display_fields(pending: Any) -> dict[str, Any]:
     display = pending.extra.get("display", {})
     if not isinstance(display, dict):
         display = {}
-    return {
+    fields = {
         "tool_display_name": str(
             display.get("tool_name") or pending.tool_name,
         ),
@@ -26,3 +26,9 @@ def approval_display_fields(pending: Any) -> dict[str, Any]:
         "similar_target": str(display.get("similar_target") or ""),
         "is_generalized": bool(display.get("is_generalized")),
     }
+    # Only present for interactive sources such as ask_user_question; kept
+    # optional so governance approvals keep their exact response shape.
+    questions = pending.extra.get("questions")
+    if isinstance(questions, list) and questions:
+        fields["questions"] = questions
+    return fields

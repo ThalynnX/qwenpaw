@@ -2,12 +2,22 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders } from "@/test/common_setup";
+import type { ApprovalQuestion } from "@/api/modules/console";
 import styles from "./ApprovalCard.module.less";
 import { ApprovalCard, type ApprovalCardProps } from "./ApprovalCard";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (_key: string, fallback: string) => fallback,
+    t: (
+      _key: string,
+      fallback: string,
+      options?: Record<string, string | number>,
+    ) =>
+      typeof fallback === "string"
+        ? fallback.replace(/\{\{(\w+)\}\}/g, (token, name) =>
+            String(options?.[name] ?? token),
+          )
+        : fallback,
   }),
 }));
 
@@ -26,9 +36,13 @@ function renderApprovalCard() {
 function renderCard({
   isGeneralized = true,
   onApprove = async () => {},
+  questions,
+  timeoutSeconds = 60,
 }: {
   isGeneralized?: boolean;
   onApprove?: ApprovalCardProps["onApprove"];
+  questions?: ApprovalQuestion[];
+  timeoutSeconds?: number;
 } = {}) {
   renderWithProviders(
     <ApprovalCard
@@ -39,8 +53,9 @@ function renderCard({
       findingsCount={0}
       findingsSummary=""
       toolParams={{}}
+      questions={questions}
       createdAt={Date.now() / 1000}
-      timeoutSeconds={60}
+      timeoutSeconds={timeoutSeconds}
       agentId="default"
       isGeneralized={isGeneralized}
       exactTarget="pytest -q"
@@ -89,5 +104,488 @@ describe("ApprovalCard generalized approval", () => {
     const approve = screen.getByRole("button", { name: "Approve" });
     expect(approve).toHaveClass(styles.approveOnceButton);
     expect(approve).toHaveClass("ant-btn-primary");
+  });
+});
+
+const SINGLE_QUESTION: ApprovalQuestion[] = [
+  {
+    question: "Which scope should I refactor?",
+    header: "Scope",
+    options: [
+      { label: "auth only", description: "touch login only" },
+      { label: "auth + session", description: "login and session" },
+    ],
+  },
+];
+const MULTI_QUESTIONS: ApprovalQuestion[] = [
+  SINGLE_QUESTION[0],
+  {
+    question: "Add tests?",
+    header: "Tests",
+    options: [
+      { label: "yes", description: "cover the tool" },
+      { label: "no", description: "skip them" },
+    ],
+  },
+];
+
+describe("ApprovalCard interactive questions", () => {
+  it("sends the chosen option back as an AskUserAnswer", async () => {
+    const onApprove = vi
+      .fn<ApprovalCardProps["onApprove"]>()
+      .mockResolvedValue(undefined);
+    renderCard({ isGeneralized: false, onApprove, questions: SINGLE_QUESTION });
+    const user = userEvent.setup();
+
+    expect(
+      screen.getByText("Which scope should I refactor?"),
+    ).toBeInTheDocument();
+    const submit = screen.getByRole("button", { name: "Submit answer" });
+    expect(submit).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Next question" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Previous question" }),
+    ).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: /auth only/ }));
+    await user.click(screen.getByRole("button", { name: "Submit answer" }));
+
+    await waitFor(() => {
+      expect(onApprove).toHaveBeenCalledWith(
+        "approval-1",
+        undefined,
+        JSON.stringify([
+          {
+            question: SINGLE_QUESTION[0].question,
+            selected: ["auth only"],
+            other: null,
+          },
+        ]),
+      );
+    });
+  });
+
+  it("falls back to free text when no option is chosen", async () => {
+    const onApprove = vi
+      .fn<ApprovalCardProps["onApprove"]>()
+      .mockResolvedValue(undefined);
+    renderCard({
+      isGeneralized: false,
+      onApprove,
+      questions: SINGLE_QUESTION,
+    });
+    const user = userEvent.setup();
+
+    await user.type(
+      screen.getByPlaceholderText("Other — type your answer"),
+      "nothing yet",
+    );
+    await user.click(screen.getByRole("button", { name: "Submit answer" }));
+
+    await waitFor(() => {
+      expect(onApprove).toHaveBeenCalledWith(
+        "approval-1",
+        undefined,
+        JSON.stringify([
+          {
+            question: SINGLE_QUESTION[0].question,
+            selected: [],
+            other: "nothing yet",
+          },
+        ]),
+      );
+    });
+  });
+
+  it("pairs answers per question for multi-question forms", async () => {
+    const onApprove = vi
+      .fn<ApprovalCardProps["onApprove"]>()
+      .mockResolvedValue(undefined);
+    renderCard({
+      isGeneralized: false,
+      onApprove,
+      questions: MULTI_QUESTIONS,
+    });
+    const user = userEvent.setup();
+
+    expect(screen.queryByRole("button", { name: "Submit answer" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Next question" }),
+    ).toBeDisabled();
+    expect(screen.queryByText("Add tests?")).toBeNull();
+    expect(screen.getByText("1 / 2")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /auth only/ }));
+    expect(screen.queryByRole("button", { name: "Submit answer" })).toBeNull();
+    expect(onApprove).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Next question" }));
+    expect(screen.queryByText(SINGLE_QUESTION[0].question)).toBeNull();
+    expect(screen.getByText("2 / 2")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Submit answer" }),
+    ).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: /yes/ }));
+    await user.click(screen.getByRole("button", { name: "Submit answer" }));
+
+    await waitFor(() => {
+      expect(onApprove).toHaveBeenCalledWith(
+        "approval-1",
+        undefined,
+        JSON.stringify([
+          {
+            question: SINGLE_QUESTION[0].question,
+            selected: ["auth only"],
+            other: null,
+          },
+          { question: "Add tests?", selected: ["yes"], other: null },
+        ]),
+      );
+    });
+  });
+
+  it("requires a current answer before advancing and cannot submit a middle page", async () => {
+    const onApprove = vi
+      .fn<ApprovalCardProps["onApprove"]>()
+      .mockResolvedValue(undefined);
+    renderCard({ questions: MULTI_QUESTIONS, onApprove });
+    const user = userEvent.setup();
+    const next = screen.getByRole("button", { name: "Next question" });
+    const previous = screen.getByRole("button", { name: "Previous question" });
+
+    expect(previous).toBeDisabled();
+    expect(next).toBeDisabled();
+    await user.type(screen.getByRole("textbox"), "   ");
+    expect(next).toBeDisabled();
+    await user.click(next);
+    expect(screen.getByText("1 / 2")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /auth only/ }));
+    await user.click(next);
+    await user.click(screen.getByRole("button", { name: /yes/ }));
+    expect(screen.getByRole("button", { name: "Submit answer" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Previous question" }));
+
+    expect(screen.queryByRole("button", { name: "Submit answer" })).toBeNull();
+    expect(onApprove).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Next question" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: /auth only/ }));
+    expect(
+      screen.getByRole("button", { name: "Next question" }),
+    ).toBeDisabled();
+  });
+
+  it("preserves choices and free text when navigating back and resets scrolling", async () => {
+    const onApprove = vi
+      .fn<ApprovalCardProps["onApprove"]>()
+      .mockResolvedValue(undefined);
+    renderCard({
+      questions: [
+        {
+          ...MULTI_QUESTIONS[0],
+          context: "scope context",
+          options: [
+            { ...MULTI_QUESTIONS[0].options[0], preview: "auth preview" },
+            MULTI_QUESTIONS[0].options[1],
+          ],
+        },
+        MULTI_QUESTIONS[1],
+      ],
+      onApprove,
+    });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /auth only/ }));
+    await user.click(screen.getByRole("button", { name: "Next question" }));
+    expect(screen.queryByText("scope context")).toBeNull();
+    expect(screen.queryByText("auth preview")).toBeNull();
+    await user.type(screen.getByRole("textbox"), "write focused tests");
+    const content = screen
+      .getByText("Add tests?")
+      .closest<HTMLDivElement>(`.${styles.content}`);
+    expect(content).not.toBeNull();
+    content!.scrollTop = 180;
+    await user.click(screen.getByRole("button", { name: "Previous question" }));
+
+    expect(content!.scrollTop).toBe(0);
+    expect(screen.getByText("scope context")).toBeInTheDocument();
+    expect(screen.getByText("auth preview")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /auth only/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("textbox")).toHaveValue("");
+    await user.click(screen.getByRole("button", { name: "Next question" }));
+    expect(screen.getByRole("textbox")).toHaveValue("write focused tests");
+    await user.click(screen.getByRole("button", { name: "Submit answer" }));
+
+    await waitFor(() => {
+      expect(onApprove).toHaveBeenCalledWith(
+        "approval-1",
+        undefined,
+        JSON.stringify([
+          {
+            question: SINGLE_QUESTION[0].question,
+            selected: ["auth only"],
+            other: null,
+          },
+          {
+            question: "Add tests?",
+            selected: [],
+            other: "write focused tests",
+          },
+        ]),
+      );
+    });
+  });
+
+  it.each([
+    { label: "a batch", questions: MULTI_QUESTIONS },
+    { label: "a single question", questions: SINGLE_QUESTION },
+    { label: "an ordinary approval", questions: undefined },
+  ])("does not take focus when $label mounts", ({ questions }) => {
+    const initialFocus = document.activeElement;
+    renderCard({ questions });
+
+    expect(document.activeElement).toBe(initialFocus);
+  });
+
+  it("focuses the current question after navigation and tabs into its options", async () => {
+    renderCard({ questions: MULTI_QUESTIONS });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /auth only/ }));
+    await user.click(screen.getByRole("button", { name: "Next question" }));
+
+    const secondHeading = screen.getByRole("heading", { name: "Add tests?" });
+    expect(secondHeading).toHaveFocus();
+    expect(secondHeading).toHaveAttribute("tabindex", "-1");
+    expect(
+      screen.getByRole("button", { name: "Submit answer" }),
+    ).toBeDisabled();
+    await user.tab();
+    expect(screen.getByRole("button", { name: /yes/ })).toHaveFocus();
+
+    await user.click(screen.getByRole("button", { name: "Previous question" }));
+    expect(
+      screen.getByRole("heading", { name: SINGLE_QUESTION[0].question }),
+    ).toHaveFocus();
+    expect(
+      screen.getByRole("button", { name: "Previous question" }),
+    ).toBeDisabled();
+    await user.tab();
+    expect(screen.getByRole("button", { name: /auth only/ })).toHaveFocus();
+  });
+
+  it("freezes the answer snapshot while the batch submission is pending", async () => {
+    let finishSubmission!: () => void;
+    const pendingSubmission = new Promise<void>((resolve) => {
+      finishSubmission = resolve;
+    });
+    const onApprove = vi
+      .fn<ApprovalCardProps["onApprove"]>()
+      .mockReturnValue(pendingSubmission);
+    renderCard({ questions: MULTI_QUESTIONS, onApprove });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /auth only/ }));
+    await user.click(screen.getByRole("button", { name: "Next question" }));
+    expect(onApprove).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: /yes/ }));
+    const submit = screen.getByRole("button", { name: "Submit answer" });
+    const input = screen.getByRole("textbox");
+
+    try {
+      await user.click(submit);
+      expect(onApprove).toHaveBeenCalledTimes(1);
+      expect(submit).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: "Previous question" }),
+      ).toBeDisabled();
+      expect(screen.getByRole("button", { name: /yes/ })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /no/ })).toBeDisabled();
+      expect(input).toBeDisabled();
+      await user.click(screen.getByRole("button", { name: /no/ }));
+      await user.type(input, "a later edit");
+      expect(input).toHaveValue("");
+      expect(onApprove).toHaveBeenCalledWith(
+        "approval-1",
+        undefined,
+        JSON.stringify([
+          {
+            question: SINGLE_QUESTION[0].question,
+            selected: ["auth only"],
+            other: null,
+          },
+          { question: "Add tests?", selected: ["yes"], other: null },
+        ]),
+      );
+    } finally {
+      finishSubmission();
+    }
+    await waitFor(() => expect(submit).toBeEnabled());
+  });
+
+  it("keeps every choice when multi_select is set", async () => {
+    const onApprove = vi
+      .fn<ApprovalCardProps["onApprove"]>()
+      .mockResolvedValue(undefined);
+    renderCard({
+      isGeneralized: false,
+      onApprove,
+      questions: [
+        {
+          question: "Which surfaces need work?",
+          header: "Surfaces",
+          multi_select: true,
+          options: [
+            { label: "console", description: "web console" },
+            { label: "desktop", description: "desktop shell" },
+          ],
+        },
+      ],
+    });
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: /console/ }));
+    await user.click(screen.getByRole("button", { name: /desktop/ }));
+    await user.click(screen.getByRole("button", { name: "Submit answer" }));
+
+    await waitFor(() => {
+      expect(onApprove).toHaveBeenCalledWith(
+        "approval-1",
+        undefined,
+        JSON.stringify([
+          {
+            question: "Which surfaces need work?",
+            selected: ["console", "desktop"],
+            other: null,
+          },
+        ]),
+      );
+    });
+  });
+
+  it("renders context always and preview only for the chosen option", async () => {
+    const onApprove = vi
+      .fn<ApprovalCardProps["onApprove"]>()
+      .mockResolvedValue(undefined);
+    renderCard({
+      isGeneralized: false,
+      onApprove,
+      questions: [
+        {
+          question: "Approve this draft?",
+          header: "Draft",
+          context: "the draft under review",
+          options: [
+            {
+              label: "keep",
+              description: "leave it",
+              preview: "draft-marker-keep",
+            },
+            { label: "rewrite", description: "replace it" },
+          ],
+        },
+      ],
+    });
+    const user = userEvent.setup();
+
+    expect(screen.getByText("the draft under review")).toBeInTheDocument();
+    expect(screen.queryByText("draft-marker-keep")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: /keep/ }));
+    expect(screen.getByText("draft-marker-keep")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /rewrite/ }));
+    expect(screen.queryByText("draft-marker-keep")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /keep/ })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
+  it("requires an answer even if a question request is marked generalized", () => {
+    renderCard({ questions: SINGLE_QUESTION });
+
+    expect(screen.queryByRole("button", { name: "Always Allow" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Just Once" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Submit answer" }),
+    ).toBeDisabled();
+  });
+
+  it("rejects whitespace and lets the user switch between a choice and free text", async () => {
+    const onApprove = vi
+      .fn<ApprovalCardProps["onApprove"]>()
+      .mockResolvedValue(undefined);
+    renderCard({ onApprove, questions: SINGLE_QUESTION });
+    const user = userEvent.setup();
+    const input = screen.getByRole("textbox", {
+      name: "Other — type your answer",
+    });
+    const submit = screen.getByRole("button", { name: "Submit answer" });
+
+    await user.type(input, "   ");
+    expect(submit).toBeDisabled();
+    await user.click(submit);
+    expect(onApprove).not.toHaveBeenCalled();
+
+    const choice = screen.getByRole("button", { name: /auth only/ });
+    await user.click(choice);
+    expect(input).toHaveValue("");
+    expect(choice).toHaveAttribute("aria-pressed", "true");
+    await user.type(input, "  auth after review  ");
+    expect(choice).toHaveAttribute("aria-pressed", "false");
+    await user.click(submit);
+
+    await waitFor(() => {
+      expect(onApprove).toHaveBeenCalledWith(
+        "approval-1",
+        undefined,
+        JSON.stringify([
+          {
+            question: SINGLE_QUESTION[0].question,
+            selected: [],
+            other: "auth after review",
+          },
+        ]),
+      );
+    });
+  });
+
+  it("does not show an option preview for a multi-select question", async () => {
+    renderCard({
+      questions: [
+        {
+          ...SINGLE_QUESTION[0],
+          multi_select: true,
+          options: [
+            { ...SINGLE_QUESTION[0].options[0], preview: "single-select only" },
+            SINGLE_QUESTION[0].options[1],
+          ],
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /auth only/ }));
+
+    expect(screen.queryByText("single-select only")).not.toBeInTheDocument();
+    expect(screen.getByText("touch login only")).toBeInTheDocument();
+  });
+
+  it("does not accept an answer after the question times out", () => {
+    renderCard({ questions: SINGLE_QUESTION, timeoutSeconds: 0 });
+
+    expect(screen.getByText("Timed out, auto denied")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Submit answer" })).toBeNull();
+    expect(screen.getByRole("button", { name: /auth only/ })).toBeDisabled();
+    expect(screen.getByRole("textbox")).toBeDisabled();
+  });
+
+  it("does not allow navigation after a batch of questions times out", () => {
+    renderCard({ questions: MULTI_QUESTIONS, timeoutSeconds: 0 });
+
+    expect(screen.getByText("Timed out, auto denied")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Submit answer" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Next question" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Previous question" }),
+    ).toBeNull();
   });
 });

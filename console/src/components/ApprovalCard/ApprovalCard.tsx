@@ -1,9 +1,23 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { Button, Card, Tag, Typography, Space, Tooltip } from "antd";
-import { Shield, Check, X, Clock, Copy, Info, AlertCircle } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { Button, Card, Input, Tag, Typography, Space, Tooltip } from "antd";
+import {
+  Shield,
+  Check,
+  X,
+  Clock,
+  Copy,
+  Info,
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAgentStore } from "../../stores/agentStore";
 import { getAgentDisplayName } from "../../utils/agentDisplayName";
+import type {
+  ApprovalQuestion,
+  ApprovalQuestionAnswer,
+} from "../../api/modules/console";
 import styles from "./ApprovalCard.module.less";
 
 const { Text } = Typography;
@@ -16,6 +30,9 @@ export interface ApprovalCardProps {
   findingsCount: number;
   findingsSummary: string;
   toolParams: Record<string, unknown>;
+  // When present the card becomes an interactive question form: options are
+  // selectable and the reply is sent back as `answer` on approve.
+  questions?: ApprovalQuestion[];
   createdAt: number;
   timeoutSeconds: number;
   agentId: string;
@@ -30,7 +47,11 @@ export interface ApprovalCardProps {
   isGeneralized?: boolean;
   exactTarget?: string;
   similarTarget?: string;
-  onApprove: (requestId: string, scope?: "exact" | "similar") => Promise<void>;
+  onApprove: (
+    requestId: string,
+    scope?: "exact" | "similar",
+    answer?: string,
+  ) => Promise<void>;
   onDeny: (requestId: string) => Promise<void>;
   onCancel?: () => void;
   onAcknowledge?: (requestId: string) => Promise<void>;
@@ -44,6 +65,7 @@ export function ApprovalCard({
   findingsCount,
   findingsSummary,
   toolParams,
+  questions,
   createdAt,
   timeoutSeconds,
   agentId,
@@ -73,6 +95,95 @@ export function ApprovalCard({
   const [remaining, setRemaining] = useState<number>(timeoutSeconds);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
+  // ── Interactive question form (ask_user_question) ──────────────────
+  const questionList = questions ?? [];
+  const isQuestionForm = questionList.length > 0;
+  const hasMultipleQuestions = questionList.length > 1;
+  const [activeQuestion, setActiveQuestion] = useState(0);
+  const currentQuestionIndex = Math.max(
+    0,
+    Math.min(activeQuestion, questionList.length - 1),
+  );
+  const isLastQuestion = currentQuestionIndex === questionList.length - 1;
+  const contentRef = useRef<HTMLDivElement>(null);
+  const questionTextRef = useRef<HTMLSpanElement>(null);
+  const lastQuestionIndex = useRef(currentQuestionIndex);
+  const [picks, setPicks] = useState<Record<number, string[]>>({});
+  const [freeText, setFreeText] = useState<Record<number, string>>({});
+
+  const answerOf = useCallback(
+    (qidx: number): string => {
+      const chosen = picks[qidx] ?? [];
+      if (chosen.length) return chosen.join(", ");
+      return (freeText[qidx] ?? "").trim();
+    },
+    [picks, freeText],
+  );
+
+  const toggleOption = useCallback(
+    (qidx: number, label: string, multi?: boolean) => {
+      setFreeText((prev) => ({ ...prev, [qidx]: "" }));
+      setPicks((prev) => {
+        const current = prev[qidx] ?? [];
+        if (!multi) {
+          return { ...prev, [qidx]: current[0] === label ? [] : [label] };
+        }
+        return {
+          ...prev,
+          [qidx]: current.includes(label)
+            ? current.filter((item) => item !== label)
+            : [...current, label],
+        };
+      });
+    },
+    [],
+  );
+
+  const typeAnswer = useCallback((qidx: number, value: string) => {
+    setPicks((prev) => ({ ...prev, [qidx]: [] }));
+    setFreeText((prev) => ({ ...prev, [qidx]: value }));
+  }, []);
+
+  const allAnswered = useMemo(
+    () =>
+      questionList.length > 0 &&
+      questionList.every((_, idx) => answerOf(idx).length > 0),
+    [questionList, answerOf],
+  );
+  const currentQuestionAnswered = answerOf(currentQuestionIndex).length > 0;
+
+  useEffect(() => {
+    const changedQuestion = lastQuestionIndex.current !== currentQuestionIndex;
+    lastQuestionIndex.current = currentQuestionIndex;
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+    if (changedQuestion) {
+      questionTextRef.current?.focus({ preventScroll: true });
+    }
+  }, [currentQuestionIndex]);
+
+  const buildAnswerPayload = useCallback(() => {
+    const answers = questionList.map(
+      (question, idx): ApprovalQuestionAnswer => ({
+        question: question.question,
+        selected: picks[idx] ?? [],
+        other: (freeText[idx] ?? "").trim() || null,
+      }),
+    );
+    return JSON.stringify(answers);
+  }, [questionList, picks, freeText]);
+
+  const previewOf = useCallback(
+    (qidx: number): string => {
+      if (questionList[qidx]?.multi_select) return "";
+      const chosen = picks[qidx] ?? [];
+      const hit = (questionList[qidx]?.options ?? []).find(
+        (option) => chosen.includes(option.label) && option.preview,
+      );
+      return hit?.preview ?? "";
+    },
+    [questionList, picks],
+  );
+
   const handleCopy = useCallback(async (text: string, field: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -86,7 +197,8 @@ export function ApprovalCard({
   // Check if this is a cross-session approval
   const isCrossSession =
     sessionId && rootSessionId && sessionId !== rootSessionId;
-  const isTimedOut = showInboxAgentContext && remaining <= 0;
+  const isTimedOut =
+    (showInboxAgentContext || isQuestionForm) && remaining <= 0;
   const executionAgentDisplayName = useMemo(() => {
     const matched = agentsById.get(agentId);
     if (matched) return getAgentDisplayName(matched, t);
@@ -125,6 +237,8 @@ export function ApprovalCard({
   }, [createdAt, timeoutSeconds]);
 
   const handleApprove = async (scope?: "exact" | "similar") => {
+    if (isQuestionForm && (!isLastQuestion || !allAnswered || isTimedOut))
+      return;
     const loadingKey =
       scope === "similar" ? "approve-pattern" : "approve-exact";
     console.log(
@@ -135,7 +249,11 @@ export function ApprovalCard({
     );
     setLoading(loadingKey);
     try {
-      await onApprove(requestId, scope);
+      if (isQuestionForm) {
+        await onApprove(requestId, scope, buildAnswerPayload());
+      } else {
+        await onApprove(requestId, scope);
+      }
       console.log("[ApprovalCard] onApprove completed");
     } catch (err) {
       console.error("[ApprovalCard] onApprove failed:", err);
@@ -174,10 +292,24 @@ export function ApprovalCard({
     <Card className={styles.approvalCard} bordered={false}>
       <div className={styles.header}>
         <Space size={8} align="center" className={styles.titleRow}>
-          <Shield size={16} className={styles.icon} />
+          {isQuestionForm ? (
+            <Info size={16} className={styles.icon} />
+          ) : (
+            <Shield size={16} className={styles.icon} />
+          )}
           <Text className={styles.title}>
-            {t("approval.title", "Security Approval Required")}
+            {isQuestionForm
+              ? t("approval.questionTitle", "Your input is needed")
+              : t("approval.title", "Security Approval Required")}
           </Text>
+          {hasMultipleQuestions ? (
+            <Text className={styles.questionProgress} aria-live="polite">
+              {t("approval.questionProgress", "{{current}} / {{total}}", {
+                current: currentQuestionIndex + 1,
+                total: questionList.length,
+              })}
+            </Text>
+          ) : null}
         </Space>
         <Space size={6} align="center" className={styles.timer}>
           <Clock size={14} className={styles.timerIcon} />
@@ -188,7 +320,84 @@ export function ApprovalCard({
         </Space>
       </div>
 
-      <div className={styles.content}>
+      <div className={styles.content} ref={contentRef}>
+        {isQuestionForm && (
+          <div className={styles.questionList}>
+            {questionList.map((q, qidx) =>
+              qidx === currentQuestionIndex ? (
+                <div className={styles.questionItem} key={qidx}>
+                  <div className={styles.questionHead}>
+                    {q.header ? <Tag>{q.header}</Tag> : null}
+                    <Text
+                      className={styles.questionTitle}
+                      ref={questionTextRef}
+                      role="heading"
+                      aria-level={3}
+                      tabIndex={-1}
+                    >
+                      {q.question}
+                    </Text>
+                  </div>
+                  {q.context ? (
+                    <pre className={styles.questionContext}>{q.context}</pre>
+                  ) : null}
+                  {(q.options?.length ?? 0) > 0 && (
+                    <div className={styles.optionList}>
+                      {q.options?.map((opt) => (
+                        <Button
+                          key={opt.label}
+                          size="small"
+                          block
+                          type={
+                            (picks[qidx] ?? []).includes(opt.label)
+                              ? "primary"
+                              : "default"
+                          }
+                          className={styles.optionButton}
+                          disabled={loading !== null || isTimedOut}
+                          aria-pressed={(picks[qidx] ?? []).includes(opt.label)}
+                          onClick={() =>
+                            toggleOption(qidx, opt.label, q.multi_select)
+                          }
+                        >
+                          <span className={styles.optionLabel}>
+                            {opt.label}
+                          </span>
+                          {opt.description ? (
+                            <span className={styles.optionDescription}>
+                              {opt.description}
+                            </span>
+                          ) : null}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                  {previewOf(qidx) ? (
+                    <pre className={styles.optionPreview}>
+                      {previewOf(qidx)}
+                    </pre>
+                  ) : null}
+                  <Input
+                    size="small"
+                    className={styles.questionInput}
+                    disabled={loading !== null || isTimedOut}
+                    aria-label={t(
+                      "approval.otherAnswer",
+                      "Other — type your answer",
+                    )}
+                    placeholder={
+                      (q.options?.length ?? 0) > 0
+                        ? t("approval.otherAnswer", "Other — type your answer")
+                        : t("approval.yourAnswer", "Your answer")
+                    }
+                    value={freeText[qidx] ?? ""}
+                    onChange={(event) => typeAnswer(qidx, event.target.value)}
+                  />
+                </div>
+              ) : null,
+            )}
+          </div>
+        )}
         {showInboxAgentContext ? (
           <>
             <div className={styles.infoRow}>
@@ -388,7 +597,44 @@ export function ApprovalCard({
             >
               {t("approval.deny", "Deny")}
             </Button>
-            {isGeneralized ? (
+            {isQuestionForm ? (
+              <div className={styles.questionNavigation}>
+                {hasMultipleQuestions ? (
+                  <Button
+                    icon={<ChevronLeft size={14} />}
+                    onClick={() => setActiveQuestion(currentQuestionIndex - 1)}
+                    disabled={loading !== null || currentQuestionIndex === 0}
+                  >
+                    {t("approval.previousQuestion", "Previous question")}
+                  </Button>
+                ) : null}
+                {isLastQuestion ? (
+                  <Button
+                    type="primary"
+                    icon={<Check size={14} />}
+                    onClick={() => handleApprove()}
+                    loading={loading === "approve-exact"}
+                    disabled={loading !== null || !allAnswered}
+                    className={styles.approveOnceButton}
+                  >
+                    {t("approval.submitAnswer", "Submit answer")}
+                  </Button>
+                ) : (
+                  <Button
+                    type="primary"
+                    onClick={() => {
+                      if (currentQuestionAnswered && !isTimedOut) {
+                        setActiveQuestion(currentQuestionIndex + 1);
+                      }
+                    }}
+                    disabled={loading !== null || !currentQuestionAnswered}
+                  >
+                    {t("approval.nextQuestion", "Next question")}
+                    <ChevronRight size={14} />
+                  </Button>
+                )}
+              </div>
+            ) : isGeneralized ? (
               <>
                 <Button
                   type="primary"

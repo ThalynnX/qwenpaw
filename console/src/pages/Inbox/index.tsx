@@ -259,6 +259,7 @@ export default function InboxPage() {
     requestId: string,
     rootSessionId: string,
     scope?: "exact" | "similar",
+    answer?: string,
   ) => {
     await commandsApi.sendApprovalCommand(
       "approve",
@@ -266,6 +267,7 @@ export default function InboxPage() {
       rootSessionId,
       undefined,
       scope,
+      answer,
     );
     setApprovals((prev) =>
       prev.filter((item) => item.request_id !== requestId),
@@ -549,6 +551,7 @@ export default function InboxPage() {
                   findingsCount={approval.findings_count}
                   findingsSummary={approval.findings_summary}
                   toolParams={approval.tool_params}
+                  questions={approval.questions}
                   reasoning={approval.reasoning}
                   createdAt={approval.created_at}
                   timeoutSeconds={approval.timeout_seconds}
@@ -557,11 +560,12 @@ export default function InboxPage() {
                   isGeneralized={approval.is_generalized}
                   exactTarget={approval.exact_target}
                   similarTarget={approval.similar_target}
-                  onApprove={(_reqId, scope) =>
+                  onApprove={(_reqId, scope, answer) =>
                     handleApproveRequest(
                       approval.request_id,
                       approval.root_session_id,
                       scope,
+                      answer,
                     )
                   }
                   onDeny={() =>

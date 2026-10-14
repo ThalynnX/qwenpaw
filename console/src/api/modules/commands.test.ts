@@ -81,6 +81,34 @@ describe("commandsApi", () => {
   });
 
   it.each(["approve", "deny"] as const)(
+    "sendApprovalCommand %s only sends an answer with approval",
+    async (action) => {
+      vi.mocked(request).mockResolvedValue({ success: true, message: "ok" });
+      const answer = JSON.stringify([
+        { question: "Which scope?", selected: ["Console"], other: null },
+      ]);
+
+      await commandsApi.sendApprovalCommand(
+        action,
+        "req-question",
+        "sess-1",
+        undefined,
+        undefined,
+        answer,
+      );
+
+      expect(request).toHaveBeenCalledWith(`/approval/${action}`, {
+        method: "POST",
+        body: JSON.stringify({
+          request_id: "req-question",
+          session_id: "sess-1",
+          ...(action === "approve" ? { answer } : {}),
+        }),
+      });
+    },
+  );
+
+  it.each(["approve", "deny"] as const)(
     "rejects an unsuccessful %s response",
     async (action) => {
       vi.mocked(request).mockResolvedValue({

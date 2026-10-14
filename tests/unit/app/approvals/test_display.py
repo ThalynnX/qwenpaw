@@ -105,3 +105,45 @@ def test_is_generalized_falsy_values():
         {"display": {"is_generalized": 0}},
     )
     assert approval_display_fields(pending)["is_generalized"] is False
+
+
+# ---------------------------------------------------------------------------
+# Interactive sources (ask_user_question) add ``questions``
+# ---------------------------------------------------------------------------
+
+
+_QUESTION = {
+    "question": "要重构哪个范围？",
+    "header": "Scope",
+    "context": None,
+    "options": [
+        {"label": "仅 auth", "description": "只动登录", "preview": None},
+        {"label": "全部", "description": "一起动", "preview": None},
+    ],
+    "multi_select": False,
+}
+
+
+def test_questions_are_forwarded_when_present():
+    """The console renders an answer form from ``extra["questions"]``."""
+    pending = _FakePending({"questions": [_QUESTION]})
+    fields = approval_display_fields(pending)
+    assert fields["questions"] == [_QUESTION]
+
+
+def test_questions_key_stays_absent_for_governance_approvals():
+    """Ordinary approvals must keep their exact response shape, so the
+    helper must not invent a ``questions`` key for them."""
+    fields = approval_display_fields(_FakePending({"display": {}}))
+    assert set(fields) == {
+        "tool_display_name",
+        "tool_source",
+        "exact_target",
+        "similar_target",
+        "is_generalized",
+    }
+
+
+def test_empty_questions_list_is_not_forwarded():
+    pending = _FakePending({"questions": []})
+    assert "questions" not in approval_display_fields(pending)

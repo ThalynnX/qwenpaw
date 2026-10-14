@@ -41,6 +41,24 @@ Security Architecture:
 
 ---
 
+## Answering agent questions
+
+The built-in `ask_user_question` tool lets an agent pause for clarification and continue the same turn after receiving your answer. For example, ask the agent to confirm the scope of a change before proceeding. The tool must be enabled in **Workspace → Tools** for that agent.
+
+A question card appears in the Console chat and in **Inbox → Approvals**. Each request contains 1–4 questions with 2–4 options per question. The Console shows one question at a time. Read the option descriptions, select one or more choices when multiple selection is offered, or type your own answer in **Other**. Typing a custom answer replaces that question's selected options. A question may show additional context; a selected option may show a preview for single-choice questions.
+
+Use **Next question** to move forward and **Previous question** to review or change an earlier answer. Your answers are retained as you move between questions. On the last question, **Submit answer** becomes available only after every question is answered, and submits the entire batch together. The same tool call stays blocked while you navigate and answer; moving between questions does not submit a partial answer. After submission, the agent receives all answers and continues the same turn.
+
+For an interactive IM channel that can deliver approval notifications and accept commands, reply with `/approval approve <request_id> <answer>`. For a single question, an option number or free text is accepted. Use the request ID in the notification so the reply resolves the intended question. Replying without an answer provides no new information.
+
+The agent waits for the existing approval timeout (300 seconds by default, configurable through `QWENPAW_TOOL_GUARD_APPROVAL_TIMEOUT_SECONDS`). **Deny** declines to answer; a timeout returns without an answer; stopping the run cancels the wait. None of these outcomes supplies an answer or counts as consent. The agent must not infer a choice from an empty approval.
+
+Questions from an ephemeral `spawn_subagent` session within the same configured agent are shown in its root conversation. Cross-configuration collaboration, remote agents, ACP, and TUI sessions without an answer channel are not supported. Cron, heartbeat, and email-triggered background runs return without waiting for a person. See [Multi-Agent](./multi-agent) for the distinction between subagents and other configured agents.
+
+Asking for information does not need a separate approval before the question is shown. Answering supplies information only: it does not allow a later command, create an “Always Allow” rule, or bypass Tool Guard, Access Policy, or their resolver identity checks. If the agent continues after a declined or timed-out question, later sensitive actions still require their own approvals.
+
+---
+
 ## Tool Guard
 
 The **Tool Guard** scans tool parameters **before** the agent invokes a tool, detecting dangerous patterns such as command injection, path traversal, or data exfiltration attempts, and blocks potentially malicious operations.

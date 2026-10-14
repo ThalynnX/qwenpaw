@@ -1,4 +1,33 @@
 /* Chat page root layout */
+.approvalOverlay {
+  position: fixed;
+  bottom: 80px;
+  right: 24px;
+  z-index: 1000;
+  width: calc(100vw - 48px);
+  max-width: 480px;
+  max-height: calc(100vh - 104px);
+  max-height: calc(100dvh - 104px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  --approval-card-max-height: calc(100vh - 106px);
+  --approval-card-max-height: calc(100dvh - 106px);
+}
+
+.approvalOverlayItem + .approvalOverlayItem {
+  margin-top: 12px;
+}
+
+@media (max-height: 480px) {
+  .approvalOverlay {
+    bottom: 12px;
+    max-height: calc(100vh - 36px);
+    max-height: calc(100dvh - 36px);
+    --approval-card-max-height: calc(100vh - 38px);
+    --approval-card-max-height: calc(100dvh - 38px);
+  }
+}
+
 .chatPageRoot {
   height: 100%;
   width: 100%;

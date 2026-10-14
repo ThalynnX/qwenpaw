@@ -5155,6 +5155,13 @@
   },
   "approval": {
     "title": "Security Approval Required",
+    "questionTitle": "Your input is needed",
+    "otherAnswer": "Other — type your answer",
+    "yourAnswer": "Your answer",
+    "submitAnswer": "Submit answer",
+    "previousQuestion": "Previous question",
+    "nextQuestion": "Next question",
+    "questionProgress": "{{current}} / {{total}}",
     "agent": "Agent",
     "ownerAgent": "Owner Agent",
     "executingAgent": "Executing Agent",

@@ -3442,6 +3442,13 @@
     "retry": "Coba Lagi"
   },
   "approval": {
+    "questionTitle": "Masukan Anda diperlukan",
+    "otherAnswer": "Lainnya — ketik jawaban Anda",
+    "yourAnswer": "Jawaban Anda",
+    "submitAnswer": "Kirim jawaban",
+    "previousQuestion": "Pertanyaan sebelumnya",
+    "nextQuestion": "Pertanyaan berikutnya",
+    "questionProgress": "{{current}} / {{total}}",
     "title": "Persetujuan Keamanan Diperlukan",
     "ownerAgent": "Agen Pemilik",
     "executingAgent": "Agen yang Mengeksekusi",

@@ -27,6 +27,7 @@ export const commandsApi = {
     sessionId: string,
     reason?: string,
     scope?: "exact" | "similar",
+    answer?: string,
   ): Promise<ApprovalCommandResponse> => {
     console.log(
       `[commandsApi] Sending ${action} for request:`,
@@ -50,6 +51,8 @@ export const commandsApi = {
           reason: reason || undefined,
           // scope only meaningful for approve; omitted on deny.
           scope: action === "approve" ? scope : undefined,
+          // Free-text reply for interactive approvals; omitted on deny.
+          answer: action === "approve" ? answer : undefined,
         }),
       },
     );

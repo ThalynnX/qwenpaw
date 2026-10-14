@@ -4506,6 +4506,13 @@
     "localModelsNotice": "バックアップファイルにはローカルモデルファイルは含まれません。デバイス間の移行の場合は、対象デバイスで必要なローカルモデルを再ダウンロードしてください。"
   },
   "approval": {
+    "questionTitle": "追加情報が必要です",
+    "otherAnswer": "その他 — 回答を入力",
+    "yourAnswer": "回答",
+    "submitAnswer": "回答を送信",
+    "previousQuestion": "前の質問",
+    "nextQuestion": "次の質問",
+    "questionProgress": "{{current}} / {{total}}",
     "title": "セキュリティ承認が必要です",
     "tool": "ツール",
     "severity": "重要度",

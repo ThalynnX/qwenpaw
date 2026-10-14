@@ -28,6 +28,7 @@ from .approval_handler import (
     ApprovalCommandHandler,
     ApproveCommandHandler,
     DenyCommandHandler,
+    _parse_approve_args,
 )
 from .model_handler import ModelCommandHandler
 from .skills_handler import SkillsCommandHandler
@@ -170,20 +171,17 @@ def parse_args(query: str, command_prefix: str) -> Dict[str, Any]:
         # First part is action (approve/deny/list/cancel)
         args["action"] = parts[0].lower()
 
+        if args["action"] == "approve":
+            action_parts = args_str.split(maxsplit=1)
+            approve_raw = action_parts[1] if len(action_parts) > 1 else ""
+            args.update(_parse_approve_args(approve_raw))
+            return args
+
         # Parse flags for list command (--all / -a)
         if args["action"] == "list" and len(parts) > 1:
             for part in parts[1:]:
                 if part in ("--all", "-a"):
                     args["all"] = True
-
-        # Parse scope flags for approve command (--exact / --pattern).
-        # Default (no flag) is EXACT, set by the handler.
-        if args["action"] == "approve" and len(parts) > 1:
-            for part in parts[1:]:
-                if part == "--exact":
-                    args["exact"] = True
-                elif part == "--pattern":
-                    args["pattern"] = True
 
         # Second part (if exists) is request_id
         if len(parts) > 1 and not parts[1].startswith("-"):

@@ -970,7 +970,7 @@ def _build_spawn_request_context(current_agent_id: str) -> dict[str, Any]:
             or get_current_session_id()
             or ""
         ),
-        "root_agent_id": current_agent_id,
+        "root_agent_id": inherited.get("root_agent_id") or current_agent_id,
         "parent_session_id": get_current_session_id() or "",
         "user_id": inherited.get("user_id") or get_current_user_id() or "",
         "channel": inherited.get("channel") or get_current_channel() or "",
@@ -981,6 +981,8 @@ def _build_spawn_request_context(current_agent_id: str) -> dict[str, Any]:
         context["channel_meta"] = safe_meta
     if inherited.get("approval_level"):
         context["approval_level"] = inherited["approval_level"]
+    if inherited.get("source"):
+        context["source"] = inherited["source"]
 
     # Subagents do not share the parent's chat, so the parent's resolved
     # project-dir list is handed down explicitly. Fork workers override

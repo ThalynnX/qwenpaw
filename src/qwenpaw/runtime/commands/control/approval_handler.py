@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import Any
 
 from ....app.approvals import (
     ApprovalActor,
@@ -22,6 +23,33 @@ from ....security.tool_guard.approval import ApprovalDecision, ApprovalScope
 from .base import BaseControlCommandHandler, ControlContext
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_approve_args(raw_args: str) -> dict[str, Any]:
+    """Read an optional ID and scope flags, preserving the answer verbatim.
+
+    Flags precede the answer. ``--`` starts an answer explicitly, including
+    a reply beginning with a flag or an answer for the queue head.
+    """
+    args: dict[str, Any] = {"action": "approve"}
+    remaining = raw_args.strip()
+    while remaining:
+        pieces = remaining.split(maxsplit=1)
+        token = pieces[0]
+        tail = pieces[1] if len(pieces) > 1 else ""
+        if token in ("--exact", "--pattern"):
+            args[token[2:]] = True
+        elif token == "--":
+            if tail:
+                args["answer"] = tail
+            break
+        elif "request_id" not in args:
+            args["request_id"] = token
+        else:
+            args["answer"] = remaining
+            break
+        remaining = tail
+    return args
 
 
 class ApprovalCommandHandler(BaseControlCommandHandler):
@@ -164,12 +192,14 @@ class ApprovalCommandHandler(BaseControlCommandHandler):
             )
 
         # Resolve the Future to unblock waiting agent
+        answer = str(context.args.get("answer") or "").strip()
         try:
             resolved = await svc.resolve_request(
                 request_id,
                 ApprovalDecision.APPROVED,
                 scope=scope,
                 actor=self._actor(context),
+                answer=answer or None,
             )
         except ApprovalIdentityMismatchError:
             return self._identity_denied()
@@ -191,11 +221,17 @@ class ApprovalCommandHandler(BaseControlCommandHandler):
                     f"审批了子Agent的工具 (Session: `{pending.session_id[:8]}`)"
                 )
 
+        # Echo the answer back so a chat user can see it was taken. Backticks
+        # are stripped: the text is theirs, but it must not break the markdown
+        # we are rendering for them.
+        echoed = answer.replace("`", "")
+        answer_hint = f"\n- 答复: `{echoed}`" if answer else ""
+
         return (
             f"✅ **工具已批准**\n\n"
             f"- 工具: `{resolved.tool_name}`\n"
             f"- 请求 ID: `{request_id[:16]}`\n"
-            f"- 状态: 正在执行...{cross_session_hint}"
+            f"- 状态: 正在执行...{answer_hint}{cross_session_hint}"
         )
 
     async def _handle_deny(self, context: ControlContext) -> str:
@@ -303,6 +339,12 @@ class ApprovalCommandHandler(BaseControlCommandHandler):
         for i, pending in enumerate(pending_list, 1):
             elapsed = int(time.time() - pending.created_at)
             severity_emoji = self._severity_emoji(pending.severity)
+            is_question = (
+                pending.extra.get("source_type") == "ask_user_question"
+            )
+            displayed_id = (
+                pending.request_id if is_question else pending.request_id[:16]
+            )
 
             # Show session info for cross-session cases
             session_info = ""
@@ -317,9 +359,14 @@ class ApprovalCommandHandler(BaseControlCommandHandler):
                 f"{i}. `{pending.tool_name}` "
                 f"{severity_emoji} `{pending.severity.upper()}` "
                 f"- {elapsed}s 前{session_info}\n"
-                f"   请求 ID: `{pending.request_id[:16]}`\n"
+                f"   请求 ID: `{displayed_id}`\n"
                 f"   发现问题: {pending.findings_count} 个\n",
             )
+            if is_question:
+                lines.append(
+                    f"{pending.result_summary}\n"
+                    f"答复: `/approve {pending.request_id} <answer>`\n",
+                )
 
         lines.append(
             "\n💡 **操作提示**\n"
@@ -380,6 +427,8 @@ class ApprovalCommandHandler(BaseControlCommandHandler):
             "**子命令**:\n"
             "- `approve [request_id] [--exact|--pattern]` - 批准工具执行\n"
             "  (`--pattern` 记录泛化规则; 默认/`--exact` 仅记录原文)\n"
+            "  问答请求: `approve <request_id> <answer>`；多题可发送 JSON 数组\n"
+            "  标志放在答复之前；`--` 后的全部内容均作为答复\n"
             "- `deny [request_id] [reason]` - 拒绝工具执行\n"
             "- `list` - 列出所有待审批工具\n"
             "- `cancel <request_id>` - 取消指定审批\n\n"
@@ -416,20 +465,7 @@ class ApproveCommandHandler(BaseControlCommandHandler):
             Response text from approval handler
         """
         raw_args = context.args.get("_raw_args", "").strip()
-        parts = raw_args.split()
-
-        new_args = {"action": "approve"}
-
-        # First non-flag token is the request_id; --exact/--pattern set scope.
-        for part in parts:
-            if part == "--exact":
-                new_args["exact"] = True
-            elif part == "--pattern":
-                new_args["pattern"] = True
-            elif "request_id" not in new_args:
-                new_args["request_id"] = part
-
-        context.args = new_args
+        context.args = _parse_approve_args(raw_args)
 
         # Delegate to approval handler
         return await self._approval_handler._handle_approve(context)

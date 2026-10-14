@@ -150,6 +150,10 @@ def _policy_tool_init(
 ) -> None:
     from agentscope.tool import FunctionTool
 
+    descriptor = getattr(func, "_tool_descriptor", None)
+    schema = (getattr(descriptor, "metadata", None) or {}).get("input_schema")
+    if schema is not None:
+        kwargs.setdefault("input_schema", schema)
     FunctionTool.__init__(self, func, **kwargs)
     self._qp_governor = governor
     self._qp_request_context = request_context or {}
@@ -459,6 +463,12 @@ async def _policy_tool_call(
                     .strip()
                 )
                 break
+
+    # DENIED can be the tool's own outcome (for example, a person declining
+    # to answer). Only a reported sandbox violation may request permission
+    # to retry; otherwise a refusal would become a second approval prompt.
+    if not violation_msg:
+        return result
 
     logger.info(
         "PolicyGuardedTool: sandbox violation for '%s': %s",

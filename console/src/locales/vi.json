@@ -2229,6 +2229,13 @@
     "byModel": "Theo mô hình"
   },
   "approval": {
+    "questionTitle": "Cần bạn cung cấp thêm thông tin",
+    "otherAnswer": "Khác — nhập câu trả lời",
+    "yourAnswer": "Câu trả lời của bạn",
+    "submitAnswer": "Gửi câu trả lời",
+    "previousQuestion": "Câu hỏi trước",
+    "nextQuestion": "Câu hỏi tiếp theo",
+    "questionProgress": "{{current}} / {{total}}",
     "title": "Yêu cầu phê duyệt bảo mật",
     "description": "Agent đang yêu cầu phê duyệt để thực thi hành động sau:",
     "approve": "Phê duyệt",

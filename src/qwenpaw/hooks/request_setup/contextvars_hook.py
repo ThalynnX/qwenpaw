@@ -90,6 +90,10 @@ class ContextVarsSetupHook(LifecycleHook):
         if isinstance(request_context, dict) and request_context.get(
             "_spawn_subagent",
         ):
+            # A spawned child has no chat of its own.  The approval service
+            # hands its requests to the root session using `root_agent_id`
+            # plus `_spawn_subagent`, so a tool that needs input from a
+            # person has to be able to see both.
             approval_route = {
                 key: request_context.get(key)
                 for key in (
@@ -99,13 +103,40 @@ class ContextVarsSetupHook(LifecycleHook):
                     "channel_meta",
                 )
             }
+            approval_route["_spawn_subagent"] = True
         else:
             approval_route = {
                 "root_session_id": ctx.root_session_id or ctx.session_id or "",
                 "user_id": getattr(ctx.request, "user_id", None) or "",
                 "channel": getattr(ctx.request, "channel", None) or "",
                 "channel_meta": getattr(ctx.request, "channel_meta", None),
+                # Deliberately not JSON-safe: the live channel object the
+                # approval service pushes its card with.  Governance reaches
+                # it through request_context (runtime/builder.py); a plain
+                # tool only has this route, so it is carried here too.
+                "_channel_instance": getattr(
+                    ctx.request,
+                    "channel_instance",
+                    None,
+                ),
             }
+        if isinstance(request_context, dict):
+            # Preserve unattended origins through child requests. A tool-call
+            # ID belongs to execution context, never to this whole turn.
+            for key in ("source", "root_agent_id"):
+                value = request_context.get(key)
+                if value:
+                    approval_route[key] = value
+            if "_headless_tool_guard" in request_context:
+                approval_route.setdefault("source", "headless")
+        approval_route.update(
+            session_id=_session_id,
+            agent_id=ctx.agent_id or "default",
+        )
+        approval_route.setdefault(
+            "root_agent_id",
+            ctx.root_agent_id or ctx.agent_id or "default",
+        )
         if isinstance(request_context, dict) and request_context.get(
             "approval_level",
         ):

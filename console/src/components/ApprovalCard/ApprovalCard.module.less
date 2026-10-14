@@ -20,6 +20,9 @@
 
   :global(.ant-card-body) {
     padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    max-height: var(--approval-card-max-height, none);
   }
 }
 
@@ -51,6 +54,7 @@
 }
 
 .header {
+  flex-shrink: 0;
   margin-bottom: 14px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--app-border-subtle);
@@ -60,8 +64,10 @@
 
   .titleRow {
     flex: 1;
+    min-width: 0;
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
   }
 
   .icon {
@@ -104,8 +110,14 @@
 .content {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
   gap: 8px;
   margin-bottom: 14px;
+
+  > * {
+    flex-shrink: 0;
+  }
 }
 
 .infoRow {
@@ -452,6 +464,7 @@
 }
 
 .actions {
+  flex-shrink: 0;
   display: flex;
   gap: 8px;
   justify-content: flex-end;
@@ -632,6 +645,122 @@
 
     .approveAlwaysButton {
       order: 2;
+    }
+  }
+}
+
+// ── Interactive question form (ask_user_question) ──────────────────────
+.questionList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.questionItem {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.questionHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+
+  :global(.ant-tag) {
+    flex-shrink: 0;
+  }
+}
+
+.questionTitle {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.questionContext,
+.optionPreview {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border-subtle);
+  border-radius: 4px;
+  color: var(--app-text-secondary);
+  font-family: "SF Mono", "Monaco", "Consolas", monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.optionList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 420px;
+}
+
+.optionButton {
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 6px 10px;
+  white-space: normal;
+  text-align: left;
+}
+
+.optionLabel {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.optionDescription {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: 0.75;
+}
+
+.questionInput {
+  max-width: 420px;
+}
+
+.questionProgress {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--app-text-secondary);
+  white-space: nowrap;
+}
+
+.questionNavigation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 768px) {
+  .questionNavigation {
+    width: 100%;
+    order: 1;
+
+    button {
+      flex: 1;
+      width: auto;
+      min-width: 0;
+      height: auto;
+      min-height: 44px;
+      white-space: normal;
+      overflow-wrap: anywhere;
     }
   }
 }

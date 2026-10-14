@@ -103,11 +103,29 @@ class PendingApproval:
 
 def _is_spawn_child_approval(pending: PendingApproval) -> bool:
     """Return whether this approval belongs to a same-agent spawned child."""
+    return _is_spawn_child_route(
+        session_id=pending.session_id,
+        root_session_id=pending.root_session_id,
+        agent_id=pending.agent_id,
+        owner_agent_id=pending.owner_agent_id,
+        extra=pending.extra,
+    )
+
+
+def _is_spawn_child_route(
+    *,
+    session_id: str,
+    root_session_id: str,
+    agent_id: str,
+    owner_agent_id: str,
+    extra: dict[str, Any],
+) -> bool:
+    """Apply the same child identity check before or after queuing."""
     return bool(
-        pending.extra.get("_spawn_subagent")
-        and pending.agent_id == pending.owner_agent_id
-        and pending.session_id != pending.root_session_id
-        and pending.root_session_id,
+        extra.get("_spawn_subagent")
+        and agent_id == owner_agent_id
+        and session_id != root_session_id
+        and root_session_id,
     )
 
 
@@ -136,6 +154,50 @@ class ApprovalService:
         """Register an agent's channel manager for spawned-child routing."""
         self._channel_managers[agent_id] = channel_manager
 
+    async def resolve_notification_channel(
+        self,
+        *,
+        session_id: str,
+        root_session_id: str,
+        owner_agent_id: str,
+        agent_id: str,
+        channel: str,
+        extra: dict[str, Any] | None = None,
+    ) -> Any | None:
+        """Resolve the channel shared by delivery and interactive preflight.
+
+        Console requests are polled. A spawned child uses its registered
+        agent manager, while other requests carry their channel instance.
+        Missing or broken routes cannot deliver an interactive question.
+        """
+        if not channel or channel == "console":
+            return None
+        route = extra or {}
+        try:
+            instance = route.get("_channel_instance")
+            if _is_spawn_child_route(
+                session_id=session_id,
+                root_session_id=root_session_id,
+                agent_id=agent_id,
+                owner_agent_id=owner_agent_id,
+                extra=route,
+            ):
+                manager = self._channel_managers.get(agent_id)
+                if manager is None:
+                    return None
+                instance = await manager.get_channel(channel)
+            if callable(getattr(instance, "send_approval_notification", None)):
+                return instance
+        except Exception:
+            logger.warning(
+                "Failed to resolve approval notification channel: "
+                "agent_id=%s channel=%s",
+                agent_id,
+                channel,
+                exc_info=True,
+            )
+        return None
+
     async def _notify_channel(
         self,
         pending: PendingApproval,
@@ -146,15 +208,16 @@ class ApprovalService:
             return
         is_spawn_child = _is_spawn_child_approval(pending)
         try:
-            channel_instance = (pending.extra or {}).get("_channel_instance")
-            if is_spawn_child:
-                channel_manager = self._channel_managers.get(pending.agent_id)
-                if channel_manager is None:
-                    return
-                channel_instance = await channel_manager.get_channel(
-                    pending.channel,
-                )
+            channel_instance = await self.resolve_notification_channel(
+                session_id=pending.session_id,
+                root_session_id=pending.root_session_id,
+                owner_agent_id=pending.owner_agent_id,
+                agent_id=pending.agent_id,
+                channel=pending.channel,
+                extra=pending.extra,
+            )
             if channel_instance is None:
+                await self._fail_question_delivery(pending)
                 return
             channel_meta = (pending.extra or {}).get("channel_meta")
             delivery_session_id = (
@@ -162,6 +225,15 @@ class ApprovalService:
                 if is_spawn_child
                 else pending.session_id
             )
+            if pending.extra.get("source_type") == "ask_user_question":
+                channel_body += (
+                    "\n\nReply with /approve "
+                    f"{pending.request_id} <answer>. "
+                    "For multiple questions, use a JSON answer array in "
+                    "question order, or objects with question, selected and "
+                    "other fields. Approve without an answer supplies no "
+                    "information."
+                )
             await channel_instance.send_approval_notification(
                 session_id=delivery_session_id,
                 user_id=pending.user_id,
@@ -177,6 +249,18 @@ class ApprovalService:
                 pending.request_id[:8],
                 exc_info=True,
             )
+            await self._fail_question_delivery(pending)
+
+    async def _fail_question_delivery(self, pending: PendingApproval) -> None:
+        """Retire an undeliverable question, preserving winning replies."""
+        if pending.extra.get("source_type") != "ask_user_question":
+            return
+        resolved = await self.resolve_request(
+            pending.request_id,
+            ApprovalDecision.TIMEOUT,
+        )
+        if resolved is not None:
+            resolved.status = "delivery_failed"
 
     # ------------------------------------------------------------------
     # Core approval lifecycle

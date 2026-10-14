@@ -861,6 +861,12 @@ git worktree remove .qwenpaw/worktrees/<id>
 
 ---
 
+## 子 Agent 向用户提问
+
+同一配置 Agent 内的临时 `spawn_subagent` 子会话，在根会话具备交互式答题频道时可以使用 `ask_user_question`。提问会发送到根会话，子会话等待用户作答、拒答或超时。控制台可一次提交所有答案；IM 频道需要支持审批通知与回答命令。
+
+这不包含通过 `chat_with_agent` 进行的跨配置 Agent 协作或远程 Agent；这些路径会直接返回，不等待用户回答。定时任务、心跳、ACP 以及没有答题频道的 TUI 会话同样不会等待。回答问题仅补充信息，不代表批准后续工具调用。支持的界面与处理结果见 [回答 Agent 提问](./security#回答-agent-提问)。
+
 ## 相关页面
 
 - [CLI 命令](./cli) - 命令行工具详细说明

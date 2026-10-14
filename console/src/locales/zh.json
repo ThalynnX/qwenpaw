@@ -5175,6 +5175,13 @@
   },
   "approval": {
     "title": "安全审批",
+    "questionTitle": "需要你补充信息",
+    "otherAnswer": "其他：输入你的答案",
+    "yourAnswer": "请输入你的答案",
+    "submitAnswer": "提交答案",
+    "previousQuestion": "上一题",
+    "nextQuestion": "下一题",
+    "questionProgress": "{{current}} / {{total}}",
     "agent": "Agent",
     "ownerAgent": "归属Agent",
     "executingAgent": "执行Agent",
