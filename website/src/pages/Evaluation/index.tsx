@@ -294,7 +294,7 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
                 </label>
                 {boards.length > 1 && (
                   <label>
-                    {t("board")}
+                    {t("collection")}
                     <span className="evaluation-select">
                       <select
                         value={activeBoard?.id}

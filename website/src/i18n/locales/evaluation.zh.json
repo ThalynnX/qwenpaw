@@ -1,6 +1,6 @@
 {
   "evaluation": "评测榜单",
-  "board": "榜单集",
+  "board": "榜单",
   "main": "综合主榜 · 等权 Index",
   "domainBoards": "领域子榜",
   "benchmarkBoards": "Benchmark 子榜",
@@ -65,5 +65,6 @@
   "chartLoading": "图表加载中，成绩表格可正常查看。",
   "chartUnavailable": "图表暂时无法加载，你仍可查看下方成绩表格。",
   "retry": "重试",
-  "trajectory": "运行轨迹"
+  "trajectory": "运行轨迹",
+  "collection": "榜单集"
 }

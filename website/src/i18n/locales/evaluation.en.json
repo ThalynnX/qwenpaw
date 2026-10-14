@@ -1,6 +1,6 @@
 {
   "evaluation": "Evaluation",
-  "board": "Collection",
+  "board": "Leaderboard",
   "main": "Overall · Equal-weight Index",
   "domainBoards": "Domain leaderboards",
   "benchmarkBoards": "Benchmark leaderboards",
@@ -65,5 +65,6 @@
   "chartLoading": "Loading chart. Results are available below.",
   "chartUnavailable": "The chart could not load. You can still explore the results table.",
   "retry": "Retry",
-  "trajectory": "Trajectory"
+  "trajectory": "Trajectory",
+  "collection": "Collection"
 }
