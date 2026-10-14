@@ -1540,6 +1540,11 @@ describe("ModelSelector", () => {
 
     await user.click(chooseModel);
     expect(chooseModel).toHaveAttribute("aria-expanded", "true");
+
+    await waitFor(
+      () => expect(agentsApi.updateModelSettings).toHaveBeenCalledOnce(),
+      { timeout: 2000 },
+    );
   });
 
   it("does not send a cached active model when saving settings", async () => {
