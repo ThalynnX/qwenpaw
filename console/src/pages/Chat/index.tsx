@@ -4473,7 +4473,11 @@ export default function ChatPage() {
             },
           },
           {
-            icon: <Copy />,
+            icon: (
+              <span title={t("common.copy")}>
+                <Copy />
+              </span>
+            ),
             onClick: ({ data }: { data: { input?: unknown[] } }) => {
               const text = (data?.input || [])
                 .map(extractUserMessageText)
