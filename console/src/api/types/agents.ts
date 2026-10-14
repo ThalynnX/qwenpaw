@@ -115,8 +115,6 @@ export interface AgentProfileConfig {
   approval_level?: string;
   active_model?: ModelSlotConfig | null;
   decision_model?: ModelSlotConfig | null;
-  decision_fallback_models?: ModelSlotConfig[];
-  decision_fallback_policy?: FallbackPolicyConfig;
   fallback_models?: ModelSlotConfig[];
   fallback_policy?: FallbackPolicyConfig;
   subagent_model?: ModelSlotConfig | null;
@@ -136,8 +134,6 @@ export interface AgentProfileConfig {
 export interface AgentModelSettingsPatch {
   active_model?: ModelSlotConfig | null;
   decision_model?: ModelSlotConfig | null;
-  decision_fallback_models?: ModelSlotConfig[];
-  decision_fallback_policy?: FallbackPolicyConfig;
   fallback_models?: ModelSlotConfig[];
   fallback_policy?: FallbackPolicyConfig;
   subagent_model?: ModelSlotConfig | null;

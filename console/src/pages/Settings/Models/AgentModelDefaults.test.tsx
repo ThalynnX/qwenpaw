@@ -1,11 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import {
-  act,
-  fireEvent,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { renderWithProviders } from "@/test/common_setup";
 import { agentsApi } from "@/api/modules/agents";
 import type {
@@ -90,16 +84,45 @@ beforeEach(() => {
   );
 });
 
-async function selectModelTab(type: ModelType) {
+async function selectDecision(enabled: boolean) {
   fireEvent.click(
-    await screen.findByRole("tab", {
-      name:
-        type === "chat"
-          ? "models.defaultChatModel"
-          : "models.defaultDecisionModel",
+    screen.getByRole("button", {
+      name: enabled
+        ? "models.defaultDecisionModel"
+        : "modelSelector.noFallback models.defaultDecisionModel",
     }),
   );
 }
+
+it("selects and clears a decision model without inheriting global or changing chat", async () => {
+  const view = renderWithProviders(<AgentModelDefaults {...props} />);
+  const choice = await screen.findByRole("button", {
+    name: "models.defaultDecisionModel",
+  });
+  expect(choice).toHaveTextContent("modelSelector.noFallback");
+  expect(screen.queryByText("models.useGlobalModel")).not.toBeInTheDocument();
+  fireEvent.click(choice);
+  await waitFor(() => expect(choice).toHaveTextContent("mixed / decision"));
+  expect(agentsApi.updateModelSettings).toHaveBeenLastCalledWith("a", {
+    decision_model: { provider_id: "mixed", model: "decision" },
+  });
+  view.unmount();
+  renderWithProviders(<AgentModelDefaults {...props} />);
+  expect(
+    await screen.findByRole("button", { name: "models.defaultDecisionModel" }),
+  ).toHaveTextContent("mixed / decision");
+  await selectDecision(false);
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "models.defaultDecisionModel" }),
+    ).toHaveTextContent("modelSelector.noFallback"),
+  );
+  expect(agentsApi.updateModelSettings).toHaveBeenLastCalledWith("a", {
+    decision_model: null,
+  });
+  expect(saved.decision_model).toBeNull();
+  expect(saved.active_model).toBeUndefined();
+});
 
 it("saves primary model changes and resets immediately without a save button", async () => {
   renderWithProviders(<AgentModelDefaults {...props} />);
@@ -111,7 +134,6 @@ it("saves primary model changes and resets immediately without a save button", a
   expect(
     await screen.findByRole("button", { name: "modelSelector.chooseFallback" }),
   ).toHaveTextContent("modelSelector.noFallback");
-  expect(screen.queryByRole("switch")).not.toBeInTheDocument();
   fireEvent.click(primary);
   await waitFor(() => expect(primary).toHaveTextContent("chat"));
   await waitFor(() => expect(primary).toBeEnabled());
@@ -136,111 +158,26 @@ it("saves primary model changes and resets immediately without a save button", a
   );
 });
 
-it("saves each setting independently and preserves both tabs through model changes", async () => {
-  saved.fallback_policy = { enabled: true, target_scope: "configured" };
+it("keeps the original chat settings alongside the decision choice", async () => {
   renderWithProviders(<AgentModelDefaults {...props} />);
-  fireEvent.click(
-    await screen.findByRole("button", { name: "modelSelector.subagentModel" }),
-  );
-  await waitFor(() =>
-    expect(
-      screen.getByRole("button", { name: "modelSelector.subagentModel" }),
-    ).toBeEnabled(),
-  );
-  fireEvent.click(
-    screen.getByRole("button", { name: "modelSelector.chooseFallback" }),
-  );
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "agent.model" })).toBeEnabled(),
-  );
-  fireEvent.click(screen.getByRole("button", { name: "agent.model" }));
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "agent.model" })).toBeEnabled(),
-  );
-  await selectModelTab("decision");
-  fireEvent.click(screen.getByRole("button", { name: "agent.model" }));
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "agent.model" })).toBeEnabled(),
-  );
-  fireEvent.click(
-    screen.getByRole("button", { name: "modelSelector.chooseFallback" }),
-  );
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "agent.model" })).toBeEnabled(),
-  );
-  await selectModelTab("chat");
-  expect(screen.getByRole("button", { name: "agent.model" })).toHaveTextContent(
-    "chat",
+  const choice = await screen.findByRole("button", {
+    name: "models.defaultDecisionModel",
+  });
+  expect(choice).toHaveTextContent("modelSelector.noFallback");
+  expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+  expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: "agent.model" })).toHaveLength(
+    1,
   );
   expect(
     screen.getByRole("button", { name: "modelSelector.subagentModel" }),
-  ).toHaveTextContent("mixed:chat");
+  ).toBeInTheDocument();
   expect(
     screen.getByRole("button", { name: "modelSelector.chooseFallback" }),
-  ).toHaveTextContent("mixed:chat");
-  expect(
-    screen.queryByRole("button", { name: /save/i, hidden: true }),
-  ).not.toBeInTheDocument();
-  expect(vi.mocked(agentsApi.updateModelSettings).mock.calls).toEqual([
-    ["a", { subagent_model: { provider_id: "mixed", model: "chat" } }],
-    ["a", { fallback_models: [{ provider_id: "mixed", model: "chat" }] }],
-    ["a", { active_model: { provider_id: "mixed", model: "chat" } }],
-    ["a", { decision_model: { provider_id: "mixed", model: "decision" } }],
-    [
-      "a",
-      {
-        decision_fallback_models: [{ provider_id: "mixed", model: "decision" }],
-      },
-    ],
-  ]);
-  await selectModelTab("decision");
-  expect(screen.getByRole("button", { name: "agent.model" })).toHaveTextContent(
-    "decision",
-  );
-  expect(
-    screen.getByRole("button", { name: "modelSelector.chooseFallback" }),
-  ).toHaveTextContent("mixed:decision");
-  expect(agentsApi.updateModelSettings).toHaveBeenCalledTimes(5);
-  expect(agentsApi.getAgent).toHaveBeenCalledTimes(1);
+  ).toBeInTheDocument();
 });
 
-it("clears an override to follow the current global default, including an unset decision default", async () => {
-  vi.mocked(agentsApi.getAgent).mockResolvedValue({
-    ...profile("a"),
-    decision_model: { provider_id: "mixed", model: "decision" },
-  });
-  const view = renderWithProviders(<AgentModelDefaults {...props} />);
-  await selectModelTab("decision");
-  fireEvent.click(
-    await screen.findByRole("button", {
-      name: "models.followGlobal",
-    }),
-  );
-  await waitFor(() =>
-    expect(
-      screen.getByRole("button", { name: "agent.model" }),
-    ).toHaveTextContent("models.followGlobal"),
-  );
-  await waitFor(() =>
-    expect(agentsApi.updateModelSettings).toHaveBeenCalledWith("a", {
-      decision_model: null,
-    }),
-  );
-  view.rerender(
-    <AgentModelDefaults
-      {...props}
-      activeModels={{
-        active_llm: chat,
-        default_models: { chat, decision: null },
-      }}
-    />,
-  );
-  expect(screen.getByRole("button", { name: "agent.model" })).toHaveTextContent(
-    "models.followGlobal",
-  );
-});
-
-it("does not apply a previous agent's late save to the newly selected agent", async () => {
+it("does not apply a previous agent's late decision save to the newly selected agent", async () => {
   let resolve!: (value: AgentProfileConfig) => void;
   vi.mocked(agentsApi.updateModelSettings).mockReturnValue(
     new Promise((done) => {
@@ -248,165 +185,65 @@ it("does not apply a previous agent's late save to the newly selected agent", as
     }),
   );
   const view = renderWithProviders(<AgentModelDefaults {...props} />);
-  await selectModelTab("decision");
-  fireEvent.click(await screen.findByRole("button", { name: "agent.model" }));
+  const toggle = await screen.findByRole("button", {
+    name: "models.defaultDecisionModel",
+  });
+  await selectDecision(true);
+  expect(toggle).toBeDisabled();
   expect(screen.getByRole("button", { name: "agent.model" })).toBeDisabled();
-  await selectModelTab("chat");
-  expect(screen.getByRole("button", { name: "agent.model" })).toBeDisabled();
-  expect(
-    screen.getByRole("button", { name: "modelSelector.subagentModel" }),
-  ).toBeDisabled();
-  expect(
-    screen.getByRole("button", { name: "modelSelector.chooseFallback" }),
-  ).toBeDisabled();
   store.selectedAgent = "b";
   view.rerender(<AgentModelDefaults {...props} />);
-  await screen.findByRole("tab", {
-    name: "models.defaultChatModel",
-    selected: true,
+  const next = await screen.findByRole("button", {
+    name: "models.defaultDecisionModel",
   });
-  await selectModelTab("decision");
-  await act(async () =>
-    resolve({
-      ...profile("a"),
-      decision_model: { provider_id: "mixed", model: "decision" },
-    }),
-  );
-  expect(screen.getByRole("button", { name: "agent.model" })).toHaveTextContent(
-    "models.followGlobal",
-  );
-  expect(screen.getByRole("button", { name: "agent.model" })).toBeEnabled();
+  await act(async () => resolve({ ...profile("a"), decision_model: decision }));
+  expect(next).toHaveTextContent("modelSelector.noFallback");
+  expect(next).toBeEnabled();
   expect(store.updateAgent).not.toHaveBeenCalled();
 });
 
-it("restores failed primary and child changes and lets the user select them again", async () => {
+it("keeps the saved decision value after a failure and allows retry", async () => {
   vi.mocked(agentsApi.updateModelSettings).mockRejectedValueOnce(
     new Error("save failed"),
   );
   renderWithProviders(<AgentModelDefaults {...props} />);
-  await selectModelTab("decision");
-  fireEvent.click(screen.getByRole("button", { name: "agent.model" }));
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "agent.model" })).toBeEnabled(),
-  );
+  const toggle = await screen.findByRole("button", {
+    name: "models.defaultDecisionModel",
+  });
+  await selectDecision(true);
+  await waitFor(() => expect(toggle).toBeEnabled());
   expect(await screen.findByText("Error: save failed")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "agent.model" })).toHaveTextContent(
-    "models.followGlobal",
-  );
-  fireEvent.click(screen.getByRole("button", { name: "agent.model" }));
-  await waitFor(() =>
-    expect(
-      screen.getByRole("button", { name: "agent.model" }),
-    ).toHaveTextContent("decision"),
-  );
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "agent.model" })).toBeEnabled(),
-  );
-  await selectModelTab("chat");
-  expect(screen.getByRole("button", { name: "agent.model" })).toHaveTextContent(
-    "thinkingControl.modelSource.global",
-  );
+  expect(toggle).toHaveTextContent("modelSelector.noFallback");
+  await selectDecision(true);
+  await waitFor(() => expect(toggle).toHaveTextContent("mixed / decision"));
+  expect(agentsApi.updateModelSettings).toHaveBeenCalledTimes(2);
+});
+
+it("restores failed child changes without affecting the decision model", async () => {
+  saved.decision_model = decision;
   vi.mocked(agentsApi.updateModelSettings).mockRejectedValueOnce(
     new Error("child save failed"),
   );
-  fireEvent.click(
-    screen.getByRole("button", { name: "modelSelector.subagentModel" }),
-  );
-  await waitFor(() =>
-    expect(
-      screen.getByRole("button", { name: "modelSelector.subagentModel" }),
-    ).toBeEnabled(),
-  );
-  expect(
-    screen.getByRole("button", { name: "modelSelector.subagentModel" }),
-  ).toHaveTextContent("modelSelector.sameAsPrimary");
-  fireEvent.click(
-    screen.getByRole("button", { name: "modelSelector.subagentModel" }),
-  );
-  await waitFor(() =>
-    expect(
-      screen.getByRole("button", { name: "modelSelector.subagentModel" }),
-    ).toBeEnabled(),
-  );
-  expect(
-    screen.getByRole("button", { name: "modelSelector.subagentModel" }),
-  ).toHaveTextContent("mixed:chat");
-  expect(vi.mocked(agentsApi.updateModelSettings).mock.calls).toEqual([
-    ["a", { decision_model: { provider_id: "mixed", model: "decision" } }],
-    ["a", { decision_model: { provider_id: "mixed", model: "decision" } }],
-    ["a", { subagent_model: { provider_id: "mixed", model: "chat" } }],
-    ["a", { subagent_model: { provider_id: "mixed", model: "chat" } }],
-  ]);
-  await selectModelTab("decision");
-  expect(screen.getByRole("button", { name: "agent.model" })).toHaveTextContent(
-    "decision",
-  );
-});
-
-it("saves and clears decision fallbacks without changing chat fallbacks", async () => {
-  let saved = {
-    ...profile("a"),
-    fallback_models: [{ provider_id: "mixed", model: "chat" }],
-    fallback_policy: { enabled: true, target_scope: "free_only" as const },
-  } as AgentProfileConfig;
-  vi.mocked(agentsApi.getAgent).mockResolvedValue(saved);
-  vi.mocked(agentsApi.updateModelSettings).mockImplementation(
-    async (_id, patch) => {
-      saved = { ...saved, ...patch };
-      return saved;
-    },
-  );
   renderWithProviders(<AgentModelDefaults {...props} />);
-  await selectModelTab("decision");
-  const decisionSettings = within(
-    await screen.findByRole("region", { name: "models.defaultDecisionModel" }),
-  );
-  fireEvent.click(
-    decisionSettings.getByRole("button", {
-      name: "modelSelector.chooseFallback",
-    }),
-  );
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "agent.model" })).toBeEnabled(),
-  );
-  expect(agentsApi.updateModelSettings).toHaveBeenLastCalledWith("a", {
-    decision_fallback_models: [{ provider_id: "mixed", model: "decision" }],
+  const child = await screen.findByRole("button", {
+    name: "modelSelector.subagentModel",
   });
-  expect(saved.fallback_models).toEqual([
-    { provider_id: "mixed", model: "chat" },
-  ]);
-  expect(saved.fallback_policy).toEqual({
-    enabled: true,
-    target_scope: "free_only",
-  });
-  fireEvent.click(
-    decisionSettings.getByRole("button", {
-      name: "modelSelector.noFallback modelSelector.chooseFallback",
-    }),
-  );
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "agent.model" })).toBeEnabled(),
-  );
-  expect(agentsApi.updateModelSettings).toHaveBeenLastCalledWith("a", {
-    decision_fallback_models: [],
-    decision_fallback_policy: { enabled: false, target_scope: "configured" },
-  });
+  fireEvent.click(child);
+  await waitFor(() => expect(child).toBeEnabled());
+  expect(child).toHaveTextContent("modelSelector.sameAsPrimary");
+  fireEvent.click(child);
+  await waitFor(() => expect(child).toHaveTextContent("mixed:chat"));
+  expect(saved.decision_model).toEqual(decision);
   expect(
-    decisionSettings.getByRole("button", {
-      name: "modelSelector.chooseFallback",
-    }),
-  ).toHaveTextContent("modelSelector.noFallback");
-  expect(saved.decision_fallback_models).toEqual([]);
-  expect(saved.fallback_models).toEqual([
-    { provider_id: "mixed", model: "chat" },
-  ]);
+    screen.getByRole("button", { name: "models.defaultDecisionModel" }),
+  ).toHaveTextContent("global / Global Decision");
 });
 
 it("selects and disables a chat fallback without changing decision settings", async () => {
   let saved: AgentProfileConfig = {
     ...profile("a"),
     fallback_policy: { enabled: false, target_scope: "free_only" },
-    decision_fallback_models: [decision],
+    decision_model: decision,
   };
   vi.mocked(agentsApi.getAgent).mockImplementation(async () => saved);
   vi.mocked(agentsApi.updateModelSettings).mockImplementation(
@@ -444,11 +281,11 @@ it("selects and disables a chat fallback without changing decision settings", as
     enabled: false,
     target_scope: "free_only",
   });
-  expect(saved.decision_fallback_models).toEqual([decision]);
+  expect(saved.decision_model).toEqual(decision);
   expect(
     vi
       .mocked(agentsApi.updateModelSettings)
-      .mock.calls.every(([, patch]) => !("decision_fallback_models" in patch)),
+      .mock.calls.every(([, patch]) => !("decision_model" in patch)),
   ).toBe(true);
 });
 

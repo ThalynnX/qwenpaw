@@ -29,6 +29,7 @@ import {
   withPendingThinking,
 } from "../../../features/thinking/sessionThinkingApi";
 import { useCreateNewSession } from "./useCreateNewSession";
+import { readPendingDecision } from "../../../features/session-settings/sessionDecision";
 import sessionApi from "../sessionApi";
 import { useAgentStore } from "../../../stores/agentStore";
 
@@ -73,6 +74,7 @@ describe("useCreateNewSession", () => {
   });
   it("discards the old blank draft model and thinking when starting a new task", async () => {
     const agent = useAgentStore.getState().selectedAgent;
+    sessionStorage.setItem(`qwenpaw-decision-enabled:${agent}:new`, "true");
     const model = JSON.stringify({
       provider_id: "dashscope",
       model: "deepseek",
@@ -96,6 +98,7 @@ describe("useCreateNewSession", () => {
       "/chats/thinking-default",
     );
     expect(withPendingModel({}, agent, "new")).toEqual({});
+    expect(readPendingDecision(agent, "new")).toBeNull();
     expect(withPendingThinking({}, agent, "new")).toEqual({});
     expect(
       sessionStorage.getItem(`qwenpaw-thinking:${agent}:new:active`),

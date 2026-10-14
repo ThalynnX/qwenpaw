@@ -153,8 +153,6 @@ class AgentModelSettingsPatch(BaseModel):
 
     fallback_models: list[ModelSlotConfig] | None = None
     fallback_policy: FallbackPolicyConfig | None = None
-    decision_fallback_models: list[ModelSlotConfig] | None = None
-    decision_fallback_policy: FallbackPolicyConfig | None = None
     subagent_model: ModelSlotConfig | None = None
     thinking_level: (
         Literal[
@@ -178,8 +176,6 @@ class AgentModelSettingsPatch(BaseModel):
         non_nullable_fields = (
             "fallback_models",
             "fallback_policy",
-            "decision_fallback_models",
-            "decision_fallback_policy",
             "thinking_level",
         )
         null_fields = [
@@ -1335,7 +1331,6 @@ async def update_agent_model_settings(
             ("decision_model", "decision"),
             ("subagent_model", "chat"),
             ("fallback_models", "chat"),
-            ("decision_fallback_models", "decision"),
         ):
             value = values.get(field)
             slots = value if isinstance(value, list) else [value]

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Tabs, Tooltip } from "antd";
+import { Tooltip } from "antd";
 import { RotateCcw } from "lucide-react";
 import { InteractiveCard } from "@/components/interaction/InteractiveCard";
 import { agentsApi } from "@/api/modules/agents";
@@ -10,14 +10,12 @@ import type {
   AgentProfileConfig,
   ProviderInfo,
   ModelSlotConfig,
-  ModelType,
 } from "@/api/types";
 import { useAgentStore } from "@/stores/agentStore";
 import { useAppMessage } from "@/hooks/useAppMessage";
 import { AgentModelSettings } from "../../Chat/ModelSelector/AgentModelSettings";
 import { buildEligibleProviders } from "../../Chat/ModelSelector/modelSelectorModels";
 import { ModelChoice } from "../../Chat/ModelSelector/ModelChoice";
-import { ModelFallbackSettings } from "../../Chat/ModelSelector/ModelFallbackSettings";
 import selectorStyles from "../../Chat/ModelSelector/index.module.less";
 import styles from "./AgentModelDefaults.module.less";
 
@@ -39,11 +37,6 @@ function modelSettings(config: AgentProfileConfig): ModelSettings {
     thinking_level: config.thinking_level ?? "inherit",
     thinking_budget: config.thinking_budget ?? null,
     decision_model: config.decision_model ?? null,
-    decision_fallback_models: config.decision_fallback_models ?? [],
-    decision_fallback_policy: config.decision_fallback_policy ?? {
-      enabled: true,
-      target_scope: "configured",
-    },
   };
 }
 
@@ -53,28 +46,21 @@ export function AgentModelDefaults(props: Props) {
 }
 
 function AgentModelChoice({
-  modelType = "chat",
   value,
   disabled,
   onChange,
 }: {
-  modelType?: ModelType;
   value?: ModelSlotConfig | null;
   disabled?: boolean;
   onChange: (value: ModelSlotConfig | null) => void;
 }) {
   const { t } = useTranslation();
-  const followGlobal = t(
-    modelType === "chat"
-      ? "thinkingControl.modelSource.global"
-      : "models.followGlobal",
-  );
+  const followGlobal = t("thinkingControl.modelSource.global");
   return (
     <div className={styles.choice}>
       <span>{t("agent.model")}</span>
       <ModelChoice
         ariaLabel={t("agent.model")}
-        modelType={modelType}
         value={value}
         label={value?.model || followGlobal}
         disabled={disabled}
@@ -139,6 +125,14 @@ function AgentModelEditor({
     config?.active_model ??
     activeModels?.default_models?.chat ??
     activeModels?.active_llm;
+  const decisionModel = settings?.decision_model;
+  const decisionProvider = providers.find(
+    (provider) => provider.id === decisionModel?.provider_id,
+  );
+  const decisionInfo = [
+    ...(decisionProvider?.models ?? []),
+    ...(decisionProvider?.extra_models ?? []),
+  ].find((model) => model.id === decisionModel?.model);
   async function save(patch: AgentModelSettingsPatch) {
     if (!settings || saving) return;
     const changes: AgentModelSettingsPatch = Object.fromEntries(
@@ -186,71 +180,45 @@ function AgentModelEditor({
       ) : !settings ? (
         <p role="status">{t("modelSelector.loadingAgentSettings")}</p>
       ) : (
-        <Tabs
-          className={styles.modelTabs}
-          defaultActiveKey="chat"
-          items={[
-            {
-              key: "chat",
-              label: t("models.defaultChatModel"),
-              children: (
-                <div className={styles.editor}>
-                  <AgentModelChoice
-                    value={settings.active_model}
-                    disabled={saving}
-                    onChange={(value) => void save({ active_model: value })}
-                  />
-                  <AgentModelSettings
-                    expanded
-                    surface="settings"
-                    disabled={saving}
-                    initialConfig={settings}
-                    draftResetToken={draftResetToken}
-                    onDraftChange={(value) => void save(value)}
-                    providers={chatProviders}
-                    activeProviderId={chatModel?.provider_id}
-                    activeModelId={chatModel?.model}
-                  />
-                </div>
-              ),
-            },
-            {
-              key: "decision",
-              label: t("models.defaultDecisionModel"),
-              children: (
-                <div className={styles.editor}>
-                  <section
-                    className={styles.modelGroup}
-                    aria-label={t("models.defaultDecisionModel")}
-                  >
-                    <AgentModelChoice
-                      modelType="decision"
-                      value={settings.decision_model}
-                      disabled={saving || !activeModels}
-                      onChange={(value) => void save({ decision_model: value })}
-                    />
-                    <ModelFallbackSettings
-                      modelType="decision"
-                      models={settings.decision_fallback_models}
-                      enabled={settings.decision_fallback_policy.enabled}
-                      providers={buildEligibleProviders(providers, "decision")}
-                      disabled={saving}
-                      onChange={(models, enabled) =>
-                        void save({
-                          decision_fallback_models: models,
-                          decision_fallback_policy: {
-                            ...settings.decision_fallback_policy,
-                            enabled,
-                          },
-                        })
-                      }
-                    />
-                  </section>
-                </div>
-              ),
-            },
-          ]}
-        />
+        <div className={styles.editor}>
+          <AgentModelChoice
+            value={settings.active_model}
+            disabled={saving}
+            onChange={(value) => void save({ active_model: value })}
+          />
+          <AgentModelSettings
+            expanded
+            surface="settings"
+            disabled={saving}
+            initialConfig={settings}
+            draftResetToken={draftResetToken}
+            onDraftChange={(value) => void save(value)}
+            providers={chatProviders}
+            activeProviderId={chatModel?.provider_id}
+            activeModelId={chatModel?.model}
+          />
+          <div className={selectorStyles.settingLine}>
+            <span>{t("models.defaultDecisionModel")}</span>
+            <ModelChoice
+              ariaLabel={t("models.defaultDecisionModel")}
+              modelType="decision"
+              value={decisionModel}
+              label={
+                decisionModel
+                  ? `${decisionProvider?.name ?? decisionModel.provider_id} / ${
+                      decisionInfo?.name ?? decisionModel.model
+                    }`
+                  : t("modelSelector.noFallback")
+              }
+              disabled={saving}
+              resetOption={{
+                label: t("modelSelector.noFallback"),
+                onReset: () => void save({ decision_model: null }),
+              }}
+              onChange={(model) => void save({ decision_model: model })}
+            />
+          </div>
+        </div>
       )}
     </InteractiveCard>
   );

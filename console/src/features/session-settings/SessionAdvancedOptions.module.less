@@ -1,0 +1,45 @@
+.advanced {
+  margin: 8px 6px 0;
+  padding-top: 4px;
+  border-top: 1px solid var(--app-border-subtle);
+  color: var(--app-text-primary);
+}
+
+.disclosure {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--app-text-secondary);
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--app-fill);
+  }
+
+  &[aria-expanded="true"] svg {
+    transform: rotate(180deg);
+  }
+}
+
+.option {
+  min-height: 48px;
+  padding: 6px 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+@media (pointer: coarse) {
+  .disclosure,
+  .option {
+    min-height: 44px;
+  }
+}

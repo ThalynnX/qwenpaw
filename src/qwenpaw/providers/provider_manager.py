@@ -281,15 +281,12 @@ class ProviderManager(
         model_type: ModelType,
         agent_config: AgentProfileConfig | None = None,
     ) -> ModelSlotConfig | None:
-        """Resolve an agent override before the global default of that type."""
+        """Resolve agent choices; only chat inherits the global default."""
         if agent_config is not None:
-            override = (
-                agent_config.active_model
-                if model_type == "chat"
-                else agent_config.decision_model
-            )
-            if override is not None:
-                return override
+            if model_type == "decision":
+                return agent_config.decision_model
+            if model_type == "chat" and agent_config.active_model is not None:
+                return agent_config.active_model
         return (
             self.get_active_model()
             if model_type == "chat"

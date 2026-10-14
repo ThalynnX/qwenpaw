@@ -7,12 +7,14 @@ import {
   setPendingThinking,
   clearPendingThinking,
 } from "./sessionThinkingApi";
-import {
-  resetSessionModel,
-  loadSessionDecisionModel,
-  saveSessionDecisionModel,
-} from "../session-settings/sessionModel";
+import { resetSessionModel } from "../session-settings/sessionModel";
 import { SessionThinking } from "./SessionThinking";
+import { loadDecisionSettings } from "../session-settings/sessionDecision";
+
+vi.mock("../session-settings/sessionDecision", () => ({
+  loadDecisionSettings: vi.fn(),
+  saveDecisionSettings: vi.fn(),
+}));
 
 vi.mock("./sessionThinkingApi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./sessionThinkingApi")>()),
@@ -23,21 +25,6 @@ vi.mock("../session-settings/sessionModel", async (importOriginal) => ({
     typeof import("../session-settings/sessionModel")
   >()),
   resetSessionModel: vi.fn(),
-  loadSessionDecisionModel: vi.fn(),
-  saveSessionDecisionModel: vi.fn(),
-}));
-vi.mock("../../pages/Chat/ModelSelector", () => ({
-  default: ({
-    modelType = "chat",
-    onPick,
-  }: {
-    modelType?: string;
-    onPick?: (provider: string, model: string) => void;
-  }) => (
-    <button onClick={() => onPick?.("typesafe", "jev-latest")}>
-      pick-{modelType}
-    </button>
-  ),
 }));
 vi.mock("../../pages/Chat/ModelSelector/ModelPickerPopover", () => ({
   ModelPickerPopover: ({
@@ -73,72 +60,21 @@ it("shows the Hub catalog name in the trigger and panel instead of its routing I
   );
   expect(await screen.findAllByText("Organization Qwen")).toHaveLength(2);
   expect(screen.queryByText(model)).not.toBeInTheDocument();
-});
-
-it("keeps chat controls intact and saves a decision choice only to the conversation", async () => {
-  vi.mocked(sessionThinkingApi.get).mockResolvedValue({
-    model: "chat-model",
-    provider_id: "p",
-    model_name: "Chat model",
-    control: { kind: "unsupported", efforts: [], supports_off: false },
-    value: { level: "inherit" },
-    effective: { level: "inherit" },
-    source: "model",
-    reason: null,
-  });
-  vi.mocked(loadSessionDecisionModel).mockResolvedValue({
-    model: "jev-latest",
-    provider_id: "typesafe",
-    model_source: "global",
-  });
-  vi.mocked(saveSessionDecisionModel).mockResolvedValue({
-    model: "jev-latest",
-    provider_id: "typesafe",
-    model_source: "session",
-  });
-  renderWithProviders(<SessionThinking agentId="a" sessionId="s" chatId="c" />);
-  expect(await screen.findAllByText("Chat model")).toHaveLength(2);
-  fireEvent.click(
-    screen.getByRole("tab", { name: "models.defaultDecisionModel" }),
-  );
-  const reset = await screen.findByRole("button", {
-    name: "thinkingControl.resetModel",
-  });
-  await waitFor(() => expect(reset).toBeDisabled());
-  expect(
-    screen.queryByRole("button", { name: "thinkingControl.modelSource.agent" }),
-  ).not.toBeInTheDocument();
-  fireEvent.click(await screen.findByRole("button", { name: "pick-decision" }));
-  await waitFor(() =>
-    expect(saveSessionDecisionModel).toHaveBeenCalledWith(
-      "a",
-      { sessionId: "s", chatId: "c" },
-      { provider_id: "typesafe", model: "jev-latest" },
-    ),
-  );
-  expect(await screen.findAllByText("Chat model")).toHaveLength(2);
-  expect(sessionThinkingApi.set).not.toHaveBeenCalled();
-  expect(resetSessionModel).not.toHaveBeenCalled();
-  vi.mocked(loadSessionDecisionModel).mockResolvedValue({
-    model: "jev-latest",
-    provider_id: "typesafe",
-    model_source: "session",
+  expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+  expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+  vi.mocked(loadDecisionSettings).mockResolvedValue({
+    enabled: false,
+    configured: true,
+    override: false,
   });
   fireEvent.click(
-    screen.getByRole("tab", { name: "models.defaultDecisionModel" }),
+    screen.getByRole("button", { name: "chat.sessionSettings.advanced" }),
   );
-  fireEvent.click(
-    await screen.findByRole("button", {
-      name: "thinkingControl.resetModel",
-    }),
-  );
-  await waitFor(() =>
-    expect(saveSessionDecisionModel).toHaveBeenLastCalledWith(
-      "a",
-      { sessionId: "s", chatId: "c" },
-      null,
-    ),
-  );
+  await waitFor(() => expect(screen.getByRole("switch")).toBeEnabled());
+  expect(loadDecisionSettings).toHaveBeenCalledWith("agent", {
+    sessionId: "session",
+    chatId: "chat",
+  });
 });
 
 it("restores the default model directly even when thinking is unsupported", async () => {

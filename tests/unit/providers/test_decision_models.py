@@ -450,42 +450,85 @@ def agent_model_client(manager, monkeypatch):
         yield client, saved, chat, decision
 
 
-def test_agent_model_overrides_save_and_inherit(manager, agent_model_client):
+def test_agent_decision_choice_persists_without_inheriting_global(
+    manager, agent_model_client
+):
     from qwenpaw.config.config import AgentProfileConfig, ModelSlotConfig
 
     client, saved, chat, decision = agent_model_client
-    assert manager.get_default_model("decision", saved["config"]) == decision
+    assert manager.get_default_model("decision", saved["config"]) is None
     response = client.patch(
         "/agents/bot/model-settings",
         json={
             "active_model": chat.model_dump(),
             "decision_model": decision.model_dump(),
-            "fallback_policy": {"enabled": False},
         },
     )
     assert response.status_code == 200
-    # The agent.json representation preserves both overrides on reload.
     restored = AgentProfileConfig.model_validate_json(
-        saved["config"].model_dump_json(exclude_none=True)
+        saved["config"].model_dump_json()
     )
     assert restored.decision_model == decision
-    assert restored.active_model == chat
+    assert manager.get_default_model("decision", restored) == decision
+    assert manager.get_default_model("chat", restored) == chat
     assert manager.default_models == {"chat": chat, "decision": decision}
-
     next_global = ModelSlotConfig(provider_id="typesafe", model="jev-latest")
     manager.default_models["decision"] = next_global
     assert manager.get_default_model("decision", restored) == decision
+    manager.default_models["decision"] = None
+    assert manager.get_default_model("decision", restored) == decision
+    manager.default_models["decision"] = decision
     response = client.patch(
         "/agents/bot/model-settings", json={"decision_model": None}
     )
     assert response.status_code == 200
-    assert saved["config"].active_model == chat
-    assert (
-        manager.get_default_model("decision", saved["config"]) == next_global
+    restored = AgentProfileConfig.model_validate_json(
+        saved["config"].model_dump_json()
     )
+    assert restored.decision_model is None
+    assert manager.get_default_model("decision", restored) is None
     assert manager.get_default_model("chat", saved["config"]) == chat
-    manager.default_models["decision"] = None
-    assert manager.get_default_model("decision", saved["config"]) is None
+    assert manager.get_default_model("decision") == decision
+
+
+@pytest.mark.parametrize(
+    ("value", "status"),
+    [(True, 422), ("decision", 422), (1, 422), ({}, 404), ([], 422)],
+)
+def test_agent_decision_choice_rejects_invalid_slots_atomically(
+    agent_model_client, value, status
+):
+    client, saved, _, _ = agent_model_client
+    response = client.patch(
+        "/agents/bot/model-settings",
+        json={"decision_model": value, "thinking_level": "high"},
+    )
+    assert response.status_code == status
+    assert saved["config"].decision_model is None
+    assert saved["config"].thinking_level == "inherit"
+
+
+def test_chat_fallback_changes_preserve_decision_choice(
+    agent_model_client,
+):
+    client, saved, chat, decision = agent_model_client
+    response = client.patch(
+        "/agents/bot/model-settings",
+        json={
+            "fallback_models": [chat.model_dump()],
+            "fallback_policy": {"enabled": True, "target_scope": "free_only"},
+            "decision_model": decision.model_dump(),
+        },
+    )
+    assert response.status_code == 200
+    response = client.patch(
+        "/agents/bot/model-settings",
+        json={"fallback_models": [], "fallback_policy": {"enabled": False}},
+    )
+    assert response.status_code == 200
+    assert saved["config"].decision_model == decision
+    assert saved["config"].fallback_models == []
+    assert not saved["config"].fallback_policy.enabled
 
 
 @pytest.mark.parametrize(
@@ -495,7 +538,6 @@ def test_agent_model_overrides_save_and_inherit(manager, agent_model_client):
         ("decision_model", "chat"),
         ("subagent_model", "decision"),
         ("fallback_models", "decision"),
-        ("decision_fallback_models", "chat"),
     ],
 )
 def test_agent_model_settings_reject_wrong_type_atomically(
@@ -516,64 +558,40 @@ def test_agent_model_settings_reject_wrong_type_atomically(
     assert saved["config"].decision_model is None
 
 
-def test_agent_model_settings_reject_unknown_decision_model(
+def test_agent_decision_choice_can_differ_from_global(
+    manager, agent_model_client
+):
+    from qwenpaw.config.config import AgentProfileConfig, ModelSlotConfig
+
+    client, saved, chat, global_decision = agent_model_client
+    override = ModelSlotConfig(provider_id="typesafe", model="jev-latest")
+    response = client.patch(
+        "/agents/bot/model-settings",
+        json={
+            "decision_model": override.model_dump(),
+        },
+    )
+    assert response.status_code == 200
+    restored = AgentProfileConfig.model_validate_json(
+        saved["config"].model_dump_json()
+    )
+    assert restored.decision_model == override
+    assert manager.get_default_model("decision", restored) == override
+    assert manager.get_default_model("chat", restored) == chat
+    assert manager.get_default_model("decision") == global_decision
+
+
+def test_agent_decision_override_rejects_unknown_model_atomically(
     agent_model_client,
 ):
     client, saved, _, _ = agent_model_client
     response = client.patch(
         "/agents/bot/model-settings",
-        json={"decision_model": {"provider_id": "mixed", "model": "missing"}},
+        json={
+            "decision_model": {"provider_id": "typesafe", "model": "missing"},
+            "thinking_level": "high",
+        },
     )
     assert response.status_code == 400
     assert saved["config"].decision_model is None
-
-
-def test_agent_fallbacks_persist_and_clear_independently(agent_model_client):
-    from qwenpaw.config.config import AgentProfileConfig
-
-    client, saved, chat, decision = agent_model_client
-    response = client.patch(
-        "/agents/bot/model-settings",
-        json={
-            "fallback_models": [chat.model_dump()],
-            "fallback_policy": {"enabled": True, "target_scope": "free_only"},
-            "decision_fallback_models": [decision.model_dump()],
-            "decision_fallback_policy": {"enabled": False},
-        },
-    )
-    assert response.status_code == 200
-    restored = AgentProfileConfig.model_validate_json(
-        saved["config"].model_dump_json(exclude_none=True)
-    )
-    assert restored.fallback_models == [chat]
-    assert restored.decision_fallback_models == [decision]
-    assert restored.fallback_policy.enabled
-    assert not restored.decision_fallback_policy.enabled
-    assert response.json()["decision_fallback_models"] == [
-        decision.model_dump()
-    ]
-    response = client.patch(
-        "/agents/bot/model-settings",
-        json={
-            "decision_fallback_models": [],
-            "decision_fallback_policy": {"enabled": True},
-        },
-    )
-    assert response.status_code == 200
-    assert saved["config"].decision_fallback_models == []
-    assert saved["config"].decision_fallback_policy.enabled
-    assert saved["config"].fallback_models == [chat]
-    assert saved["config"].fallback_policy.target_scope == "free_only"
-
-
-@pytest.mark.parametrize(
-    "field", ["decision_fallback_models", "decision_fallback_policy"]
-)
-def test_decision_fallback_fields_reject_null(agent_model_client, field):
-    client, saved, _, _ = agent_model_client
-    response = client.patch(
-        "/agents/bot/model-settings",
-        json={field: None, "thinking_level": "high"},
-    )
-    assert response.status_code == 422
     assert saved["config"].thinking_level == "inherit"

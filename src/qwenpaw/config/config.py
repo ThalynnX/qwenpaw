@@ -2376,7 +2376,7 @@ class AgentProfileConfig(BaseModel):
     )
     decision_model: Optional["ModelSlotConfig"] = Field(
         default=None,
-        description="Decision model override; None inherits the global default",
+        description="Decision model for this agent; None disables it by default",
     )
     fallback_models: List["ModelSlotConfig"] = Field(
         default_factory=list,
@@ -2385,13 +2385,6 @@ class AgentProfileConfig(BaseModel):
     fallback_policy: FallbackPolicyConfig = Field(
         default_factory=FallbackPolicyConfig,
         description="Chat model fallback policy",
-    )
-    decision_fallback_models: List["ModelSlotConfig"] = Field(
-        default_factory=list,
-        description="Ordered decision model fallback chain",
-    )
-    decision_fallback_policy: FallbackPolicyConfig = Field(
-        default_factory=FallbackPolicyConfig,
     )
     subagent_model: Optional["ModelSlotConfig"] = Field(
         default=None,
