@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
 import {
   Tabs,
   Empty,
@@ -17,12 +18,12 @@ import {
   Tooltip,
 } from "antd";
 import {
-  BulbOutlined,
-  CopyOutlined,
-  DownOutlined,
-  SafetyOutlined,
-  ToolOutlined,
-} from "@ant-design/icons";
+  Lightbulb as BulbOutlined,
+  Copy as CopyOutlined,
+  ChevronDown as DownOutlined,
+  ShieldCheck as SafetyOutlined,
+  Wrench as ToolOutlined,
+} from "lucide-react";
 import { PackageOpen, Bell, BellRing } from "lucide-react";
 import { MailAccessControlDrawer } from "./components/MailAccessControlDrawer";
 import { MailProcessingPauses } from "./components/MailProcessingPauses";
@@ -143,7 +144,14 @@ const getMailDetail = (messageItem: PushMessage | null): MailDetail | null => {
 
 export default function InboxPage() {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<TabKey>(resolveInitialTab);
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState<TabKey>(() =>
+    requestedTab === "approvals" || requestedTab === "messages"
+      ? requestedTab
+      : resolveInitialTab(),
+  );
   const [mailAclDrawerOpen, setMailAclDrawerOpen] = useState(false);
   const {
     pendingCount,
@@ -302,6 +310,12 @@ export default function InboxPage() {
     () => getMailDetail(selectedMessage),
     [selectedMessage],
   );
+
+  useEffect(() => {
+    if (requestedTab === "approvals" || requestedTab === "messages") {
+      setActiveTab(requestedTab);
+    }
+  }, [location.key, requestedTab]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -591,7 +605,7 @@ export default function InboxPage() {
         extra={
           <Badge dot={pendingCount > 0} offset={[-4, 4]}>
             <Button
-              icon={<SafetyOutlined />}
+              icon={<SafetyOutlined size="1em" />}
               className={
                 mailAclNewArrival && wobbleEnabled
                   ? styles.mailAclShake
@@ -731,7 +745,7 @@ export default function InboxPage() {
                       >
                         {entry.type === "tool_call" ? (
                           <span className={styles.mailTraceTool}>
-                            <ToolOutlined /> {entry.name || "tool"}
+                            <ToolOutlined size="1em" /> {entry.name || "tool"}
                           </span>
                         ) : null}
                         <pre className={styles.mailTraceSummary}>
@@ -780,9 +794,9 @@ export default function InboxPage() {
                         const foldIcon = kind
                           .toLowerCase()
                           .includes("thinking") ? (
-                          <BulbOutlined />
+                          <BulbOutlined size="1em" />
                         ) : kind.toLowerCase().includes("tool") ? (
-                          <ToolOutlined />
+                          <ToolOutlined size="1em" />
                         ) : null;
                         const collapseKey = `trace-${item.at}-${index}`;
                         const isPanelActive = !!expandedTraceMap[collapseKey];
@@ -843,7 +857,7 @@ export default function InboxPage() {
                                               : ""
                                           }`}
                                         >
-                                          <DownOutlined />
+                                          <DownOutlined size="1em" />
                                         </span>
                                       </div>
                                     ),
@@ -880,7 +894,7 @@ export default function InboxPage() {
                                                   }
                                                   title={t("common.copy")}
                                                 >
-                                                  <CopyOutlined />
+                                                  <CopyOutlined size="1em" />
                                                 </button>
                                               </div>
                                               <pre
@@ -922,7 +936,7 @@ export default function InboxPage() {
                                                   }
                                                   title={t("common.copy")}
                                                 >
-                                                  <CopyOutlined />
+                                                  <CopyOutlined size="1em" />
                                                 </button>
                                               </div>
                                               <pre
