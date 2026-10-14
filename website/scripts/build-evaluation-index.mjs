@@ -1,30 +1,7 @@
-import { execFileSync } from "node:child_process";
 import { readFile, readdir, mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import Ajv from "ajv/dist/2020.js";
 
-const baseRef = process.argv[2];
-if (baseRef) {
-  const changes = execFileSync(
-    "git",
-    [
-      "diff",
-      "--name-status",
-      "--no-renames",
-      "--diff-filter=DMRTUXB",
-      baseRef,
-      "HEAD",
-      "--",
-      "website/evaluation/results/*.json",
-    ],
-    {
-      cwd: fileURLToPath(new URL("../../", import.meta.url)),
-      encoding: "utf8",
-    },
-  ).trim();
-  if (changes)
-    throw new Error(`Results are append-only; add a new run JSON:\n${changes}`);
-}
 const root = new URL("../evaluation/", import.meta.url);
 const read = async (url) => JSON.parse(await readFile(url, "utf8"));
 const ajv = new Ajv({ allErrors: true });

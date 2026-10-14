@@ -16,12 +16,11 @@ No workflow in this feature starts an agent or provisions compute.
 4. Submit a PR. Merging result changes into `main` triggers the existing website
    deployment. Never edit generated `public/evaluation/data/index.json`.
 
-Use one file per evaluation run; a file can contain several models. Results are
-**append-only**: after merging, never edit, delete or rename a result JSON. Each
-SDK version, rerun or correction gets a new ID and filename; old records remain
-visible. CI compares against the PR base commit and rejects changes to existing
-result files. To check locally, run `node website/scripts/build-evaluation-index.mjs
-<base-commit>`.
+Use one file per evaluation run; a file can contain several models. Add a new
+ID/file for each SDK version or new run to preserve history. Existing result
+files may be corrected, deleted or renamed when needed, for example after a run
+used the wrong configuration. When renaming, update the file's `id` to match.
+CI validates the resulting data, without enforcing immutable history.
 
 Every file declares `board: { "id": "qwenpaw", "name": "QwenPaw", "group_by":
 "model" }`. Files with the same board ID belong to the same collection and must

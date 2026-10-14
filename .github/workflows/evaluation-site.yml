@@ -12,8 +12,6 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: pnpm/action-setup@v4
         with:
           version: 9
@@ -23,8 +21,4 @@ jobs:
           cache: pnpm
           cache-dependency-path: website/pnpm-lock.yaml
       - run: pnpm --dir website install --frozen-lockfile
-      - name: Validate append-only results
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: node website/scripts/build-evaluation-index.mjs "$BASE_SHA"
       - run: pnpm --dir website build
