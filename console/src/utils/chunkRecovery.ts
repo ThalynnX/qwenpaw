@@ -36,8 +36,11 @@ function canResetGuard(stored: string | null, build: string) {
 }
 
 function restartHealthyReset() {
-  cancelHealthyReset();
-  if (!isHealthy()) return;
+  if (!isHealthy()) {
+    cancelHealthyReset();
+    return;
+  }
+  if (healthyTimer !== undefined) return;
   try {
     const build = getFrontendBuildId();
     const stored = window.sessionStorage.getItem(RELOAD_KEY);

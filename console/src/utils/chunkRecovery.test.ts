@@ -276,6 +276,18 @@ describe("healthy recovery intervals", () => {
     expect(current.reload).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps the original interval as healthy windows mount and unmount", () => {
+    healthyPage();
+    vi.advanceTimersByTime(20_000);
+    const release = healthyPage();
+    vi.advanceTimersByTime(20_000);
+    release();
+    vi.advanceTimersByTime(19_999);
+    expect(current.values.get(reloadKey)).toBe(guard);
+    vi.advanceTimersByTime(1);
+    expect(current.values.has(reloadKey)).toBe(false);
+  });
+
   it("cancels a pending reset as soon as another chunk fails", () => {
     guard = JSON.stringify({ build: getFrontendBuildId(), attempts: 1 });
     current.values.set(reloadKey, guard);
