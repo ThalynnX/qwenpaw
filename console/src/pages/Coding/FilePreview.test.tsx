@@ -57,6 +57,56 @@ describe("FilePreview", () => {
   });
 });
 
+describe("FilePreview interactive HTML", () => {
+  const content = [
+    "<!doctype html>",
+    '<html><head><meta charset="utf-8">',
+    "<style>canvas { width: 100%; height: 100%; }</style>",
+    '<script type="importmap">{"imports":{"three":"https://example.com/three.js"}}</script>',
+    '<script src="https://example.com/controls.js"></script>',
+    "</head><body><canvas></canvas>",
+    '<button onclick="draw()">Rotate</button>',
+    '<input type="range" aria-label="Zoom">',
+    '<script>function draw() { document.querySelector("canvas").dataset.ready = "true"; } draw();</script>',
+    '<script type="module">import * as THREE from "three";</script>',
+    "</body></html>",
+  ].join("\n");
+
+  it.each(["scene.html", "scene.htm"])(
+    "preserves scripts, module imports, and controls in %s",
+    (filePath) => {
+      render(<FilePreview filePath={filePath} content={content} />);
+
+      expect(screen.getByTitle("files.htmlPreview")).toHaveAttribute(
+        "srcdoc",
+        content,
+      );
+    },
+  );
+
+  it("allows scripts while keeping the preview isolated and focusable", () => {
+    render(<FilePreview filePath="scene.html" content={content} />);
+
+    const frame = screen.getByTitle("files.htmlPreview");
+    expect(frame).toHaveAttribute("sandbox", "allow-scripts");
+    expect(frame).not.toHaveAttribute("tabindex", "-1");
+  });
+
+  it("updates the runnable document when the file content changes", () => {
+    const { rerender } = render(
+      <FilePreview filePath="scene.html" content={content} />,
+    );
+    const nextContent = content.replace("Rotate", "Orbit");
+
+    rerender(<FilePreview filePath="scene.html" content={nextContent} />);
+
+    expect(screen.getByTitle("files.htmlPreview")).toHaveAttribute(
+      "srcdoc",
+      nextContent,
+    );
+  });
+});
+
 // ---------------------------------------------------------------------------
 // getPreviewType / isPreviewable — regression for #5863
 // (Coding session images were not displayed because image files did not

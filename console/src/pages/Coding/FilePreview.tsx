@@ -5,7 +5,7 @@
  *   • image  – PNG / JPG / GIF / WebP / SVG / ICO / BMP
  *   • pdf    – inline <embed>
  *   • markdown – react-markdown with GFM
- *   • html   – read-only sandboxed document
+ *   • html   – interactive sandboxed document
  *   • csv    – parsed table
  */
 
@@ -342,41 +342,6 @@ function MarkdownPreview({ content }: { content: string }) {
   );
 }
 
-function buildReadOnlyHtml(content: string): string {
-  const document = new DOMParser().parseFromString(content, "text/html");
-  document
-    .querySelectorAll("script, meta[http-equiv='refresh']")
-    .forEach((element) => element.remove());
-  document.querySelectorAll("*").forEach((element) => {
-    Array.from(element.attributes).forEach((attribute) => {
-      if (attribute.name.toLowerCase().startsWith("on")) {
-        element.removeAttribute(attribute.name);
-      }
-    });
-    element.removeAttribute("contenteditable");
-  });
-  document.querySelectorAll("a").forEach((element) => {
-    element.removeAttribute("href");
-    element.removeAttribute("target");
-    element.removeAttribute("download");
-  });
-  document.querySelectorAll("form").forEach((element) => {
-    element.removeAttribute("action");
-    element.removeAttribute("method");
-  });
-  document
-    .querySelectorAll("button, input, select, textarea")
-    .forEach((element) => element.setAttribute("disabled", ""));
-
-  const style = document.createElement("style");
-  style.textContent = [
-    "a, button, input, select, textarea, form, iframe, object, embed,",
-    "audio, video, [contenteditable] { pointer-events: none !important; }",
-  ].join(" ");
-  document.head.appendChild(style);
-  return `<!doctype html>\n${document.documentElement.outerHTML}`;
-}
-
 function HtmlPreview({
   content,
   filePath,
@@ -386,7 +351,6 @@ function HtmlPreview({
   workspaceBacked,
 }: FilePreviewProps) {
   const { t } = useTranslation();
-  const readOnlyHtml = useMemo(() => buildReadOnlyHtml(content), [content]);
 
   return (
     <div className={styles.htmlWrap}>
@@ -409,11 +373,11 @@ function HtmlPreview({
           {t("files.openHtmlInBrowser")}
         </button>
       </div>
+      {/* Omitting allow-same-origin keeps scripts isolated from the app. */}
       <iframe
         className={styles.htmlFrame}
-        srcDoc={readOnlyHtml}
-        sandbox=""
-        tabIndex={-1}
+        srcDoc={content}
+        sandbox="allow-scripts"
         title={t("files.htmlPreview")}
       />
     </div>
