@@ -503,7 +503,7 @@ export function AgentModelSettings({
                       : "modelSelector.saveAgentSettings",
                   )}
                   disabled={saving}
-                  onClick={save}
+                  onClick={() => void save()}
                 >
                   {saving ? (
                     <LoaderCircle size={14} className={styles.spinning} />

@@ -1,7 +1,6 @@
 import { renderWithProviders } from "@/test/common_setup";
 import { useAgentStore } from "@/stores/agentStore";
 import { screen, waitFor } from "@testing-library/react";
-import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiMocks = vi.hoisted(() => ({
