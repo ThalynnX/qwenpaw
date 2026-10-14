@@ -84,7 +84,9 @@ def try_bind_port(host: str, port: int) -> socket.socket | None:
         else:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind((host, port))
-        sock.listen(1)
+        # Winsock retains the first listen backlog when asyncio later takes
+        # over this socket. Allow the console's parallel asset connections.
+        sock.listen(socket.SOMAXCONN)
         return sock
     except OSError:
         if sock is not None:
