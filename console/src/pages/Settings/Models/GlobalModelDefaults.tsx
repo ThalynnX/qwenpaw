@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ModelDefaultRow } from "./ModelDefaultRow";
+import { ModelChoice } from "../../Chat/ModelSelector/ModelChoice";
 import { providerApi } from "@/api/modules/provider";
 import type {
   ActiveModelsInfo,
@@ -44,15 +44,43 @@ export function GlobalModelDefaults({
         const slot =
           activeModels?.default_models?.[type] ??
           (type === "chat" ? activeModels?.active_llm : null);
+        const provider = providers.find(
+          (item) => item.id === slot?.provider_id,
+        );
+        const model = [
+          ...(provider?.models ?? []),
+          ...(provider?.extra_models ?? []),
+        ].find((item) => item.id === slot?.model);
+        const label = t(
+          type === "chat"
+            ? "models.defaultChatModel"
+            : "models.defaultDecisionModel",
+        );
         return (
-          <ModelDefaultRow
-            key={type}
-            modelType={type}
-            value={slot}
-            providers={providers}
-            disabled={saving || !activeModels}
-            onChange={(value) => void save(type, value)}
-          />
+          <div className={styles.defaultModelRow} key={type}>
+            <span>{label}</span>
+            <ModelChoice
+              ariaLabel={label}
+              modelType={type}
+              value={slot}
+              label={model?.name || slot?.model || t("models.noDefaultModel")}
+              description={
+                provider?.name ||
+                slot?.provider_id ||
+                t("models.noDefaultModel")
+              }
+              disabled={saving || !activeModels}
+              onChange={(value) => void save(type, value)}
+              resetOption={
+                type === "decision" && slot
+                  ? {
+                      label: t("common.clear"),
+                      onReset: () => void save(type, null),
+                    }
+                  : undefined
+              }
+            />
+          </div>
         );
       })}
     </div>

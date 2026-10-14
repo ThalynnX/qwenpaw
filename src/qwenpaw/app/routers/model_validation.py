@@ -4,7 +4,6 @@
 from fastapi import HTTPException
 
 from ...config.config import ModelType
-from ...exceptions import AppBaseException
 from ...providers.provider_manager import ProviderManager
 
 
@@ -30,18 +29,11 @@ def validate_model_slot(
             ),
         )
     model_info = provider.get_model_info(model_id)
-    if model_type != "chat" and (
-        model_info is None or model_info.model_type != model_type
-    ):
+    if model_info is not None and model_info.model_type != model_type:
         raise HTTPException(
             status_code=400,
             detail=f"Model '{model_id}' is not a {model_type} model.",
         )
-    try:
-        if model_type == "chat":
-            provider.validate_chat_model(model_id)
-    except AppBaseException as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if model_info and model_info.availability_status in {
         "permission_denied",
         "model_not_found",

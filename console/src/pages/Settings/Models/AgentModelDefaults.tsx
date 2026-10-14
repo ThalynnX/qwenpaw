@@ -1,225 +1,37 @@
-import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Tooltip } from "antd";
-import { RotateCcw } from "lucide-react";
 import { InteractiveCard } from "@/components/interaction/InteractiveCard";
-import { agentsApi } from "@/api/modules/agents";
-import type {
-  ActiveModelsInfo,
-  AgentModelSettingsPatch,
-  AgentProfileConfig,
-  ProviderInfo,
-  ModelSlotConfig,
-} from "@/api/types";
+import type { ActiveModelsInfo, ProviderInfo } from "@/api/types";
 import { useAgentStore } from "@/stores/agentStore";
-import { useAppMessage } from "@/hooks/useAppMessage";
 import { AgentModelSettings } from "../../Chat/ModelSelector/AgentModelSettings";
 import { buildEligibleProviders } from "../../Chat/ModelSelector/modelSelectorModels";
-import { ModelChoice } from "../../Chat/ModelSelector/ModelChoice";
-import selectorStyles from "../../Chat/ModelSelector/index.module.less";
 import styles from "./AgentModelDefaults.module.less";
 
-type ModelSettings = Required<AgentModelSettingsPatch>;
-type Props = {
-  providers: ProviderInfo[];
-  activeModels: ActiveModelsInfo | null;
-};
-
-function modelSettings(config: AgentProfileConfig): ModelSettings {
-  return {
-    active_model: config.active_model ?? null,
-    fallback_models: config.fallback_models ?? [],
-    fallback_policy: config.fallback_policy ?? {
-      enabled: true,
-      target_scope: "configured",
-    },
-    subagent_model: config.subagent_model ?? null,
-    thinking_level: config.thinking_level ?? "inherit",
-    thinking_budget: config.thinking_budget ?? null,
-    decision_model: config.decision_model ?? null,
-  };
-}
-
-export function AgentModelDefaults(props: Props) {
-  const agentId = useAgentStore((state) => state.selectedAgent);
-  return <AgentModelEditor key={agentId} agentId={agentId} {...props} />;
-}
-
-function AgentModelChoice({
-  value,
-  disabled,
-  onChange,
-}: {
-  value?: ModelSlotConfig | null;
-  disabled?: boolean;
-  onChange: (value: ModelSlotConfig | null) => void;
-}) {
-  const { t } = useTranslation();
-  const followGlobal = t("thinkingControl.modelSource.global");
-  return (
-    <div className={styles.choice}>
-      <span>{t("agent.model")}</span>
-      <ModelChoice
-        ariaLabel={t("agent.model")}
-        value={value}
-        label={value?.model || followGlobal}
-        disabled={disabled}
-        onChange={onChange}
-      />
-      <Tooltip title={followGlobal}>
-        <button
-          type="button"
-          disabled={disabled || !value}
-          aria-label={followGlobal}
-          onClick={() => onChange(null)}
-        >
-          <RotateCcw size={16} />
-        </button>
-      </Tooltip>
-    </div>
-  );
-}
-
-function AgentModelEditor({
-  agentId,
+export function AgentModelDefaults({
   providers,
   activeModels,
-}: Props & { agentId: string }) {
+}: {
+  providers: ProviderInfo[];
+  activeModels: ActiveModelsInfo | null;
+}) {
   const { t } = useTranslation();
-  const { message } = useAppMessage();
-  const updateAgent = useAgentStore((state) => state.updateAgent);
-  const [config, setConfig] = useState<AgentProfileConfig | null>(null);
-  const [error, setError] = useState<string>();
-  const [saving, setSaving] = useState(false);
-  const [draftResetToken, setDraftResetToken] = useState(0);
-  const [loadRevision, setLoadRevision] = useState(0);
-  const mounted = useRef(false);
-  const chatProviders = useMemo(
-    () => buildEligibleProviders(providers),
-    [providers],
-  );
-
-  useEffect(() => {
-    mounted.current = true;
-    let cancelled = false;
-    setError(undefined);
-    void agentsApi
-      .getAgent(agentId)
-      .then((next) => {
-        if (cancelled) return;
-        setConfig(next);
-      })
-      .catch((reason) => {
-        if (!cancelled) setError(String(reason));
-      });
-    return () => {
-      cancelled = true;
-      mounted.current = false;
-    };
-  }, [agentId, loadRevision]);
-
-  if (config?.backend && config.backend !== "qwenpaw") return null;
-
-  const settings = config && modelSettings(config);
-  const chatModel =
-    config?.active_model ??
-    activeModels?.default_models?.chat ??
-    activeModels?.active_llm;
-  const decisionModel = settings?.decision_model;
-  const decisionProvider = providers.find(
-    (provider) => provider.id === decisionModel?.provider_id,
-  );
-  const decisionInfo = [
-    ...(decisionProvider?.models ?? []),
-    ...(decisionProvider?.extra_models ?? []),
-  ].find((model) => model.id === decisionModel?.model);
-  async function save(patch: AgentModelSettingsPatch) {
-    if (!settings || saving) return;
-    const changes: AgentModelSettingsPatch = Object.fromEntries(
-      Object.entries(patch).filter(
-        ([key, value]) =>
-          JSON.stringify(value) !==
-          JSON.stringify(settings[key as keyof ModelSettings]),
-      ),
-    );
-    if (!Object.keys(changes).length) return;
-    setSaving(true);
-    try {
-      const updated = await agentsApi.updateModelSettings(agentId, changes);
-      if (!mounted.current) return;
-      setConfig(updated);
-      if ("active_model" in changes)
-        updateAgent(agentId, { active_model: updated.active_model });
-    } catch (reason) {
-      if (mounted.current) message.error(String(reason));
-    } finally {
-      if (mounted.current) {
-        setDraftResetToken((value) => value + 1);
-        setSaving(false);
-      }
-    }
-  }
-
+  const agentId = useAgentStore((state) => state.selectedAgent);
   return (
     <InteractiveCard
       as="section"
       tilt={0}
-      className={`${styles.section} ${selectorStyles.settingsSurface}`}
+      className={styles.section}
       aria-label={t("models.agentDefaults")}
     >
-      {error ? (
-        <div role="alert">
-          {error}
-          <button
-            type="button"
-            onClick={() => setLoadRevision((value) => value + 1)}
-          >
-            {t("common.retry")}
-          </button>
-        </div>
-      ) : !settings ? (
-        <p role="status">{t("modelSelector.loadingAgentSettings")}</p>
-      ) : (
-        <div className={styles.editor}>
-          <AgentModelChoice
-            value={settings.active_model}
-            disabled={saving}
-            onChange={(value) => void save({ active_model: value })}
-          />
-          <AgentModelSettings
-            expanded
-            surface="settings"
-            disabled={saving}
-            initialConfig={settings}
-            draftResetToken={draftResetToken}
-            onDraftChange={(value) => void save(value)}
-            providers={chatProviders}
-            activeProviderId={chatModel?.provider_id}
-            activeModelId={chatModel?.model}
-          />
-          <div className={selectorStyles.settingLine}>
-            <span>{t("models.defaultDecisionModel")}</span>
-            <ModelChoice
-              ariaLabel={t("models.defaultDecisionModel")}
-              modelType="decision"
-              value={decisionModel}
-              label={
-                decisionModel
-                  ? `${decisionProvider?.name ?? decisionModel.provider_id} / ${
-                      decisionInfo?.name ?? decisionModel.model
-                    }`
-                  : t("modelSelector.noFallback")
-              }
-              disabled={saving}
-              resetOption={{
-                label: t("modelSelector.noFallback"),
-                onReset: () => void save({ decision_model: null }),
-              }}
-              onChange={(model) => void save({ decision_model: model })}
-            />
-          </div>
-        </div>
-      )}
+      <AgentModelSettings
+        key={agentId}
+        agentId={agentId}
+        expanded
+        surface="settings"
+        providers={buildEligibleProviders(providers)}
+        decisionProviders={buildEligibleProviders(providers, "decision")}
+        activeProviderId={activeModels?.active_llm?.provider_id}
+        activeModelId={activeModels?.active_llm?.model}
+      />
     </InteractiveCard>
   );
 }

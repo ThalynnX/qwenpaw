@@ -82,6 +82,7 @@ class TestValidateModelSlot:
         provider = MagicMock()
         provider.has_model.return_value = True
         provider.get_model_info.return_value = SimpleNamespace(
+            model_type="chat",
             availability_status="permission_denied",
             availability_message="no access",
         )
@@ -96,6 +97,7 @@ class TestValidateModelSlot:
         provider = MagicMock()
         provider.has_model.return_value = True
         provider.get_model_info.return_value = SimpleNamespace(
+            model_type="chat",
             availability_status="model_not_found",
             availability_message=None,
         )
@@ -109,6 +111,7 @@ class TestValidateModelSlot:
         provider = MagicMock()
         provider.has_model.return_value = True
         provider.get_model_info.return_value = SimpleNamespace(
+            model_type="chat",
             availability_status="available",
             availability_message=None,
         )

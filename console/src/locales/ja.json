@@ -1911,8 +1911,6 @@
     "defaultChatModel": "チャットモデル",
     "defaultDecisionModel": "判定モデル",
     "noDefaultModel": "未設定",
-    "followGlobal": "グローバル設定に従う",
-    "agentOverride": "このエージェントのみ",
     "defaultLlm": "デフォルト LLM",
     "llmDescription": "ここではグローバル既定の LLM モデルを設定します。Chat ページでは各 Agent ごとに使用するモデルを個別に選択できます。",
     "configureProvider": "{{name}} を設定",

@@ -741,31 +741,27 @@ async def _decision_settings(workspace, override: bool | None) -> dict:
 @router.get("/decision-settings")
 async def get_decision_settings(
     chat_id: str | None = None,
-    override: bool | None = None,
     mgr: ChatManager = Depends(get_chat_manager),
     workspace=Depends(get_workspace),
 ):
-    """Read effective settings or preview a not-yet-created session."""
+    """Read session preferences, falling back to the agent's default."""
     chat = await mgr.get_chat(chat_id) if chat_id else None
     if chat_id and chat is None:
         raise HTTPException(404, "Chat not found")
 
     runtime = (chat.meta.get("runtime_context") or {}) if chat else {}
-    return await _decision_settings(
-        workspace,
-        override if override is not None else runtime.get("decision_enabled"),
-    )
+    return await _decision_settings(workspace, runtime.get("decision_enabled"))
 
 
 @router.put("/decision-settings")
 @router.put("/{chat_id}/decision-settings")
 async def set_decision_settings(
     chat_id: str | None = None,
-    enabled: bool | None = Body(None, strict=True),
+    enabled: bool = Body(..., strict=True),
     mgr: ChatManager = Depends(get_chat_manager),
     workspace=Depends(get_workspace),
 ):
-    """Save an override, clear it with null, or validate a new session draft."""
+    """Save a session preference or validate a new session draft."""
     if chat_id and await mgr.get_chat(chat_id) is None:
         raise HTTPException(404, "Chat not found")
     settings = await _decision_settings(workspace, enabled)

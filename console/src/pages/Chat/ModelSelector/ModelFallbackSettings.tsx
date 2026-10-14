@@ -1,19 +1,17 @@
 import { useTranslation } from "react-i18next";
-import type { ModelSlotConfig, ModelType, ProviderInfo } from "@/api/types";
+import type { ModelSlotConfig, ProviderInfo } from "@/api/types";
 import { ModelChoice } from "./ModelChoice";
 import styles from "./index.module.less";
 
 export function ModelFallbackSettings({
   models,
   enabled,
-  modelType = "chat",
   providers,
   disabled,
   onChange,
 }: {
   models: ModelSlotConfig[];
   enabled: boolean;
-  modelType?: ModelType;
   providers: Pick<ProviderInfo, "id" | "name" | "models">[];
   disabled?: boolean;
   onChange: (models: ModelSlotConfig[], enabled: boolean) => void;
@@ -32,7 +30,6 @@ export function ModelFallbackSettings({
             <span>{t("modelSelector.chooseFallback")}</span>
             <ModelChoice
               ariaLabel={t("modelSelector.chooseFallback")}
-              modelType={modelType}
               value={slot}
               label={
                 slot

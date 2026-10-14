@@ -121,159 +121,93 @@ async def test_persistence_isolation_and_first_send_do_not_change_runtime(
     third = await _persist_pending_model_settings(
         workspace, third, {"session_decision_enabled": True}
     )
-    view = await api.get_decision_settings(third.id, None, manager, workspace)
+    view = await api.get_decision_settings(third.id, manager, workspace)
     assert view == {"configured": False, "enabled": False, "override": True}
-    await api.set_decision_settings(first.id, None, manager, workspace)
-    runtime = (await manager.get_chat(first.id)).meta["runtime_context"]
-    assert runtime == {"model": selected}
 
 
-def test_settings_api_defaults_validation_and_missing_chat(
-    tmp_path,
-    agent_configs,
-):
+@pytest.fixture
+def client(tmp_path, agent_configs):
     manager = ChatManager(repo=JsonChatRepository(tmp_path / "chats.json"))
     workspace = SimpleNamespace(chat_manager=manager, agent_id="a")
     app = FastAPI()
     app.include_router(api.router)
     app.dependency_overrides[api.get_chat_manager] = lambda: manager
     app.dependency_overrides[api.get_workspace] = lambda: workspace
-    with TestClient(app) as client:
-        assert client.get("/chats/decision-settings").json() == {
-            "configured": True,
-            "enabled": True,
-            "override": None,
-        }
-        assert client.put("/chats/decision-settings", json=False).json() == {
-            "configured": True,
-            "enabled": False,
-            "override": False,
-        }
-        chat = client.post(
-            "/chats", json={"session_id": "s", "user_id": "u"}
-        ).json()
-        assert "decision_enabled" not in chat["meta"].get(
-            "runtime_context", {}
-        )
-        url = f"/chats/{chat['id']}/decision-settings"
-        assert client.put(url, json=True).status_code == 200
-        assert client.get(
-            "/chats/decision-settings", params={"chat_id": chat["id"]}
-        ).json() == {"configured": True, "enabled": True, "override": True}
-        assert client.put(url, json="true").status_code == 422
-        assert (
-            client.put(
-                "/chats/missing/decision-settings", json=True
-            ).status_code
-            == 404
-        )
-        assert (
-            client.get("/chats/decision-settings?chat_id=missing").status_code
-            == 404
-        )
-        assert client.put(url, json=None).json() == {
-            "configured": True,
-            "enabled": True,
-            "override": None,
-        }
+    with TestClient(app) as result:
+        yield result
 
 
-def test_inheritance_tracks_agent_changes_and_overrides_remain_local(
-    tmp_path,
-    agent_configs,
-    provider_manager,
+def test_api_inheritance_and_session_isolation(
+    client, agent_configs, provider_manager
 ):
-    manager = ChatManager(repo=JsonChatRepository(tmp_path / "chats.json"))
-    workspace = SimpleNamespace(chat_manager=manager, agent_id="a")
-    app = FastAPI()
-    app.include_router(api.router)
-    app.dependency_overrides[api.get_chat_manager] = lambda: manager
-    app.dependency_overrides[api.get_workspace] = lambda: workspace
-    with TestClient(app) as client:
-        first = client.post(
-            "/chats", json={"session_id": "one", "user_id": "u"}
-        ).json()
-        second = client.post(
-            "/chats", json={"session_id": "two", "user_id": "u"}
-        ).json()
-        url = f"/chats/{first['id']}/decision-settings"
-        assert client.put(url, json=False).json()["enabled"] is False
-        assert (
+    assert client.get("/chats/decision-settings").json() == {
+        "configured": True,
+        "enabled": True,
+        "override": None,
+    }
+    assert (
+        client.put("/chats/decision-settings", json=False).json()["enabled"]
+        is False
+    )
+    chats = [
+        client.post("/chats", json={"session_id": name, "user_id": "u"}).json()
+        for name in ("one", "two")
+    ]
+    assert all(
+        "decision_enabled" not in chat["meta"].get("runtime_context", {})
+        for chat in chats
+    )
+    url = f"/chats/{chats[0]['id']}/decision-settings"
+
+    def views():
+        return [
             client.get(
-                "/chats/decision-settings", params={"chat_id": second["id"]}
-            ).json()["enabled"]
-            is True
-        )
-        selected = agent_configs["a"].decision_model
-        agent_configs["a"].decision_model = None
-        assert client.get(
-            "/chats/decision-settings", params={"chat_id": second["id"]}
-        ).json() == {
-            "configured": False,
-            "enabled": False,
-            "override": None,
-        }
-        assert client.put(url, json=True).status_code == 422
-        assert (
-            client.put("/chats/decision-settings", json=True).status_code
-            == 422
-        )
-        assert (
-            client.get(
-                "/chats/decision-settings", params={"chat_id": first["id"]}
-            ).json()["override"]
-            is False
-        )
-        agent_configs["a"].decision_model = selected
-        assert (
-            client.get(
-                "/chats/decision-settings", params={"chat_id": first["id"]}
-            ).json()["enabled"]
-            is False
-        )
-        assert (
-            client.get(
-                "/chats/decision-settings", params={"chat_id": second["id"]}
-            ).json()["enabled"]
-            is True
-        )
-        assert client.put(url, json=None).json()["enabled"] is True
-        workspace.agent_id = "b"
-        assert client.get("/chats/decision-settings").json() == {
-            "configured": False,
-            "enabled": False,
-            "override": None,
-        }
-        workspace.agent_id = "a"
-        agent_configs["a"].decision_model = None
-        provider_manager.get_default_model.return_value = selected
-        assert client.get("/chats/decision-settings").json() == {
-            "configured": True,
-            "enabled": False,
-            "override": None,
-        }
-        assert client.put(url, json=True).json() == {
-            "configured": True,
-            "enabled": True,
-            "override": True,
-        }
-        assert (
-            client.get(
-                "/chats/decision-settings", params={"chat_id": first["id"]}
-            ).json()["enabled"]
-            is True
-        )
-        assert (
-            client.get(
-                "/chats/decision-settings", params={"chat_id": second["id"]}
-            ).json()["enabled"]
-            is False
-        )
-        assert agent_configs["a"].decision_model is None
-        assert client.put(url, json=None).json() == {
-            "configured": True,
-            "enabled": False,
-            "override": None,
-        }
-        provider_manager.get_default_model.return_value = None
-        assert client.put(url, json=True).status_code == 422
+                "/chats/decision-settings", params={"chat_id": chat["id"]}
+            ).json()
+            for chat in chats
+        ]
+
+    assert client.put(url, json=False).status_code == 200
+    assert [view["enabled"] for view in views()] == [False, True]
+    selected = agent_configs["a"].decision_model
+    agent_configs["a"].decision_model = None
+    assert [view["enabled"] for view in views()] == [False, False]
+    for endpoint in (url, "/chats/decision-settings"):
+        assert client.put(endpoint, json=True).status_code == 422
+    assert [view["override"] for view in views()] == [False, None]
+    agent_configs["a"].decision_model = selected
+    assert [view["enabled"] for view in views()] == [False, True]
+    agent_configs["a"].decision_model = None
+    provider_manager.get_default_model.return_value = selected
+    assert client.get("/chats/decision-settings").json() == {
+        "configured": True,
+        "enabled": False,
+        "override": None,
+    }
+    assert client.put(url, json=True).status_code == 200
+    assert [view["enabled"] for view in views()] == [True, False]
+    assert agent_configs["a"].decision_model is None
+    provider_manager.get_default_model.return_value = None
+    assert views()[0] == {
+        "configured": False,
+        "enabled": False,
+        "override": True,
+    }
+
+
+@pytest.mark.parametrize("enabled", [None, "true", 1, {}, []])
+def test_api_requires_boolean(client, enabled):
+    assert (
+        client.put("/chats/decision-settings", json=enabled).status_code == 422
+    )
+
+
+def test_api_missing_chat(client):
+    assert (
+        client.get("/chats/decision-settings?chat_id=missing").status_code
+        == 404
+    )
+    assert (
+        client.put("/chats/missing/decision-settings", json=True).status_code
+        == 404
+    )

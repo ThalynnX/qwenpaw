@@ -250,7 +250,7 @@ describe("ModelSelector", () => {
     expect(providerApi.setActiveLlm).not.toHaveBeenCalled();
   });
 
-  it("filters fallback candidates by model type without activating the chat model", async () => {
+  it("keeps decision models out of chat fallbacks", async () => {
     const provider = {
       ...mockProvider,
       models: [
@@ -269,7 +269,6 @@ describe("ModelSelector", () => {
       <ModelFallbackSettings
         models={[]}
         enabled={false}
-        modelType="decision"
         providers={[provider]}
         onChange={change}
       />,
@@ -277,11 +276,11 @@ describe("ModelSelector", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "modelSelector.chooseFallback" }),
     );
-    const option = await screen.findByText("JEV");
-    expect(screen.queryByText("GPT-4")).not.toBeInTheDocument();
+    const option = await screen.findByText("GPT-4");
+    expect(screen.queryByText("JEV")).not.toBeInTheDocument();
     fireEvent.click(option);
     expect(change).toHaveBeenCalledWith(
-      [{ provider_id: "openai", model: "jev" }],
+      [{ provider_id: "openai", model: "gpt-4" }],
       true,
     );
     expect(providerApi.setActiveLlm).not.toHaveBeenCalled();

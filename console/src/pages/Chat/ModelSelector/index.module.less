@@ -843,7 +843,6 @@
 .panel,
 .trigger,
 .oauthModalContent,
-.settingsSurface,
 .agentModelSettings,
 .agentSelectDropdown {
   .model-surface-tokens();
@@ -1651,13 +1650,9 @@
 }
 
 .agentModelSettings[data-surface="settings"] {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--app-border-subtle);
-}
-
-.settingsSurface,
-.agentModelSettings[data-surface="settings"] {
+  margin: 0;
+  padding: 8px 0 0;
+  border: 0;
   .agentSettingsBody {
     gap: 6px;
     padding: 0;
@@ -1704,7 +1699,6 @@
 }
 
 @media (max-width: 600px) {
-  .settingsSurface,
   .agentModelSettings[data-surface="settings"] {
     .settingLine {
       align-items: flex-start;
@@ -1719,7 +1713,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .settingsSurface .settingLine,
   .agentModelSettings[data-surface="settings"] .settingLine {
     transition: none;
   }

@@ -456,7 +456,7 @@ class ChatManager:  # pylint: disable=too-many-public-methods
     async def set_session_decision(
         self,
         chat_id: str,
-        enabled: bool | None,
+        enabled: bool,
         *,
         only_if_unset: bool = False,
     ):
@@ -469,10 +469,7 @@ class ChatManager:  # pylint: disable=too-many-public-methods
             runtime = dict(meta.get("runtime_context") or {})
             if only_if_unset and "decision_enabled" in runtime:
                 return existing
-            if enabled is None:
-                runtime.pop("decision_enabled", None)
-            else:
-                runtime["decision_enabled"] = enabled
+            runtime["decision_enabled"] = enabled
             meta["runtime_context"] = runtime
             updated = existing.model_copy(update={"meta": meta})
             updated.updated_at = datetime.now(timezone.utc)

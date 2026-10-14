@@ -453,10 +453,9 @@ def agent_model_client(manager, monkeypatch):
 def test_agent_decision_choice_persists_without_inheriting_global(
     manager, agent_model_client
 ):
-    from qwenpaw.config.config import AgentProfileConfig, ModelSlotConfig
+    from qwenpaw.config.config import AgentProfileConfig
 
     client, saved, chat, decision = agent_model_client
-    assert manager.get_default_model("decision", saved["config"]) is None
     response = client.patch(
         "/agents/bot/model-settings",
         json={
@@ -469,15 +468,7 @@ def test_agent_decision_choice_persists_without_inheriting_global(
         saved["config"].model_dump_json()
     )
     assert restored.decision_model == decision
-    assert manager.get_default_model("decision", restored) == decision
-    assert manager.get_default_model("chat", restored) == chat
     assert manager.default_models == {"chat": chat, "decision": decision}
-    next_global = ModelSlotConfig(provider_id="typesafe", model="jev-latest")
-    manager.default_models["decision"] = next_global
-    assert manager.get_default_model("decision", restored) == decision
-    manager.default_models["decision"] = None
-    assert manager.get_default_model("decision", restored) == decision
-    manager.default_models["decision"] = decision
     response = client.patch(
         "/agents/bot/model-settings", json={"decision_model": None}
     )
@@ -486,8 +477,6 @@ def test_agent_decision_choice_persists_without_inheriting_global(
         saved["config"].model_dump_json()
     )
     assert restored.decision_model is None
-    assert manager.get_default_model("decision", restored) is None
-    assert manager.get_default_model("chat", saved["config"]) == chat
     assert manager.get_default_model("decision") == decision
 
 
@@ -576,8 +565,6 @@ def test_agent_decision_choice_can_differ_from_global(
         saved["config"].model_dump_json()
     )
     assert restored.decision_model == override
-    assert manager.get_default_model("decision", restored) == override
-    assert manager.get_default_model("chat", restored) == chat
     assert manager.get_default_model("decision") == global_decision
 
 

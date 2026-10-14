@@ -15,7 +15,7 @@ from agentscope.model import ChatModelBase
 
 from qwenpaw.exceptions import ModelNotFoundException
 
-from ..config.config import AgentProfileConfig, ModelSlotConfig, ModelType
+from ..config.config import ModelSlotConfig, ModelType
 from ..constant import EnvVarLoader, SECRET_DIR
 from ..exceptions import ProviderError
 from ..utils.logging import sanitize_log_value
@@ -279,14 +279,8 @@ class ProviderManager(
     def get_default_model(
         self,
         model_type: ModelType,
-        agent_config: AgentProfileConfig | None = None,
     ) -> ModelSlotConfig | None:
-        """Resolve agent choices; only chat inherits the global default."""
-        if agent_config is not None:
-            if model_type == "decision":
-                return agent_config.decision_model
-            if model_type == "chat" and agent_config.active_model is not None:
-                return agent_config.active_model
+        """Return the global default for a model type."""
         return (
             self.get_active_model()
             if model_type == "chat"

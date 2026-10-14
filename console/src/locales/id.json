@@ -3669,8 +3669,6 @@
     "defaultChatModel": "Model percakapan",
     "defaultDecisionModel": "Model keputusan",
     "noDefaultModel": "Belum diatur",
-    "followGlobal": "Ikuti pengaturan global",
-    "agentOverride": "Hanya agen ini",
     "defaultLlm": "LLM Default",
     "notConfiguredYet": "Belum dikonfigurasi",
     "llmDescription": "Atur model LLM default global dari penyedia yang diotorisasi. Anda dapat memilih model tertentu untuk setiap Agen di halaman Chat.",

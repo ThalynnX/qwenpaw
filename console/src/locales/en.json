@@ -2557,8 +2557,6 @@
     "defaultChatModel": "Chat model",
     "defaultDecisionModel": "Decision model",
     "noDefaultModel": "Not set",
-    "followGlobal": "Follow global",
-    "agentOverride": "This agent only",
     "defaultLlm": "Default LLM",
     "notConfiguredYet": "Not configured",
     "llmDescription": "Set the global default LLM model from an authorized provider. You can choose a specific model for each Agent in the Chat page.",

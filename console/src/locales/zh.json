@@ -2417,8 +2417,6 @@
     "defaultChatModel": "对话模型",
     "defaultDecisionModel": "决策模型",
     "noDefaultModel": "未设置",
-    "followGlobal": "跟随全局",
-    "agentOverride": "仅此智能体",
     "defaultLlm": "默认LLM",
     "notConfiguredYet": "尚未配置",
     "llmDescription": "在这里设置全局默认的 LLM 模型。你也可以在聊天页面为具体 Agent 单独选择使用的模型。",

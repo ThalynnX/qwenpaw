@@ -55,29 +55,30 @@ export async function loadDecisionSettings(
   const pending = readPendingDecision(agent, scope.sessionId);
   const query = new URLSearchParams();
   if (scope.chatId) query.set("chat_id", scope.chatId);
-  else if (pending !== null) query.set("override", String(pending));
   const settings = await request<DecisionSettings>(
     `/chats/decision-settings${query.size ? `?${query}` : ""}`,
     { headers: { "X-Agent-Id": agent } },
   );
-  if (!scope.chatId || pending === null) return settings;
+  if (pending === null) return settings;
   if (
+    scope.chatId &&
     settings.override === pending &&
     readPendingDecision(agent, scope.sessionId) === pending
   ) {
     clearPendingDecision(agent, scope.sessionId);
     return settings;
   }
-  return request<DecisionSettings>(
-    `/chats/decision-settings?override=${pending}`,
-    { headers: { "X-Agent-Id": agent } },
-  );
+  return {
+    ...settings,
+    override: pending,
+    enabled: settings.configured && pending,
+  };
 }
 
 export async function saveDecisionSettings(
   agent: string,
   scope: SessionModelScope,
-  enabled: boolean | null,
+  enabled: boolean,
 ) {
   const settings = await request<DecisionSettings>(
     scope.chatId
@@ -89,8 +90,7 @@ export async function saveDecisionSettings(
       body: JSON.stringify(enabled),
     },
   );
-  if (scope.chatId || enabled === null)
-    clearPendingDecision(agent, scope.sessionId);
+  if (scope.chatId) clearPendingDecision(agent, scope.sessionId);
   else sessionStorage.setItem(key(agent, scope.sessionId), String(enabled));
   return settings;
 }

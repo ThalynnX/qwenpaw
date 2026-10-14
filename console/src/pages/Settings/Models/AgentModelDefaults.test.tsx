@@ -212,7 +212,7 @@ it("keeps the saved decision value after a failure and allows retry", async () =
   });
   await selectDecision(true);
   await waitFor(() => expect(toggle).toBeEnabled());
-  expect(await screen.findByText("Error: save failed")).toBeInTheDocument();
+  expect(await screen.findByText("save failed")).toBeInTheDocument();
   expect(toggle).toHaveTextContent("modelSelector.noFallback");
   await selectDecision(true);
   await waitFor(() => expect(toggle).toHaveTextContent("mixed / decision"));

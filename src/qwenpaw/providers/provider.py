@@ -718,18 +718,17 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
                     ordered_ids.append(model.id)
                 by_id[model.id] = model
         for configured in self.models:
-            if configured.id in by_id:
+            if configured.id in by_id and getattr(
+                configured,
+                f"config_overrides",
+                [],
+            ):
                 overrides = {
                     field: getattr(configured, field)
-                    for field in getattr(configured, "config_overrides", [])
+                    for field in configured.config_overrides
                     if field in ModelInfo.model_fields
                 }
-                overrides.update(
-                    model_type=configured.model_type,
-                    config_overrides=getattr(
-                        configured, "config_overrides", []
-                    ),
-                )
+                overrides[f"config_overrides"] = configured.config_overrides
                 by_id[configured.id] = by_id[configured.id].model_copy(
                     update=overrides,
                 )

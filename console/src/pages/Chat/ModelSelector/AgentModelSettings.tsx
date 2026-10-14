@@ -18,13 +18,16 @@ import { useTranslation } from "react-i18next";
 
 import { agentsApi } from "@/api/modules/agents";
 import type {
+  AgentModelSettingsPatch,
   AgentProfileConfig,
   ModelInfo,
   ModelSlotConfig,
 } from "@/api/types";
 import { useAppMessage } from "@/hooks/useAppMessage";
+import { useAgentStore } from "@/stores/agentStore";
 
 import styles from "./index.module.less";
+import settingsStyles from "../../Settings/Models/AgentModelDefaults.module.less";
 
 interface SettingsProvider {
   id: string;
@@ -37,6 +40,7 @@ interface AgentModelSettingsProps {
   disabled?: boolean;
   agentId?: string;
   providers: SettingsProvider[];
+  decisionProviders?: SettingsProvider[];
   activeProviderId?: string;
   activeModelId?: string;
   showThinking?: boolean;
@@ -86,6 +90,7 @@ export function AgentModelSettings({
   expanded = false,
   disabled = false,
   providers,
+  decisionProviders,
   activeProviderId,
   activeModelId,
   showThinking = true,
@@ -96,6 +101,8 @@ export function AgentModelSettings({
 }: AgentModelSettingsProps) {
   const { t } = useTranslation();
   const { message } = useAppMessage();
+  const updateAgent = useAgentStore((state) => state.updateAgent);
+  const autoSave = surface === "settings" && !!agentId;
   const [open, setOpen] = useState(!agentId);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -154,10 +161,20 @@ export function AgentModelSettings({
     return slots;
   }, [config, options]);
   const activeOption = optionByKey.get(
-    slotKey(activeProviderId ?? "", activeModelId ?? ""),
+    slotKey(
+      config?.active_model?.provider_id ?? activeProviderId ?? "",
+      config?.active_model?.model ?? activeModelId ?? "",
+    ),
   );
   const thinkingSupported = activeOption?.supportsThinking ?? false;
   function applyConfig(next: AgentProfileConfig, targetAgentId: string): void {
+    next = {
+      fallback_models: [],
+      subagent_model: null,
+      thinking_level: "inherit",
+      thinking_budget: null,
+      ...next,
+    };
     configAgentId.current = targetAgentId;
     setConfig(next);
     setFallbackEnabled(next.fallback_policy?.enabled ?? true);
@@ -202,6 +219,10 @@ export function AgentModelSettings({
     setLoading(false);
     setSaving(false);
     setOpen(false);
+    return () => {
+      loadRevision.current += 1;
+      saveRevision.current += 1;
+    };
   }, [agentId]);
 
   const loadConfig = async (force = false) => {
@@ -262,12 +283,12 @@ export function AgentModelSettings({
     subagentKey?: string;
     thinking?: ThinkingPreference;
   } = {}): void {
-    if (agentId || !onDraftChange || !config) return;
+    if (!config || (agentId && !autoSave)) return;
     const fallbackModels = nextFallbackKeys.flatMap((key) => {
       const slot = slotByKey.get(key);
       return slot ? [slot] : [];
     });
-    onDraftChange({
+    const settings = {
       fallback_models: fallbackModels,
       fallback_policy: {
         enabled: nextFallbackEnabled,
@@ -276,12 +297,26 @@ export function AgentModelSettings({
       subagent_model: slotByKey.get(nextSubagentKey) ?? null,
       thinking_level: nextThinking.level,
       thinking_budget: nextThinking.budget_tokens ?? null,
-    });
+    };
+    if (autoSave) void save(settings);
+    else onDraftChange?.(settings);
   }
 
-  const save = async () => {
+  const save = async (patch?: AgentModelSettingsPatch) => {
     if (!agentId || !config || saving || configAgentId.current !== agentId) {
       return;
+    }
+    if (patch) {
+      patch = Object.fromEntries(
+        Object.entries(patch).filter(
+          ([key, value]) =>
+            JSON.stringify(value ?? null) !==
+            JSON.stringify(
+              config[key as keyof AgentModelSettingsPatch] ?? null,
+            ),
+        ),
+      );
+      if (!Object.keys(patch).length) return;
     }
     const targetAgentId = agentId;
     const revision = ++saveRevision.current;
@@ -308,7 +343,7 @@ export function AgentModelSettings({
       };
       const updated = await agentsApi.updateModelSettings(
         targetAgentId,
-        settings,
+        patch ?? settings,
       );
       if (
         revision !== saveRevision.current ||
@@ -317,7 +352,9 @@ export function AgentModelSettings({
         return;
       }
       applyConfig(updated, targetAgentId);
-      message.success(t("modelSelector.agentSettingsSaved"));
+      if (patch && "active_model" in patch)
+        updateAgent(targetAgentId, { active_model: updated.active_model });
+      if (!autoSave) message.success(t("modelSelector.agentSettingsSaved"));
     } catch (error) {
       if (
         revision !== saveRevision.current ||
@@ -325,6 +362,7 @@ export function AgentModelSettings({
       ) {
         return;
       }
+      if (autoSave) applyConfig(config, targetAgentId);
       message.error(
         error instanceof Error
           ? error.message
@@ -337,6 +375,14 @@ export function AgentModelSettings({
     }
   };
 
+  if (config?.backend && config.backend !== "qwenpaw") return null;
+  const decision = config?.decision_model;
+  const decisionProvider = decisionProviders?.find(
+    (provider) => provider.id === decision?.provider_id,
+  );
+  const decisionInfo = decisionProvider?.models.find(
+    (model) => model.id === decision?.model,
+  );
   return (
     <section className={styles.agentModelSettings} data-surface={surface}>
       {!expanded && (
@@ -370,6 +416,30 @@ export function AgentModelSettings({
             </div>
           ) : (
             <>
+              {autoSave && (
+                <div className={settingsStyles.choice}>
+                  <span>{t("agent.model")}</span>
+                  <ModelChoice
+                    ariaLabel={t("agent.model")}
+                    value={config.active_model}
+                    label={
+                      config.active_model?.model ||
+                      t("thinkingControl.modelSource.global")
+                    }
+                    disabled={busy}
+                    onChange={(active_model) => void save({ active_model })}
+                  />
+                  <button
+                    type="button"
+                    title={t("thinkingControl.modelSource.global")}
+                    aria-label={t("thinkingControl.modelSource.global")}
+                    disabled={busy || !config.active_model}
+                    onClick={() => void save({ active_model: null })}
+                  >
+                    <RotateCcw size={16} />
+                  </button>
+                </div>
+              )}
               {showThinking && (
                 <ThinkingControl
                   tone={surface === "settings" ? "quiet" : "default"}
@@ -431,7 +501,30 @@ export function AgentModelSettings({
                   notifyDraft({ fallbackKeys: keys, fallbackEnabled: enabled });
                 }}
               />
-              {agentId && (
+              {decisionProviders && (
+                <div className={styles.settingLine}>
+                  <span>{t("models.defaultDecisionModel")}</span>
+                  <ModelChoice
+                    ariaLabel={t("models.defaultDecisionModel")}
+                    modelType="decision"
+                    value={decision}
+                    label={
+                      decision
+                        ? `${
+                            decisionProvider?.name ?? decision.provider_id
+                          } / ${decisionInfo?.name ?? decision.model}`
+                        : t("modelSelector.noFallback")
+                    }
+                    disabled={busy}
+                    resetOption={{
+                      label: t("modelSelector.noFallback"),
+                      onReset: () => void save({ decision_model: null }),
+                    }}
+                    onChange={(decision_model) => void save({ decision_model })}
+                  />
+                </div>
+              )}
+              {agentId && !autoSave && (
                 <button
                   type="button"
                   className={styles.saveAgentSettings}
@@ -441,7 +534,7 @@ export function AgentModelSettings({
                       : "modelSelector.saveAgentSettings",
                   )}
                   disabled={busy}
-                  onClick={save}
+                  onClick={() => void save()}
                 >
                   {saving ? (
                     <LoaderCircle size={14} className={styles.spinning} />

@@ -21,45 +21,29 @@ export function SessionAdvancedOptions({
   const [open, setOpen] = useState(false);
   const [settings, setSettings] = useState<DecisionSettings>();
   const [busy, setBusy] = useState(false);
-  const mounted = useRef(false);
   const revision = useRef(0);
   const id = useId();
 
   useEffect(() => {
-    mounted.current = true;
     return () => {
-      mounted.current = false;
+      ++revision.current;
     };
   }, []);
 
-  async function load() {
+  async function update(enabled?: boolean) {
+    if (busy) return;
     const version = ++revision.current;
     setBusy(true);
     try {
-      const next = await loadDecisionSettings(agentId, { sessionId, chatId });
-      if (mounted.current && version === revision.current) setSettings(next);
+      const scope = { sessionId, chatId };
+      const next = await (enabled === undefined
+        ? loadDecisionSettings(agentId, scope)
+        : saveDecisionSettings(agentId, scope, enabled));
+      if (version === revision.current) setSettings(next);
     } catch (error) {
-      if (mounted.current) message.error(String(error));
+      if (version === revision.current) message.error(String(error));
     } finally {
-      if (mounted.current && version === revision.current) setBusy(false);
-    }
-  }
-
-  async function save(enabled: boolean) {
-    if (busy || !settings) return;
-    ++revision.current;
-    setBusy(true);
-    try {
-      const next = await saveDecisionSettings(
-        agentId,
-        { sessionId, chatId },
-        enabled,
-      );
-      if (mounted.current) setSettings(next);
-    } catch (error) {
-      if (mounted.current) message.error(String(error));
-    } finally {
-      if (mounted.current) setBusy(false);
+      if (version === revision.current) setBusy(false);
     }
   }
 
@@ -72,7 +56,7 @@ export function SessionAdvancedOptions({
         aria-controls={id}
         onClick={() => {
           setOpen(!open);
-          if (!open && !busy) void load();
+          if (!open) void update();
         }}
       >
         {t("chat.sessionSettings.advanced")}
@@ -91,7 +75,7 @@ export function SessionAdvancedOptions({
               checked={settings?.enabled ?? false}
               disabled={!settings?.configured || busy}
               loading={busy}
-              onChange={(enabled) => void save(enabled)}
+              onChange={(enabled) => void update(enabled)}
             />
           </div>
         )}
