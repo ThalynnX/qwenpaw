@@ -1,7 +1,30 @@
+import { execFileSync } from "node:child_process";
 import { readFile, readdir, mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import Ajv from "ajv/dist/2020.js";
 
+const baseRef = process.argv[2];
+if (baseRef) {
+  const changes = execFileSync(
+    "git",
+    [
+      "diff",
+      "--name-status",
+      "--no-renames",
+      "--diff-filter=DMRTUXB",
+      baseRef,
+      "HEAD",
+      "--",
+      "website/evaluation/results/*.json",
+    ],
+    {
+      cwd: fileURLToPath(new URL("../../", import.meta.url)),
+      encoding: "utf8",
+    },
+  ).trim();
+  if (changes)
+    throw new Error(`Results are append-only; add a new run JSON:\n${changes}`);
+}
 const root = new URL("../evaluation/", import.meta.url);
 const read = async (url) => JSON.parse(await readFile(url, "utf8"));
 const ajv = new Ajv({ allErrors: true });
@@ -31,6 +54,7 @@ const requireValue = (condition, message) => {
   if (!condition) throw new Error(message);
 };
 const protocols = new Map();
+const boards = new Map();
 const runs = [];
 for (const name of (await readdir(new URL("results/", root)))
   .filter((n) => n.endsWith(".json"))
@@ -38,6 +62,13 @@ for (const name of (await readdir(new URL("results/", root)))
   const input = await read(new URL(`results/${name}`, root));
   requireValue(validate(input), `${name}: ${ajv.errorsText(validate.errors)}`);
   requireValue(name === `${input.id}.json`, `${name}: filename must match id`);
+  const board = JSON.stringify([input.board.name, input.board.group_by]);
+  requireValue(
+    !boards.has(input.board.id) || boards.get(input.board.id) === board,
+    `${name}: inconsistent board metadata`,
+  );
+  boards.set(input.board.id, board);
+  const protocolKey = JSON.stringify([input.board.id, input.index_version]);
   const catalog = new Map(input.benchmarks.map((b) => [b.id, b]));
   requireValue(
     catalog.size === input.benchmarks.length,
@@ -54,11 +85,10 @@ for (const name of (await readdir(new URL("results/", root)))
       })),
   );
   requireValue(
-    !protocols.has(input.index_version) ||
-      protocols.get(input.index_version) === protocol,
+    !protocols.has(protocolKey) || protocols.get(protocolKey) === protocol,
     `${name}: benchmark definitions changed; use a new index_version`,
   );
-  protocols.set(input.index_version, protocol);
+  protocols.set(protocolKey, protocol);
   const identities = new Set();
   const records = input.records.map((r) => {
     const key = JSON.stringify([r.provider, r.model, r.harness]);
@@ -67,10 +97,6 @@ for (const name of (await readdir(new URL("results/", root)))
       `${name}: duplicate model/provider/harness`,
     );
     identities.add(key);
-    requireValue(
-      input.visibility !== "public" || r.harness === "QwenPaw",
-      `${name}: public results must use QwenPaw`,
-    );
     const parts = new Map(r.benchmarks.map((p) => [p.benchmark, p]));
     requireValue(
       parts.size === r.benchmarks.length &&
@@ -120,7 +146,7 @@ for (const name of (await readdir(new URL("results/", root)))
   });
   runs.push({
     schema_version: 1,
-    visibility: input.visibility,
+    board: input.board,
     index_version: input.index_version,
     id: input.id,
     evaluation_sha: input.source_sha,
@@ -131,19 +157,11 @@ for (const name of (await readdir(new URL("results/", root)))
     complete: records.every((r) => r.complete),
   });
 }
-requireValue(
-  new Set(runs.map((r) => r.visibility)).size <= 1,
-  "Public and private results cannot be published together",
-);
 runs.sort((a, b) => b.date.localeCompare(a.date));
 const target = new URL("../public/evaluation/data/", import.meta.url);
 await mkdir(target, { recursive: true });
 await writeFile(
   new URL("index.json", target),
-  JSON.stringify(
-    { schema_version: 1, visibility: runs[0]?.visibility ?? "public", runs },
-    null,
-    2,
-  ) + "\n",
+  JSON.stringify({ schema_version: 1, runs }, null, 2) + "\n",
 );
 console.log(`Evaluation index: ${runs.length} runs → ${fileURLToPath(target)}`);

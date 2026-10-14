@@ -1,6 +1,6 @@
 {
   "evaluation": "Evaluation",
-  "board": "Leaderboard",
+  "board": "Collection",
   "main": "Overall · Equal-weight Index",
   "domainBoards": "Domain leaderboards",
   "benchmarkBoards": "Benchmark leaderboards",

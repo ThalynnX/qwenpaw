@@ -16,11 +16,23 @@ No workflow in this feature starts an agent or provisions compute.
 4. Submit a PR. Merging result changes into `main` triggers the existing website
    deployment. Never edit generated `public/evaluation/data/index.json`.
 
-Use one file per evaluation run; a file can contain several models. Edit the same
-file to replace a run. Use a different ID/file to retain another SDK version or
-historical run. Different protocols are displayed separately. Within one
-`index_version`, benchmark IDs, dataset revisions, domains and expected counts
-must match across files; change the protocol version when changing the suite.
+Use one file per evaluation run; a file can contain several models. Results are
+**append-only**: after merging, never edit, delete or rename a result JSON. Each
+SDK version, rerun or correction gets a new ID and filename; old records remain
+visible. CI compares against the PR base commit and rejects changes to existing
+result files. To check locally, run `node website/scripts/build-evaluation-index.mjs
+<base-commit>`.
+
+Every file declares `board: { "id": "qwenpaw", "name": "QwenPaw", "group_by":
+"model" }`. Files with the same board ID belong to the same collection and must
+use the same name and grouping. `model` highlights the best SDK run per
+provider/model; `model_harness` groups by provider/model/harness. The collection
+selector appears only when JSON contains multiple boards. Domain and benchmark
+options come from the selected collection’s results. There is no visibility toggle.
+
+Different protocols are displayed separately. Within a board and `index_version`,
+benchmark IDs, dataset revisions, domains and expected counts must match across
+files; change the protocol version when changing the suite.
 
 Scores are percentages **0–100**, model costs are **USD per task**, runtime is
 **seconds per task**. A score is publishable only when `scored === expected`;
@@ -44,10 +56,8 @@ A record links to the external trajectory archive and can be downloaded as JSON.
 Schema validation checks structure and consistency, not whether a reported score
 is trustworthy: review the external evidence before merging.
 
-Public files use `visibility: public` and `harness: QwenPaw`. An independently hosted
-private website may use `visibility: private` with other harnesses; highlighting
-then groups by provider/model/harness. Mixing public and private files fails the
-build. **Do not commit private evaluation data to this public repository.**
+All submitted files are published. Board metadata controls presentation, not access
+permissions. Do not commit private evaluation data to this public repository.
 
 ## Preview
 

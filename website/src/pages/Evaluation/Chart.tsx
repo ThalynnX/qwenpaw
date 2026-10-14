@@ -16,14 +16,14 @@ const escape = (value: string) =>
 export default function Chart({
   rows,
   title,
-  privateView,
+  compareHarnesses,
   history,
   demo,
   onSelect,
 }: {
   rows: Row[];
   title: string;
-  privateView: boolean;
+  compareHarnesses: boolean;
   history: boolean;
   demo: boolean;
   onSelect: (row: Row) => void;
@@ -48,7 +48,7 @@ export default function Chart({
       new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 3 }).format(
         value,
       );
-    const best = bestRows(rows, privateView);
+    const best = bestRows(rows, compareHarnesses);
     const shown = rows.filter(
       (r) => r.score !== null && (history || best.has(r.id)),
     );
@@ -275,7 +275,16 @@ export default function Chart({
       observer.disconnect();
       Plotly.purge(element);
     };
-  }, [rows, title, privateView, history, demo, onSelect, t, i18n.language]);
+  }, [
+    rows,
+    title,
+    compareHarnesses,
+    history,
+    demo,
+    onSelect,
+    t,
+    i18n.language,
+  ]);
   return (
     <div
       className="evaluation-plot"

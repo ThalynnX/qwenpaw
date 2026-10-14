@@ -1,10 +1,8 @@
 {
   "schema_version": 1,
-  "visibility": "public",
   "runs": [
     {
       "schema_version": 1,
-      "visibility": "public",
       "index_version": "index-v1",
       "id": "demo-0",
       "evaluation_sha": "demo",
@@ -427,11 +425,15 @@
             }
           ]
         }
-      ]
+      ],
+      "board": {
+        "id": "qwenpaw",
+        "name": "QwenPaw",
+        "group_by": "model"
+      }
     },
     {
       "schema_version": 1,
-      "visibility": "public",
       "index_version": "index-v1",
       "id": "demo-1",
       "evaluation_sha": "demo",
@@ -854,11 +856,15 @@
             }
           ]
         }
-      ]
+      ],
+      "board": {
+        "id": "qwenpaw",
+        "name": "QwenPaw",
+        "group_by": "model"
+      }
     },
     {
       "schema_version": 1,
-      "visibility": "public",
       "index_version": "index-v1",
       "id": "demo-2",
       "evaluation_sha": "demo",
@@ -1281,7 +1287,12 @@
             }
           ]
         }
-      ]
+      ],
+      "board": {
+        "id": "qwenpaw",
+        "name": "QwenPaw",
+        "group_by": "model"
+      }
     }
   ]
 }

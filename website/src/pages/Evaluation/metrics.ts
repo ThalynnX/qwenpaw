@@ -1,13 +1,13 @@
 import type { Row } from "./types";
 
-const group = (row: Row, privateView: boolean) =>
-  privateView
+const group = (row: Row, compareHarnesses: boolean) =>
+  compareHarnesses
     ? `${row.provider ?? ""}/${row.model}/${row.harness}`
     : `${row.provider ?? ""}/${row.model}`;
-export function bestRows(rows: Row[], privateView: boolean): Set<string> {
+export function bestRows(rows: Row[], compareHarnesses: boolean): Set<string> {
   const best = new Map<string, Row>();
   for (const row of rows.filter((r) => r.score !== null)) {
-    const key = group(row, privateView),
+    const key = group(row, compareHarnesses),
       previous = best.get(key);
     if (
       !previous ||

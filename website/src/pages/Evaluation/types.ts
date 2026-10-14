@@ -21,7 +21,7 @@ export interface RecordResult {
 }
 export interface Run {
   schema_version: 1;
-  visibility: "public" | "private";
+  board: { id: string; name: string; group_by: "model" | "model_harness" };
   index_version: string;
   id: string;
   evaluation_sha: string;
@@ -32,7 +32,6 @@ export interface Run {
 }
 export interface History {
   schema_version: 1;
-  visibility: "public" | "private";
   runs: Run[];
 }
 export interface Row extends RecordResult {
@@ -48,11 +47,6 @@ export const benchmarks: Record<string, string> = {
   gaia: "GAIA",
   "spreadsheetbench-verified": "SpreadsheetBench Verified",
   "swebench-verified": "SWE-bench Verified",
-};
-export const domains: Record<string, string> = {
-  research: "research",
-  office: "office",
-  coding: "coding",
 };
 export function mean(values: (number | null)[]): number | null {
   return !values.length || values.some((value) => value === null)

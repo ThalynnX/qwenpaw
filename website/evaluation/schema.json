@@ -15,9 +15,6 @@
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9._-]{0,99}$"
     },
-    "visibility": {
-      "enum": ["public", "private"]
-    },
     "date": {
       "type": "string",
       "format": "timestamp"
@@ -173,17 +170,36 @@
         },
         "required": ["model", "provider", "harness", "benchmarks"]
       }
+    },
+    "board": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "group_by"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,99}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "group_by": {
+          "enum": ["model", "model_harness"]
+        }
+      }
     }
   },
   "required": [
     "schema_version",
     "id",
-    "visibility",
     "date",
     "index_version",
     "sdk_version",
     "source_sha",
     "benchmarks",
-    "records"
+    "records",
+    "board"
   ]
 }

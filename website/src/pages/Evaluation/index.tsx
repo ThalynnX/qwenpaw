@@ -14,8 +14,7 @@ import {
 import Chart from "./ChartPanel";
 import { bestRows, frontier } from "./metrics";
 import {
-  benchmarks,
-  domains,
+  benchmarks as benchmarkNames,
   logo,
   money as formatMoney,
   safeWorkflow,
@@ -53,7 +52,6 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
   const navigate = useNavigate();
   const [data, setData] = useState<History>({
     schema_version: 1,
-    visibility: "public",
     runs: [],
   });
   const [error, setError] = useState("");
@@ -64,6 +62,7 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
   const [showTable, setShowTable] = useState(true);
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [onlyFrontier, setOnlyFrontier] = useState(false);
+  const [boardId, setBoardId] = useState("");
   const [protocol, setProtocol] = useState("");
   const [sort, setSort] = useState<{
     key: "score" | "cost" | "runtime" | "date";
@@ -91,12 +90,9 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
       .then((history: History) => {
         if (
           history.schema_version !== 1 ||
-          !["public", "private"].includes(history.visibility) ||
           !Array.isArray(history.runs) ||
           history.runs.some(
-            (run) =>
-              run.visibility !== history.visibility ||
-              !Array.isArray(run.records),
+            (run) => !run.board?.id || !Array.isArray(run.records),
           )
         )
           throw new Error("invalidData");
@@ -116,26 +112,44 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
     };
   }, [demo]);
   const history = data;
-  const compareHarnesses =
-    history.visibility === "private" ||
-    new Set(
-      history.runs.flatMap((run) =>
-        run.records.map((record) => record.harness),
-      ),
-    ).size > 1;
-  const versions = [...new Set(history.runs.map((run) => run.index_version))];
+  const boards = [
+    ...new Map(history.runs.map((run) => [run.board.id, run.board])).values(),
+  ];
+  const activeBoard = boards.find((board) => board.id === boardId) ?? boards[0];
+  const boardRuns = history.runs.filter(
+    (run) => run.board.id === activeBoard?.id,
+  );
+  const compareHarnesses = activeBoard?.group_by === "model_harness";
+  const versions = [...new Set(boardRuns.map((run) => run.index_version))];
   const activeProtocol = versions.includes(protocol) ? protocol : versions[0];
+  const activeRuns = boardRuns.filter(
+    (run) => run.index_version === activeProtocol,
+  );
+  const parts = activeRuns.flatMap((run) =>
+    run.records.flatMap((record) => record.benchmarks),
+  );
+  const benchmarks = Object.fromEntries(
+    [...new Set(parts.map((part) => part.benchmark))].map((key) => [
+      key,
+      benchmarkNames[key] ?? key,
+    ]),
+  );
+  const domainIds = [...new Set(parts.flatMap((part) => part.domains))];
   const rows = useMemo(
     () =>
       selectRows(
-        history.runs.filter((run) => run.index_version === activeProtocol),
+        history.runs.filter(
+          (run) =>
+            run.board.id === activeBoard?.id &&
+            run.index_version === activeProtocol,
+        ),
         metric,
       ).filter((row) =>
         `${row.model} ${row.sdk_version} ${row.harness}`
           .toLowerCase()
           .includes(search.toLowerCase()),
       ),
-    [history, activeProtocol, metric, search],
+    [history, activeBoard?.id, activeProtocol, metric, search],
   );
   const best = useMemo(
     () => bestRows(rows, compareHarnesses),
@@ -261,7 +275,7 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
                     >
                       <option value="index">{t("main")}</option>
                       <optgroup label={t("domainBoards")}>
-                        {Object.keys(domains).map((key) => (
+                        {domainIds.map((key) => (
                           <option key={key} value={`domain:${key}`}>
                             {t(`domains.${key}`)}
                           </option>
@@ -278,13 +292,38 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
                     <ChevronDown size={16} aria-hidden="true" />
                   </span>
                 </label>
+                {boards.length > 1 && (
+                  <label>
+                    {t("board")}
+                    <span className="evaluation-select">
+                      <select
+                        value={activeBoard?.id}
+                        onChange={(e) => {
+                          setBoardId(e.target.value);
+                          setProtocol("");
+                          setMetric("index");
+                        }}
+                      >
+                        {boards.map((board) => (
+                          <option key={board.id} value={board.id}>
+                            {board.name}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown size={16} aria-hidden="true" />
+                    </span>
+                  </label>
+                )}
                 {versions.length > 1 && (
                   <label>
                     {t("protocol")}
                     <span className="evaluation-select">
                       <select
                         value={activeProtocol}
-                        onChange={(e) => setProtocol(e.target.value)}
+                        onChange={(e) => {
+                          setProtocol(e.target.value);
+                          setMetric("index");
+                        }}
                       >
                         {versions.map((v) => (
                           <option key={v}>{v}</option>
@@ -310,7 +349,7 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
               <Chart
                 rows={visible}
                 title={title}
-                privateView={compareHarnesses}
+                compareHarnesses={compareHarnesses}
                 history={showHistory}
                 demo={demo}
                 onSelect={navigateRow}

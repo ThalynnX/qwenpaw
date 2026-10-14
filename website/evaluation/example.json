@@ -2,7 +2,6 @@
   "$schema": "./schema.json",
   "schema_version": 1,
   "id": "qwenpaw-v-next-example",
-  "visibility": "public",
   "date": "2026-10-14T00:00:00Z",
   "index_version": "index-v1",
   "sdk_version": "v-next",
@@ -62,5 +61,10 @@
         }
       ]
     }
-  ]
+  ],
+  "board": {
+    "id": "qwenpaw",
+    "name": "QwenPaw",
+    "group_by": "model"
+  }
 }
