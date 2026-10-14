@@ -426,9 +426,9 @@ class QwenPawACPAgent(Agent):
 
         return WorkspaceBootstrapFactory.build_bootstrap_kwargs(
             app_services,
-            extra_command_specs=extra_command_specs
-            if extra_command_specs
-            else None,
+            extra_command_specs=(
+                extra_command_specs if extra_command_specs else None
+            ),
         )
 
     async def _ensure_workspace(self) -> Any:
@@ -1062,11 +1062,9 @@ class QwenPawACPAgent(Agent):
     def _pending_cancel_reason(pending_future: asyncio.Future) -> str:
         """Why a pending approval resolved before the client answered.
 
-        ``wait_for_approval`` times out via ``asyncio.wait_for``, which
-        cancels the shared future instead of setting a TIMEOUT result —
-        check ``cancelled()`` before ``result()``, which would raise
-        CancelledError (a BaseException that would escape the bridge and
-        kill the polling loop in ``_bridge_approval_requests``).
+        Timeouts resolve the shared future with TIMEOUT. Also handle futures
+        cancelled by another caller before reading their result, so a
+        CancelledError cannot escape and kill the approval polling loop.
         """
         from ...security.tool_guard.approval import ApprovalDecision
 
@@ -1332,7 +1330,9 @@ class QwenPawACPAgent(Agent):
                     current_model_id=model_id,
                 )
 
-            manager = ProviderManager.get_instance()
+            manager = await run_sync_io(ProviderManager.get_instance)
+            agent_id = self._resolve_agent_id()
+            agent_config = await run_sync_io(load_agent_config, agent_id)
             provider_infos = await manager.list_provider_info()
 
             available_models: list[ACPModelInfo] = []
@@ -1345,8 +1345,6 @@ class QwenPawACPAgent(Agent):
                         ),
                     )
 
-            agent_id = self._resolve_agent_id()
-            agent_config = load_agent_config(agent_id)
             active = agent_config.active_model
             if active and active.provider_id and active.model:
                 current_model_id = f"{active.provider_id}:{active.model}"

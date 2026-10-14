@@ -36,6 +36,7 @@ from qwenpaw.exceptions import (
     ConfigurationException,
 )
 
+from .history_path import normalize_history_db_filename
 from .timezone import detect_system_timezone
 from ..constant import (
     HEARTBEAT_DEFAULT_EVERY,
@@ -1228,6 +1229,12 @@ class ScrollContextConfig(BaseModel):
         description="SQLite history store filename, relative to working_dir.",
     )
 
+    @field_validator("db_filename")
+    @classmethod
+    def validate_db_filename(cls, value: str) -> str:
+        """Keep durable history inside its agent workspace."""
+        return normalize_history_db_filename(value)
+
     tool_output_token_cap: int = Field(
         default=3000,
         ge=100,
@@ -1363,8 +1370,8 @@ class LightContextConfig(BaseModel):
 class AutoTitleConfig(BaseModel):
     """Async chat-title generation configuration.
 
-    The console handler creates each new chat with a 10-character
-    placeholder name and spawns a background task that asks the active
+    The console handler creates each new chat with a placeholder name bounded
+    to 500 characters and spawns a background task that asks the active
     LLM for a concise title. Each new chat costs one short extra LLM
     call; flip ``enabled`` to ``False`` to keep the placeholder and
     avoid the spend.
@@ -1376,7 +1383,7 @@ class AutoTitleConfig(BaseModel):
         default=True,
         description=(
             "Generate a chat title via the active LLM after the first "
-            "user message. Disable to keep the truncated placeholder "
+            "user message. Disable to keep the placeholder "
             "and skip the extra per-chat LLM call."
         ),
     )
@@ -2374,13 +2381,25 @@ class AgentProfileConfig(BaseModel):
     thinking_level: Literal[
         "inherit",
         "off",
+        "minimal",
         "low",
         "medium",
         "high",
-    ] = Field(
-        default="inherit",
-        description="Provider-independent agent reasoning level",
-    )
+        "xhigh",
+        "max",
+        "budget",
+    ] = f"inherit"
+    thinking_budget: int | None = Field(default=None, ge=1)
+
+    @model_validator(mode=f"after")
+    def validate_thinking_budget(self):
+        """Keep effort and numeric budget settings mutually exclusive."""
+        if (self.thinking_level == f"budget") != (
+            self.thinking_budget is not None
+        ):
+            raise ValueError(f"Budget mode requires thinking_budget")
+        return self
+
     language: str = Field(
         default="zh",
         description="Language setting for this agent",

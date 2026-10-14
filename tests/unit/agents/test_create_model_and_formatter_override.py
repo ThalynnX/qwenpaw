@@ -49,6 +49,14 @@ class _FakeChatModel:
         self.qwenpaw_provider_id = provider_id
 
 
+class _FakeProvider(SimpleNamespace):
+    """Provider stub with no additional catalog metadata to resolve."""
+
+    def resolve_model_info(self, model_id):
+        """Return the stub's already configured model information."""
+        return self.get_model_info(model_id)
+
+
 def _patched_load_agent_config(_agent_id):  # noqa: ARG001
     """Return fake agent config with an overridable active model."""
     return SimpleNamespace(
@@ -96,7 +104,8 @@ def _patch_dependencies(monkeypatch):
         "ProviderManager",
         SimpleNamespace(
             get_instance=lambda: SimpleNamespace(
-                get_provider=lambda provider_id: SimpleNamespace(
+                get_provider=lambda provider_id: _FakeProvider(
+                    enabled=True,
                     get_model_info=lambda model_id: provider_module.ModelInfo(
                         id=model_id,
                         name=model_id,
@@ -245,7 +254,8 @@ def test_factory_uses_resolved_provider_id(
     canonical_model = _FakeChatModel("canonical-provider/model")
     wrapper_provider_ids = []
     manager = SimpleNamespace(
-        get_provider=lambda _provider_id: SimpleNamespace(
+        get_provider=lambda _provider_id: _FakeProvider(
+            enabled=True,
             get_model_info=lambda model_id: provider_module.ModelInfo(
                 id=model_id,
                 name=model_id,
@@ -466,7 +476,7 @@ def test_global_model_configuration_errors(monkeypatch, global_slot):
         lambda: manager,
     )
     expected = (
-        "Active provider 'dashscope' not found"
+        "Provider 'dashscope' not found"
         if global_slot == ("dashscope", "model-a")
         else "No active model configured"
     )
@@ -526,19 +536,21 @@ def test_preloaded_agent_config_preserves_model_settings(monkeypatch):
         lambda _agent_id: pytest.fail("preloaded config must be reused"),
     )
     providers = {
-        "default-provider": SimpleNamespace(
+        "default-provider": _FakeProvider(
+            enabled=True,
             get_model_info=lambda model_id: provider_module.ModelInfo(
                 id=model_id,
                 name=model_id,
             ),
             get_chat_model_instance=lambda model_name: (
-                f"default-provider/{model_name}"
+                _FakeChatModel(f"default-provider/{model_name}")
             ),
         ),
-        "fallback-provider": SimpleNamespace(
+        "fallback-provider": _FakeProvider(
+            enabled=True,
             get_model_info=lambda _model_name: SimpleNamespace(is_free=False),
             get_chat_model_instance=lambda model_name: (
-                f"fallback-provider/{model_name}"
+                _FakeChatModel(f"fallback-provider/{model_name}")
             ),
         ),
     }
@@ -557,7 +569,7 @@ def test_preloaded_agent_config_preserves_model_settings(monkeypatch):
     thinking_levels = []
 
     @contextmanager
-    def record_thinking_level(level):
+    def record_thinking_level(level, _budget=None):
         thinking_levels.append(level)
         yield
 
@@ -579,7 +591,7 @@ def test_preloaded_agent_config_preserves_model_settings(monkeypatch):
     monkeypatch.setattr(
         fallback_chat_model,
         "FallbackChatModel",
-        lambda models: models,
+        lambda models: SimpleNamespace(models=models),
     )
     monkeypatch.setattr(
         model_factory,
@@ -592,7 +604,7 @@ def test_preloaded_agent_config_preserves_model_settings(monkeypatch):
         agent_config=config,
     )
 
-    assert model == [
+    assert [item.identifier for item in model.models] == [
         "default-provider/default-model",
         "fallback-provider/fallback",
     ]
@@ -618,19 +630,21 @@ def test_each_fallback_model_gets_its_own_formatter(monkeypatch):
         lambda _agent_id: config,
     )
     providers = {
-        "default-provider": SimpleNamespace(
+        "default-provider": _FakeProvider(
+            enabled=True,
             get_model_info=lambda model_id: provider_module.ModelInfo(
                 id=model_id,
                 name=model_id,
             ),
             get_chat_model_instance=lambda model_name: (
-                f"default-provider/{model_name}"
+                _FakeChatModel(f"default-provider/{model_name}")
             ),
         ),
-        "fallback-provider": SimpleNamespace(
+        "fallback-provider": _FakeProvider(
+            enabled=True,
             get_model_info=lambda _model_name: SimpleNamespace(is_free=False),
             get_chat_model_instance=lambda model_name: (
-                f"fallback-provider/{model_name}"
+                _FakeChatModel(f"fallback-provider/{model_name}")
             ),
         ),
     }
@@ -647,21 +661,21 @@ def test_each_fallback_model_gets_its_own_formatter(monkeypatch):
 
     def install(model, provider_id=None, *, model_info=None):
         del model_info
-        installed.append((model, provider_id))
-        return f"formatter:{model}"
+        installed.append((model.identifier, provider_id))
+        return f"formatter:{model.identifier}"
 
     monkeypatch.setattr(model_factory, "_install_model_formatter", install)
     monkeypatch.setattr(
         fallback_chat_model,
         "FallbackChatModel",
-        lambda models: models,
+        lambda models: SimpleNamespace(models=models),
     )
 
     model, formatter = model_factory.create_model_and_formatter(
         agent_id="agent-1",
     )
 
-    assert model == [
+    assert [item.identifier for item in model.models] == [
         "default-provider/default-model",
         "fallback-provider/fallback",
     ]
@@ -688,19 +702,21 @@ def test_model_override_disables_persisted_fallback_chain(monkeypatch):
         lambda _agent_id: config,
     )
     providers = {
-        "override-provider": SimpleNamespace(
+        "override-provider": _FakeProvider(
+            enabled=True,
             get_model_info=lambda model_id: provider_module.ModelInfo(
                 id=model_id,
                 name=model_id,
             ),
             get_chat_model_instance=lambda model_name: (
-                f"override-provider/{model_name}"
+                _FakeChatModel(f"override-provider/{model_name}")
             ),
         ),
-        "fallback-provider": SimpleNamespace(
+        "fallback-provider": _FakeProvider(
+            enabled=True,
             get_model_info=lambda _model_name: SimpleNamespace(is_free=False),
             get_chat_model_instance=lambda model_name: (
-                f"fallback-provider/{model_name}"
+                _FakeChatModel(f"fallback-provider/{model_name}")
             ),
         ),
     }
@@ -728,7 +744,7 @@ def test_model_override_disables_persisted_fallback_chain(monkeypatch):
         },
     )
 
-    assert model == "override-provider/override"
+    assert model.identifier == "override-provider/override"
     assert not fallback_calls
 
 
@@ -749,16 +765,18 @@ def test_invalid_fallback_slots_are_skipped(monkeypatch):
         lambda _agent_id: config,
     )
     providers = {
-        "default-provider": SimpleNamespace(
+        "default-provider": _FakeProvider(
+            enabled=True,
             get_model_info=lambda model_id: provider_module.ModelInfo(
                 id=model_id,
                 name=model_id,
             ),
             get_chat_model_instance=lambda model_name: (
-                f"default-provider/{model_name}"
+                _FakeChatModel(f"default-provider/{model_name}")
             ),
         ),
         "known-provider": SimpleNamespace(
+            enabled=True,
             get_model_info=lambda _model_name: None,
         ),
     }
@@ -780,7 +798,7 @@ def test_invalid_fallback_slots_are_skipped(monkeypatch):
 
     model, _ = model_factory.create_model_and_formatter(agent_id="agent-1")
 
-    assert model == "default-provider/default-model"
+    assert model.identifier == "default-provider/default-model"
     assert not fallback_calls
 
 

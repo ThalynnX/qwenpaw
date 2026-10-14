@@ -11,11 +11,13 @@ import { useNavigate } from "react-router-dom";
 import { renderWithProviders } from "@/test/common_setup";
 import { useMessageQueueStore } from "@/stores/messageQueueStore";
 import ChatPage from "./index";
+import { LongTextPasteInput } from "./LongTextPaste";
 import { ChatRunLifecycle } from "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/Execution/runLifecycle";
 import sessionApi from "./sessionApi";
 import { stopBackgroundQueue } from "./backgroundQueueRegistry";
 import { chatExtensions } from "@/plugins/registry/chatExtensions";
 import { useSessionFilesDrawer } from "@/stores/filesSurfaceStore";
+import { useStoppedTurnsStore } from "./stoppedTurns";
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks
@@ -148,6 +150,13 @@ vi.mock(
   }),
 );
 
+vi.mock("../../features/session-settings/sessionModel", () => ({
+  loadSessionModel: (...args: unknown[]) => mockGetActiveModels(...args),
+  readPendingModel: () => null,
+  migratePendingModel: vi.fn(),
+  withPendingModel: (body: unknown) => body,
+}));
+
 vi.mock("@/api/modules/provider", () => ({
   providerApi: {
     listProviders: mockListProviders,
@@ -224,6 +233,8 @@ vi.mock("./sessionApi", () => ({
     getBackendSessionId: vi.fn(() => "backend-session-1"),
     setLastUserMessage: vi.fn(),
     discardLastUserMessage: vi.fn(),
+    setVisibleSession: vi.fn(),
+    getSession: vi.fn(async (id: string) => ({ id, messages: [] })),
     lastActiveChatId: "last-chat-1",
     patchLastUserMessage: vi.fn(),
     getSessionIdentity: vi.fn(() => ({
@@ -260,7 +271,7 @@ vi.mock("./OptionsPanel/defaultConfig", () => ({
       },
     },
     welcome: {},
-    sender: {},
+    sender: { longTextUpload: false },
   })),
 }));
 
@@ -573,6 +584,7 @@ describe("ChatPage coverage", () => {
       currentSendingId: null,
       lastMigratedTo: null,
     });
+    useStoppedTurnsStore.setState({ stoppedSessionIds: new Set() });
     mockBeginLoopModeSubmission.mockReset();
     mockBeginLoopModeSubmission.mockImplementation((text: string) => text);
     mockRequiresQwenPawModel.mockReset();
@@ -728,7 +740,7 @@ describe("ChatPage coverage", () => {
     });
     await screen.findByTestId("chat-ui");
     await act(async () => {});
-    expect(screen.getByTestId("model-selector")).toBeInTheDocument();
+    expect(screen.queryByTestId("model-selector")).not.toBeInTheDocument();
     expect(screen.getByTestId("action-group")).toBeInTheDocument();
     expect(screen.getByTestId("header-title")).toBeInTheDocument();
   });
@@ -1111,6 +1123,34 @@ describe("ChatPage coverage", () => {
       // stopChat should have been called
       await waitFor(() => expect(chatApi.stopChat).toHaveBeenCalled());
     }
+  });
+
+  it("marks the canceled session after switching to another session", async () => {
+    const { chatApi } = await import("@/api/modules/chat");
+    vi.mocked(sessionApi.getRealIdForSession).mockImplementation((id) =>
+      id === "chat-A" ? "chat-A" : null,
+    );
+    vi.mocked(sessionApi.getBackendSessionId).mockImplementation((id) =>
+      id === "chat-A" || id === "runtime-A" ? "runtime-A" : "runtime-B",
+    );
+
+    renderWithProviders(<ChatPage />, {
+      initialEntries: ["/chat/chat-B"],
+    });
+    await screen.findByTestId("chat-ui");
+    sessionApi.lastActiveChatId = "chat-B";
+
+    await act(async () => {
+      await capturedOptions.api.cancel({
+        session_id: "runtime-A",
+        chatSessionId: "chat-A",
+      });
+    });
+
+    expect(chatApi.stopChat).toHaveBeenCalledWith("chat-A", "default");
+    expect(useStoppedTurnsStore.getState().stoppedSessionIds).toEqual(
+      new Set(["runtime-A"]),
+    );
   });
 
   // ── reconnect callback → calls fetch ───────────────────────────────────
@@ -1955,22 +1995,16 @@ describe("ChatPage coverage", () => {
     }
   });
 
-  // ── sender longTextUpload customRequest ────────────────────────────────
-  it("sender longTextUpload customRequest is available", async () => {
+  it("uses the host paste adapter without SDK draft conversion or truncation", async () => {
     renderWithProviders(<ChatPage />, {
       initialEntries: ["/chat/test-session"],
     });
     await screen.findByTestId("chat-ui");
     await act(async () => {});
 
-    const longTextUpload = capturedOptions?.sender?.longTextUpload;
-    if (longTextUpload) {
-      expect(typeof longTextUpload.customRequest).toBe("function");
-      expect(typeof longTextUpload.prompt).toBe("function");
-      // Exercise the prompt function
-      const promptText = longTextUpload.prompt();
-      expect(typeof promptText).toBe("string");
-    }
+    expect(capturedOptions?.sender?.longTextUpload).toBe(false);
+    expect(capturedOptions?.sender?.maxLength).toBeUndefined();
+    expect(capturedOptions?.sender?.components?.input).toBe(LongTextPasteInput);
   });
 
   // ── sender placeholder ─────────────────────────────────────────────────
@@ -2180,7 +2214,7 @@ describe("ChatPage coverage", () => {
   });
 
   // ── model-switched event with maxInputLength ───────────────────────────
-  it("model-switched event with maxInputLength patches context", async () => {
+  it("model-switched refreshes capabilities for the session model", async () => {
     renderWithProviders(<ChatPage />, {
       initialEntries: ["/chat/test-session"],
     });
@@ -2196,7 +2230,7 @@ describe("ChatPage coverage", () => {
       );
     });
 
-    // Should trigger both fetchMultimodalCaps and patchContextMaxInputLength
+    // Capability refresh uses the session model, without rewriting history.
     await waitFor(() => {
       expect(mockGetActiveModels).toHaveBeenCalled();
     });
@@ -2643,6 +2677,16 @@ describe("ChatPage coverage", () => {
       );
       expect(chatIndex).toBeGreaterThanOrEqual(0);
       expect(drawerIndex).toBeGreaterThan(chatIndex);
+      const conversationPanel = container.querySelector(
+        '[data-panel="true"][id="conversation"]',
+      );
+      expect(conversationPanel?.contains(children[chatIndex])).toBe(true);
+      expect(conversationPanel?.contains(children[drawerIndex])).toBe(true);
+      expect(
+        container
+          .querySelector('[data-panel="true"][id="terminal"]')
+          ?.contains(children[drawerIndex]),
+      ).toBe(false);
     } finally {
       drawerState.mockReturnValue({ kind: "closed" });
     }

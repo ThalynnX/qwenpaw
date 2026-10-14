@@ -5,7 +5,7 @@ description = "QwenPaw is a **personal assistant** that runs in your own environ
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 dependencies = [
-    "agentscope[model-ollama]==2.0.7.post1",
+    "agentscope[model-ollama]==2.0.10",
     "httpx>=0.27.0",
     "websockets>=15.0.1,<16",
     "packaging>=24.0",
@@ -29,7 +29,7 @@ dependencies = [
     "python-socks>=2.5.3",
     "onnxruntime<1.24",
     "lark-oapi>=1.5.3",
-    "python-telegram-bot>=20.0",
+    "python-telegram-bot>=20.8",
     "slack-bolt>=1.22.0",
     "twilio>=9.10.2",
     "pywebview>=4.0",
@@ -60,6 +60,7 @@ dependencies = [
     # after Textual ships and QwenPaw verifies the upstream fix.
     "textual>=8.2.8,<8.2.9",
     "psutil>=6.0.0",
+    "pywinpty>=2.0.15,<3; sys_platform == 'win32'",
     "openai>=2.0.0,<=2.33.0",
     # anyio 4.13.0: _deliver_cancellation busy-loop / getpid storm (QwenPaw#2632)
     "anyio>=4.0.0,<4.13.0",
@@ -87,10 +88,15 @@ Issues = "https://github.com/agentscope-ai/QwenPaw/issues"
 version = {attr = "qwenpaw.__version__.__version__"}
 
 [tool.setuptools]
-packages = { find = { where = ["src", "packages/qwenpawmail-mcp/src"] } }
 include-package-data = true
 
+[tool.setuptools.package-dir]
+"qwenpaw" = "src/qwenpaw"
+"qwenpawmail_mcp" = "packages/qwenpawmail-mcp/src/qwenpawmail_mcp"
+"qwenpaw.plugins.bundled.hub" = "plugins/hub"
+
 [tool.setuptools.package-data]
+"qwenpaw.plugins.bundled.hub" = ["*/plugin.json"]
 # Dockerfile copies console build output to src/qwenpaw/console/ (no dist subdir).
 "qwenpaw" = [
     "console/**",
