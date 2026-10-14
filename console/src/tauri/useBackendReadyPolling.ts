@@ -98,7 +98,9 @@ export default function useBackendReadyPolling(): BackendReadyPollingState {
             BACKEND_REQUEST_TIMEOUT_MS,
           );
           try {
-            const res = await fetch(`${apiBaseUrl}/api/version`, {
+            // Version is available before background agent initialization.
+            // Wait for the existing readiness contract before loading assets.
+            const res = await fetch(`${apiBaseUrl}/api/healthz`, {
               signal: controller.signal,
               cache: "no-store",
             });
