@@ -18,6 +18,7 @@ from .._utils.constants import (
 )
 from .._utils.history_sqlite import (
     configured_history_db_path,
+    history_agent_config_bytes,
     history_sidecar_paths,
 )
 from ...constant import CONFIG_FILE, SECRET_DIR, WORKING_DIR
@@ -29,7 +30,7 @@ class BackupCancelled(Exception):
     """Raised when cooperative cancellation stops archive creation."""
 
 
-def add_agent_workspaces(
+def add_agent_workspaces(  # pylint: disable=too-many-branches
     zf: zipfile.ZipFile,
     valid_agents: list[tuple[str, Any]],
     progress_callback=None,
@@ -99,7 +100,13 @@ def add_agent_workspaces(
                     rel = relative.as_posix()
                     arcname = f"{PREFIX_WORKSPACES}{aid}/{rel}"
                     try:
-                        zf.write(entry, arcname)
+                        if rel == f"agent.json":
+                            zf.writestr(
+                                arcname,
+                                history_agent_config_bytes(ws),
+                            )
+                        else:
+                            zf.write(entry, arcname)
                     except (PermissionError, OSError) as exc:
                         # A file that can't be added (e.g. an open Chromium
                         # cache file the backend has locked) must not abort

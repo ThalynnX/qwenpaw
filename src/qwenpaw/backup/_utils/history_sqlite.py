@@ -9,12 +9,25 @@ from pathlib import Path
 
 from ...config.history_path import (
     DEFAULT_HISTORY_DB_FILENAME,
+    migrate_history_db_path,
     resolve_history_db_path,
 )
 
 logger = logging.getLogger(__name__)
 
 SQLITE_SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
+
+
+def history_agent_config_bytes(workspace: Path) -> bytes:
+    """Normalize the archive config without rewriting the live workspace."""
+    content = (workspace / f"agent.json").read_bytes()
+    try:
+        data = json.loads(content)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return content
+    if migrate_history_db_path(data, workspace):
+        return json.dumps(data, ensure_ascii=False, indent=2).encode(f"utf-8")
+    return content
 
 
 def configured_history_db_path(workspace: Path) -> Path:
@@ -30,6 +43,7 @@ def configured_history_db_path(workspace: Path) -> Path:
     if agent_json.is_file():
         try:
             data = json.loads(agent_json.read_text(encoding="utf-8"))
+            migrate_history_db_path(data, workspace)
             configured = (
                 data.get("running", {})
                 .get("light_context_config", {})

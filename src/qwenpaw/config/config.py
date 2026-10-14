@@ -36,7 +36,10 @@ from qwenpaw.exceptions import (
     ConfigurationException,
 )
 
-from .history_path import normalize_history_db_filename
+from .history_path import (
+    migrate_history_db_path,
+    normalize_history_db_filename,
+)
 from .timezone import detect_system_timezone
 from ..constant import (
     HEARTBEAT_DEFAULT_EVERY,
@@ -3641,6 +3644,7 @@ def load_agent_config(  # pylint: disable=too-many-branches,too-many-statements
             else:
                 data.pop("last_dispatch")
                 last_dispatch_migrated = True
+        history_path_migrated = migrate_history_db_path(data, workspace_dir)
         project_dir_migrated = migrate_project_directory_config(data)
 
         # Match the existing migration behavior: migrate this workspace only
@@ -3663,6 +3667,7 @@ def load_agent_config(  # pylint: disable=too-many-branches,too-many-statements
             access_control_migrated = False
 
         migrations_applied = (
+            history_path_migrated,
             project_dir_migrated,
             mail_credentials_migrated,
             weixin_migrated,
