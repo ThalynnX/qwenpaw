@@ -60,7 +60,7 @@
 
 ## Новости
 
-- [2026-09-22] **v2.2.2** | PawPort переносит беседы и настройки из Codex/Qoder, Hub позволяет команде пользоваться общими моделями, а для каждой беседы можно выбрать модель и настроить глубину рассуждения. [Release Notes v2.2.2 →](https://qwenpaw.agentscope.io/release-notes#v2.2.2)
+- [2026-10-14] **v2.2.2** | Обновления Console, новые модели QwenPaw-Flash 9B/27B/35B-A3B, PawPort для переноса данных из Codex/Qoder, Creator 2.0.1 и Data 0.3.0. [Release Notes v2.2.2 →](https://qwenpaw.agentscope.io/release-notes#v2.2.2)
 
 - [2026-09-10] **v2.2.1** | Рабочее пространство Blueprint в Creator 1.2, маршрутизация моделей для отдельных агентов и единое управление средой. [Release Notes v2.2.1 →](https://qwenpaw.agentscope.io/release-notes#v2.2.1)
 

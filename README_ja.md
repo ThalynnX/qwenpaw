@@ -60,7 +60,7 @@
 
 ## ニュース
 
-- [2026-09-22] **v2.2.2** | PawPort で Codex/Qoder の会話や設定を移行し、Hub でチームのモデルを共有できます。会話ごとにモデルを選び、思考の深さも調整できます。 [v2.2.2 リリースノート →](https://qwenpaw.agentscope.io/release-notes#v2.2.2)
+- [2026-10-14] **v2.2.2** | Console の更新、9B/27B/35B-A3B をカバーする新しい QwenPaw-Flash モデル、Codex/Qoder のデータを移行できる PawPort、Creator 2.0.1、Data 0.3.0。 [v2.2.2 リリースノート →](https://qwenpaw.agentscope.io/release-notes#v2.2.2)
 
 - [2026-09-10] **v2.2.1** | Creator 1.2 のブループリントワークベンチ、Agent ごとのモデルルーティング、統合環境管理。[v2.2.1 リリースノート →](https://qwenpaw.agentscope.io/release-notes#v2.2.1)
 
