@@ -172,6 +172,7 @@ describe("ModelsPage", () => {
       .closest("[data-page-header]");
     expect(header).toHaveClass(styles.pageHeader);
     expect(screen.queryByText("nav.settings")).not.toBeInTheDocument();
+    expect(screen.queryByText("models.scope.agent")).not.toBeInTheDocument();
   });
 
   it("shows the loading state while fetching", () => {

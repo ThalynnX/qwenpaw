@@ -43,9 +43,12 @@ vi.mock("@/utils/freeModelSwitchWarning", () => ({
 }));
 
 vi.mock("@/stores/agentStore", () => ({
-  useAgentStore: vi.fn(() => ({
-    selectedAgent: agentStoreState.selectedAgent,
-  })),
+  useAgentStore: Object.assign(
+    vi.fn(() => ({
+      selectedAgent: agentStoreState.selectedAgent,
+    })),
+    { subscribe: vi.fn(() => () => undefined) },
+  ),
 }));
 
 vi.mock("react-router-dom", async (importOriginal) => {
@@ -1458,6 +1461,45 @@ describe("ModelSelector", () => {
           model: "gpt-3.5-turbo",
         },
         thinking_level: "high",
+      }),
+    );
+  });
+
+  it("auto-saves work-environment settings without a save button", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <AgentModelSettings
+        expanded
+        autoSave
+        surface="settings"
+        agentId="default"
+        providers={await providerApi.listProviders()}
+        activeProviderId="openai"
+        activeModelId="gpt-4"
+      />,
+    );
+
+    const fallback = await screen.findByLabelText(
+      "modelSelector.enableFallback",
+    );
+    expect(fallback).toBeChecked();
+    expect(
+      screen.queryByRole("button", { name: /common.save/ }),
+    ).not.toBeInTheDocument();
+
+    await user.click(fallback);
+
+    await waitFor(
+      () => expect(agentsApi.updateModelSettings).toHaveBeenCalledOnce(),
+      { timeout: 2000 },
+    );
+    expect(agentsApi.updateModelSettings).toHaveBeenCalledWith(
+      "default",
+      expect.objectContaining({
+        fallback_policy: {
+          enabled: false,
+          target_scope: "configured",
+        },
       }),
     );
   });

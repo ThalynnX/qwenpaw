@@ -23,6 +23,7 @@ import type {
   ModelSlotConfig,
 } from "@/api/types";
 import { useAppMessage } from "@/hooks/useAppMessage";
+import { useAutoSave } from "@/hooks/useAutoSave";
 
 import styles from "./index.module.less";
 
@@ -59,6 +60,7 @@ interface AgentModelSettingsProps {
     >,
   ) => void;
   surface?: "default" | "settings";
+  autoSave?: boolean;
 }
 
 interface ModelOption {
@@ -91,6 +93,7 @@ export function AgentModelSettings({
   draftResetToken,
   onDraftChange,
   surface = "default",
+  autoSave = false,
 }: AgentModelSettingsProps) {
   const { t } = useTranslation();
   const { message } = useAppMessage();
@@ -244,6 +247,9 @@ export function AgentModelSettings({
       setOpen(true);
       void loadConfig(true);
     }
+    // Loading is keyed to the expansion mode and agent identity. Depending on
+    // loadConfig would reload after applyConfig updates its closed-over state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expanded, agentId]);
   const pickSlot = (slot: ModelSlotConfig) => {
     const key = slotKey(slot.provider_id, slot.model);
@@ -278,9 +284,9 @@ export function AgentModelSettings({
     });
   }
 
-  const save = async () => {
-    if (!agentId || !config || saving || configAgentId.current !== agentId) {
-      return;
+  const save = async (automatic = false) => {
+    if (!agentId || !config || configAgentId.current !== agentId) {
+      return false;
     }
     const targetAgentId = agentId;
     const revision = ++saveRevision.current;
@@ -316,28 +322,46 @@ export function AgentModelSettings({
         return;
       }
       applyConfig(updated, targetAgentId);
-      message.success(t("modelSelector.agentSettingsSaved"));
+      if (!automatic) {
+        message.success(t("modelSelector.agentSettingsSaved"));
+      }
+      return true;
     } catch (error) {
       if (
         revision !== saveRevision.current ||
         targetAgentId !== agentIdRef.current
       ) {
-        return;
+        return false;
       }
+      if (automatic) throw error;
       message.error(
         error instanceof Error
           ? error.message
           : t("modelSelector.agentSettingsSaveFailed"),
       );
+      return false;
     } finally {
       if (revision === saveRevision.current) {
         setSaving(false);
       }
     }
   };
+  const { schedule: scheduleAutoSave } = useAutoSave(
+    () => save(true),
+    1000,
+    autoSave,
+  );
+
+  const schedulePersistence = () => {
+    if (autoSave && agentId) scheduleAutoSave();
+  };
 
   return (
-    <section className={styles.agentModelSettings} data-surface={surface}>
+    <section
+      className={styles.agentModelSettings}
+      data-surface={surface}
+      data-auto-save={autoSave}
+    >
       {!expanded && (
         <button
           type="button"
@@ -383,6 +407,7 @@ export function AgentModelSettings({
                   onChange={(next) => {
                     setThinking(next);
                     notifyDraft({ thinking: next });
+                    schedulePersistence();
                   }}
                   disabled={saving}
                 />
@@ -401,6 +426,7 @@ export function AgentModelSettings({
                     const key = pickSlot(slot);
                     setSubagentKey(key);
                     notifyDraft({ subagentKey: key });
+                    schedulePersistence();
                   }}
                 />
                 <button
@@ -410,6 +436,7 @@ export function AgentModelSettings({
                   onClick={() => {
                     setSubagentKey(EMPTY_KEY);
                     notifyDraft({ subagentKey: EMPTY_KEY });
+                    schedulePersistence();
                   }}
                 >
                   <RotateCcw size={15} />
@@ -429,6 +456,7 @@ export function AgentModelSettings({
                     }
                     setFallbackEnabled(next);
                     notifyDraft({ fallbackEnabled: next });
+                    schedulePersistence();
                   }}
                 />
               </div>
@@ -459,12 +487,13 @@ export function AgentModelSettings({
                             fallbackKeys: keys,
                             fallbackEnabled: true,
                           });
+                          schedulePersistence();
                         }}
                       />
                     </div>
                   ),
                 )}
-              {agentId && (
+              {agentId && !autoSave && (
                 <button
                   type="button"
                   className={styles.saveAgentSettings}
