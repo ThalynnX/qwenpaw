@@ -4093,6 +4093,7 @@
     "htmlPreview": "Pratinjau HTML",
     "htmlReadOnlyTitle": "Halaman ini berisi konten dinamis",
     "htmlReadOnlyNotice": "Konten dinamis tidak dapat ditampilkan dalam pratinjau hanya baca ini. Buka file di browser untuk melihat tampilan lengkapnya.",
+    "htmlReadOnlyNotice_fallback": "Klik tombol di bawah untuk membuka halaman di browser dan melihat tampilan lengkapnya.",
     "openHtmlInBrowser": "Buka di browser",
     "edit": "Edit",
     "selectFile": "Pilih file untuk dibuka",

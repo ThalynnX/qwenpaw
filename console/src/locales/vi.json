@@ -2388,6 +2388,7 @@
     "htmlPreview": "Xem trước HTML",
     "htmlReadOnlyTitle": "Trang này có nội dung động",
     "htmlReadOnlyNotice": "Không thể hiển thị nội dung động trong bản xem trước chỉ đọc này. Hãy mở tệp trong trình duyệt để có trải nghiệm đầy đủ.",
+    "htmlReadOnlyNotice_fallback": "Nhấp vào nút bên dưới để mở trang trong trình duyệt và trải nghiệm đầy đủ các tính năng.",
     "openHtmlInBrowser": "Mở trong trình duyệt",
     "edit": "Chỉnh sửa",
     "selectFile": "Chọn tệp để mở",

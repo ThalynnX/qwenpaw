@@ -2303,6 +2303,7 @@
     "htmlPreview": "HTML プレビュー",
     "htmlReadOnlyTitle": "このページには動的なコンテンツが含まれています",
     "htmlReadOnlyNotice": "この読み取り専用プレビューでは動的なコンテンツを表示できません。すべての機能を利用するには、ブラウザーでファイルを開いてください。",
+    "htmlReadOnlyNotice_fallback": "下のボタンをクリックしてブラウザーでページを開くと、本来の表示と動作を確認できます。",
     "openHtmlInBrowser": "ブラウザーで開く",
     "edit": "編集",
     "selectFile": "開くファイルを選択",

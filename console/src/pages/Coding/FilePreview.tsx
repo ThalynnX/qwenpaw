@@ -474,7 +474,9 @@ function HtmlPreview({
               </h3>
             )}
             <p className={styles.htmlNoticeText}>
-              {t("files.htmlReadOnlyNotice")}
+              {t("files.htmlReadOnlyNotice", {
+                context: showFallback ? "fallback" : undefined,
+              })}
             </p>
           </div>
           {showFallback && openButton}
