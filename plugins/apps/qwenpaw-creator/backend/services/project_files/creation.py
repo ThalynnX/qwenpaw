@@ -16,6 +16,10 @@ from pydantic import (
 )
 
 from domain.errors import ConflictError, StorageIntegrityError, ValidationError
+from models.config import (
+    EXECUTION_AUTHORIZATION_REQUIRED,
+    get_execution_authorization_mode,
+)
 from schemas.projects import (
     ExecutionPreauthorizationPolicy,
     ProjectCreateRequest,
@@ -77,7 +81,15 @@ def _settings(request: ProjectCreateRequest) -> ProjectSettings:
         if request.execution_preauthorization is not None
         else None
     )
+    # Confirmation policies review short-drama scripts before media spending.
+    script_first = (
+        request.scenario == "short_drama"
+        and get_execution_authorization_mode()
+        == EXECUTION_AUTHORIZATION_REQUIRED
+    )
     return ProjectSettings(
+        production_stage=request.production_stage
+        or ("script" if script_first else "media"),
         aspect_ratio=request.aspect_ratio,
         resolution=request.resolution,
         content_type=request.content_type,

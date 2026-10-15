@@ -40,6 +40,17 @@ function isAlwaysVisible(message: IAgentScopeRuntimeMessage): boolean {
   );
 }
 
+function isEmptyTextMessage(message: IAgentScopeRuntimeMessage): boolean {
+  return (
+    message.type === AgentScopeRuntimeMessageType.MESSAGE &&
+    message.content.every(
+      (content) =>
+        content.type === AgentScopeRuntimeContentType.TEXT &&
+        !content.text.trim(),
+    )
+  );
+}
+
 export type ResponseMessageBlock =
   | { kind: "message"; message: IAgentScopeRuntimeMessage }
   | { kind: "steps"; messages: IAgentScopeRuntimeMessage[] };
@@ -148,8 +159,12 @@ export function groupResponseMessages(
   messages: IAgentScopeRuntimeMessage[],
   mode: ResponseMessageDisplayMode,
 ): ResponseMessageBlock[] {
+  const displayMessages = messages.filter(
+    (message) => !isEmptyTextMessage(message),
+  );
+
   if (mode === "all") {
-    return messages
+    return displayMessages
       .filter(
         (message) => message.type !== AgentScopeRuntimeMessageType.HEARTBEAT,
       )
@@ -158,8 +173,10 @@ export function groupResponseMessages(
 
   let lastMessageIndex = -1;
   if (mode === "result-only") {
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-      if (messages[index].type === AgentScopeRuntimeMessageType.MESSAGE) {
+    for (let index = displayMessages.length - 1; index >= 0; index -= 1) {
+      if (
+        displayMessages[index].type === AgentScopeRuntimeMessageType.MESSAGE
+      ) {
         lastMessageIndex = index;
         break;
       }
@@ -174,7 +191,7 @@ export function groupResponseMessages(
     collapsedRun = [];
   };
 
-  messages.forEach((message, index) => {
+  displayMessages.forEach((message, index) => {
     if (message.type === AgentScopeRuntimeMessageType.HEARTBEAT) return;
     const visible =
       isAlwaysVisible(message) ||

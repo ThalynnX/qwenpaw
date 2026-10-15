@@ -36,7 +36,11 @@ from domain.errors import (
     NotFoundError,
     StorageIntegrityError,
 )
-from schemas.projects import ProjectCreateRequest, ProjectCreateResponse
+from schemas.projects import (
+    ProjectCreateRequest,
+    ProjectCreateResponse,
+    ProductionStageRequest,
+)
 from services.file_agent_runtime import (
     interrupt_creator_agent_runtime,
     notify_creator_agent_runtime,
@@ -72,6 +76,7 @@ from .dependencies import (
     CreatorErrorRoute,
     project_file_services,
     resolve_idempotency_key,
+    semantic_etag,
 )
 
 logger = setup_logger("project_routes")
@@ -99,7 +104,7 @@ router = APIRouter(
     tags=["projects"],
     route_class=_RemovedProjectPutRoute,
 )
-archive_router = APIRouter(
+storage_router = APIRouter(
     prefix="/projects",
     tags=["projects"],
     route_class=CreatorErrorRoute,
@@ -159,7 +164,7 @@ def _existing_copy_receipt(
     return {"projectId": target_project_id}
 
 
-@router.get("")
+@storage_router.get("")
 async def list_projects(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
@@ -246,6 +251,29 @@ async def create_project(
     notify_creator_agent_runtime(result.project_id)
     response.status_code = status.HTTP_201_CREATED
     return result
+
+
+@router.post("/{project_id}/production-stage")
+async def set_production_stage(
+    project_id: str,
+    request: ProductionStageRequest,
+    services: CreatorFileServices = Depends(project_file_services),
+):
+    expected = semantic_etag(request.project_etag)
+    snapshot = await asyncio.to_thread(services.projects.read, project_id)
+    if snapshot.etag != expected:
+        raise ConflictError("剧本已更新，请查看最新内容后重新确认。")
+    candidate = snapshot.project.model_dump(mode="json")
+    candidate["settings"]["production_stage"] = request.stage
+    result = await services.commit_candidate(
+        base=snapshot,
+        candidate=candidate,
+        origin="frontend_edit",
+        review_policy="auto_fix",
+        production_stage_confirmation=expected,
+    )
+    notify_creator_agent_runtime(project_id)
+    return {"ok": True, "generation": result.snapshot.generation}
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -496,7 +524,7 @@ async def copy_project(
 # pylint: enable=too-many-statements
 
 
-@archive_router.get("/{project_id}/export")
+@storage_router.get("/{project_id}/export")
 async def export_project(
     project_id: str,
     idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
@@ -683,7 +711,7 @@ async def _run_import(upload) -> str:
         )
 
 
-@archive_router.post("/import")
+@storage_router.post("/import")
 async def import_project(
     request: Request,
     idempotency_key: str | None = Header(None, alias="Idempotency-Key"),

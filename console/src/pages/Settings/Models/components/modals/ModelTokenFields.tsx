@@ -11,7 +11,7 @@ interface TokenFieldProps {
 }
 
 const labelStyle = {
-  fontSize: 13,
+  fontSize: "var(--app-font-secondary)",
   color: "var(--app-text)",
   marginBottom: 4,
 };
@@ -134,7 +134,6 @@ export function OutputTokenLimitField({
         aria-label={t("models.maxTokensLabel")}
         style={{ width: "100%" }}
         min={1}
-        max={model?.max_output_length ?? undefined}
         step={1024}
         value={value}
         placeholder={

@@ -225,18 +225,22 @@ export const skillApi = {
       }),
     }),
 
-  saveSkill: (payload: {
-    name: string;
-    content: string;
-    source_name?: string;
-    config?: Record<string, unknown>;
-    overwrite?: boolean;
-  }) =>
+  saveSkill: (
+    payload: {
+      name: string;
+      content: string;
+      source_name?: string;
+      config?: Record<string, unknown>;
+      overwrite?: boolean;
+    },
+    agentId?: string,
+  ) =>
     request<{
       success: boolean;
       mode: "edit" | "rename" | "noop";
       name: string;
     }>("/skills/save", {
+      headers: agentId ? new Headers({ "X-Agent-Id": agentId }) : undefined,
       method: "PUT",
       body: JSON.stringify(payload),
     }),
@@ -324,6 +328,7 @@ export const skillApi = {
   startHubSkillInstall: (
     payload: {
       bundle_url: string;
+      provider_key?: string;
       version?: string;
       enable?: boolean;
       target_name?: string;
@@ -342,6 +347,7 @@ export const skillApi = {
 
   importPoolSkillFromHub: (payload: {
     bundle_url: string;
+    provider_key?: string;
     version?: string;
     target_name?: string;
   }) =>
@@ -468,28 +474,35 @@ export const skillApi = {
       body: JSON.stringify(payload),
     }),
 
-  updateSkillChannels: (skillName: string, channels: string[]) =>
+  updateSkillChannels: (
+    skillName: string,
+    channels: string[],
+    agentId?: string,
+  ) =>
     request<{ updated: boolean; channels: string[] }>(
       `/skills/${encodeURIComponent(skillName)}/channels`,
       {
+        headers: agentId ? new Headers({ "X-Agent-Id": agentId }) : undefined,
         method: "PUT",
         body: JSON.stringify(channels),
       },
     ),
 
-  updateSkillPreload: (skillName: string, preload: boolean) =>
+  updateSkillPreload: (skillName: string, preload: boolean, agentId?: string) =>
     request<{ updated: boolean; preload: boolean }>(
       `/skills/${encodeURIComponent(skillName)}/preload`,
       {
+        headers: agentId ? new Headers({ "X-Agent-Id": agentId }) : undefined,
         method: "PUT",
         body: JSON.stringify({ preload }),
       },
     ),
 
-  updateSkillTags: (skillName: string, tags: string[]) =>
+  updateSkillTags: (skillName: string, tags: string[], agentId?: string) =>
     request<{ updated: boolean; tags: string[] }>(
       `/skills/${encodeURIComponent(skillName)}/tags`,
       {
+        headers: agentId ? new Headers({ "X-Agent-Id": agentId }) : undefined,
         method: "PUT",
         body: JSON.stringify(tags),
       },
