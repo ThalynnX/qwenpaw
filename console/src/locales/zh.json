@@ -5182,6 +5182,7 @@
     "previousQuestion": "上一题",
     "nextQuestion": "下一题",
     "questionProgress": "{{current}} / {{total}}",
+    "recommended": "推荐",
     "agent": "Agent",
     "ownerAgent": "归属Agent",
     "executingAgent": "执行Agent",

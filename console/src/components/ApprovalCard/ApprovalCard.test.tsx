@@ -117,6 +117,22 @@ const SINGLE_QUESTION: ApprovalQuestion[] = [
     ],
   },
 ];
+const RECOMMENDED_QUESTION: ApprovalQuestion[] = [
+  {
+    question: "Which approach should I use?",
+    header: "Approach",
+    options: [
+      {
+        label: "Reuse ApprovalService (Recommended)",
+        description: "Preserves the existing blocking approval flow.",
+      },
+      {
+        label: "Use a separate prompt service",
+        description: "Requires an additional response channel.",
+      },
+    ],
+  },
+];
 const MULTI_QUESTIONS: ApprovalQuestion[] = [
   SINGLE_QUESTION[0],
   {
@@ -130,6 +146,118 @@ const MULTI_QUESTIONS: ApprovalQuestion[] = [
 ];
 
 describe("ApprovalCard interactive questions", () => {
+  it.each([
+    { choice: "recommended", index: 0 },
+    { choice: "alternative", index: 1 },
+  ])(
+    "shows a recommendation without preselection and submits the $choice choice",
+    async ({ index }) => {
+      const onApprove = vi
+        .fn<ApprovalCardProps["onApprove"]>()
+        .mockResolvedValue(undefined);
+      renderCard({
+        isGeneralized: false,
+        onApprove,
+        questions: RECOMMENDED_QUESTION,
+      });
+      const user = userEvent.setup();
+      const options = screen.getAllByRole("button", { pressed: false });
+      const submit = screen.getByRole("button", { name: "Submit answer" });
+
+      expect(options).toHaveLength(2);
+      const recommendation = screen.getByText("Recommended", { exact: true });
+      expect(recommendation).toBeVisible();
+      expect(recommendation).toHaveClass("ant-tag");
+      expect(options[0]).toContainElement(recommendation);
+      expect(options[0]).toHaveTextContent("Reuse ApprovalService");
+      expect(options[0]).not.toHaveTextContent("(Recommended)");
+      expect(options[0]).toHaveTextContent(
+        "Preserves the existing blocking approval flow.",
+      );
+      expect(options[1]).toHaveTextContent("Use a separate prompt service");
+      expect(screen.queryByRole("button", { pressed: true })).toBeNull();
+      expect(submit).toBeDisabled();
+      expect(onApprove).not.toHaveBeenCalled();
+
+      await user.click(options[index]);
+      expect(options[index]).toHaveAttribute("aria-pressed", "true");
+      expect(submit).toBeEnabled();
+      await user.click(submit);
+
+      await waitFor(() => {
+        expect(onApprove).toHaveBeenCalledWith(
+          "approval-1",
+          undefined,
+          JSON.stringify([
+            {
+              question: RECOMMENDED_QUESTION[0].question,
+              selected: [RECOMMENDED_QUESTION[0].options[index].label],
+              other: null,
+            },
+          ]),
+        );
+      });
+    },
+  );
+
+  it("keeps a later recommended option in its original position", () => {
+    renderCard({
+      questions: [
+        {
+          ...RECOMMENDED_QUESTION[0],
+          options: [...RECOMMENDED_QUESTION[0].options].reverse(),
+        },
+      ],
+    });
+    const options = screen.getAllByRole("button", { pressed: false });
+    const recommendation = screen.getByText("Recommended", { exact: true });
+
+    expect(options[0]).toHaveTextContent("Use a separate prompt service");
+    expect(options[0]).not.toContainElement(recommendation);
+    expect(options[1]).toContainElement(recommendation);
+    expect(screen.queryByRole("button", { pressed: true })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Submit answer" }),
+    ).toBeDisabled();
+  });
+
+  it.each([
+    "Reuse ApprovalService (recommended)",
+    "Reuse ApprovalService (Recommended) later",
+    "Reuse ApprovalService (Recommended) ",
+  ])("requires the exact recommendation suffix in %j", (label) => {
+    renderCard({
+      questions: [
+        {
+          ...SINGLE_QUESTION[0],
+          options: [
+            { label, description: "Preserve the option label." },
+            SINGLE_QUESTION[0].options[1],
+          ],
+        },
+      ],
+    });
+
+    expect(screen.queryByText("Recommended", { exact: true })).toBeNull();
+    expect(screen.getAllByRole("button", { pressed: false })).toHaveLength(2);
+  });
+
+  it("ignores an unsupported recommended field without a label marker", () => {
+    const optionsWithExtraField = [
+      SINGLE_QUESTION[0].options[0],
+      { ...SINGLE_QUESTION[0].options[1], recommended: true },
+    ];
+    renderCard({
+      questions: [{ ...SINGLE_QUESTION[0], options: optionsWithExtraField }],
+    });
+
+    expect(screen.queryByText("Recommended", { exact: true })).toBeNull();
+    expect(screen.queryByRole("button", { pressed: true })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Submit answer" }),
+    ).toBeDisabled();
+  });
+
   it("sends the chosen option back as an AskUserAnswer", async () => {
     const onApprove = vi
       .fn<ApprovalCardProps["onApprove"]>()
@@ -140,6 +268,7 @@ describe("ApprovalCard interactive questions", () => {
     expect(
       screen.getByText("Which scope should I refactor?"),
     ).toBeInTheDocument();
+    expect(screen.queryByText("Recommended", { exact: true })).toBeNull();
     const submit = screen.getByRole("button", { name: "Submit answer" });
     expect(submit).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Next question" })).toBeNull();

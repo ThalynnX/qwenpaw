@@ -2236,6 +2236,7 @@
     "previousQuestion": "Câu hỏi trước",
     "nextQuestion": "Câu hỏi tiếp theo",
     "questionProgress": "{{current}} / {{total}}",
+    "recommended": "Khuyên dùng",
     "title": "Yêu cầu phê duyệt bảo mật",
     "description": "Agent đang yêu cầu phê duyệt để thực thi hành động sau:",
     "approve": "Phê duyệt",

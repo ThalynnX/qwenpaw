@@ -4513,6 +4513,7 @@
     "previousQuestion": "前の質問",
     "nextQuestion": "次の質問",
     "questionProgress": "{{current}} / {{total}}",
+    "recommended": "推奨",
     "title": "セキュリティ承認が必要です",
     "tool": "ツール",
     "severity": "重要度",

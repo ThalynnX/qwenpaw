@@ -3449,6 +3449,7 @@
     "previousQuestion": "Pertanyaan sebelumnya",
     "nextQuestion": "Pertanyaan berikutnya",
     "questionProgress": "{{current}} / {{total}}",
+    "recommended": "Direkomendasikan",
     "title": "Persetujuan Keamanan Diperlukan",
     "ownerAgent": "Agen Pemilik",
     "executingAgent": "Agen yang Mengeksekusi",

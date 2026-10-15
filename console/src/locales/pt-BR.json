@@ -4571,6 +4571,7 @@
     "previousQuestion": "Pergunta anterior",
     "nextQuestion": "Próxima pergunta",
     "questionProgress": "{{current}} / {{total}}",
+    "recommended": "Recomendado",
     "title": "Seguranca Approval Obrigatorio",
     "tool": "Tool",
     "severity": "Severity",

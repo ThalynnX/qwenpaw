@@ -16,6 +16,7 @@ const questionKeys = [
   "previousQuestion",
   "nextQuestion",
   "questionProgress",
+  "recommended",
 ] as const;
 
 describe("approval question translations", () => {

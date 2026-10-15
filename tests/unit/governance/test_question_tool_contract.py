@@ -11,6 +11,7 @@ from agentscope.message import TextBlock, ToolResultState
 from agentscope.permission import PermissionBehavior, PermissionDecision
 from agentscope.tool import AskUserParams, FunctionTool, ToolChunk
 
+from qwenpaw.agents.tools import ask_user_question
 from qwenpaw.governance import PolicyGuardedTool, tool_adapter
 from qwenpaw.governance.policy import GovernanceAction, ToolCallSpec
 from qwenpaw.runtime.tool_guard import GuardedFunctionTool
@@ -46,6 +47,22 @@ def test_guard_publishes_framework_question_schema(guard):
     assert schema["properties"]["questions"]["minItems"] == 1
     assert schema["properties"]["questions"]["maxItems"] == 4
     assert "questions" in schema["required"]
+
+
+@pytest.mark.parametrize("guard", [PolicyGuardedTool, GuardedFunctionTool])
+def test_question_recommendation_guidance_reaches_the_model(guard):
+    tool = guard(ask_user_question)
+    description = " ".join(tool.description.split())
+    assert 'place it first and append "(Recommended)"' in description
+    assert "option's description" in description
+    assert "leave the labels unmarked" in description
+    expected = FunctionTool(
+        ask_user_question,
+        input_schema=AskUserParams,
+    ).input_schema
+    assert tool.input_schema == expected
+    option_schema = tool.input_schema["$defs"]["_Option"]["properties"]
+    assert set(option_schema) == {"label", "description", "preview"}
 
 
 @pytest.mark.parametrize("guard", [PolicyGuardedTool, GuardedFunctionTool])

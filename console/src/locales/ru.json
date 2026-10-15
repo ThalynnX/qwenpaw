@@ -4528,6 +4528,7 @@
     "previousQuestion": "Предыдущий вопрос",
     "nextQuestion": "Следующий вопрос",
     "questionProgress": "{{current}} / {{total}}",
+    "recommended": "Рекомендуется",
     "title": "Требуется подтверждение безопасности",
     "tool": "Инструмент",
     "severity": "Уровень угрозы",

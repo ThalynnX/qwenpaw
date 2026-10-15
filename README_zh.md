@@ -334,7 +334,7 @@ docker run -p 127.0.0.1:8088:8088 \
 - [添加 Skills](https://qwenpaw.agentscope.io/docs/skills) 扩展能力（PDF、Office、浏览器、新闻等）
 - [配置频道](https://qwenpaw.agentscope.io/docs/channels) 连接钉钉、飞书、Discord 等
 - [配置 Cron](https://qwenpaw.agentscope.io/docs/cron) 实现定时任务与自动化
-- [回答 Agent 提问](https://qwenpaw.agentscope.io/docs/security#回答-agent-提问)，通过选项或自由文本补充信息，在同一轮继续执行
+- [回答 Agent 提问](https://qwenpaw.agentscope.io/docs/security#回答-agent-提问)，查看 Agent 提供的推荐，通过选项或自由文本补充信息，在同一轮继续执行
 - 查看完整 [快速开始指南](https://qwenpaw.agentscope.io/docs/quickstart) 了解所有选项与验证步骤
 
 ---

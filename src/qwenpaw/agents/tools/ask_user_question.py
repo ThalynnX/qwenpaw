@@ -452,6 +452,12 @@ async def ask_user_question(
     need information only the user has. Do not use it to confirm work you
     could reasonably attempt yourself.
 
+    If you recommend a specific option, place it first and append
+    "(Recommended)" to its label, following the framework's AskUser rule.
+    Explain the reason in that option's description. When there is no
+    clear recommendation, leave the labels unmarked. Do not add a separate
+    recommended field. A recommendation is a suggestion, not a user answer.
+
     Args:
         questions (`list[dict] | str`):
             1-4 question objects. Each needs ``question`` (unique text,

@@ -21,6 +21,7 @@ import type {
 import styles from "./ApprovalCard.module.less";
 
 const { Text } = Typography;
+const RECOMMENDED_SUFFIX = "(Recommended)";
 
 export interface ApprovalCardProps {
   requestId: string;
@@ -343,33 +344,52 @@ export function ApprovalCard({
                   ) : null}
                   {(q.options?.length ?? 0) > 0 && (
                     <div className={styles.optionList}>
-                      {q.options?.map((opt) => (
-                        <Button
-                          key={opt.label}
-                          size="small"
-                          block
-                          type={
-                            (picks[qidx] ?? []).includes(opt.label)
-                              ? "primary"
-                              : "default"
-                          }
-                          className={styles.optionButton}
-                          disabled={loading !== null || isTimedOut}
-                          aria-pressed={(picks[qidx] ?? []).includes(opt.label)}
-                          onClick={() =>
-                            toggleOption(qidx, opt.label, q.multi_select)
-                          }
-                        >
-                          <span className={styles.optionLabel}>
-                            {opt.label}
-                          </span>
-                          {opt.description ? (
-                            <span className={styles.optionDescription}>
-                              {opt.description}
+                      {q.options?.map((opt) => {
+                        const isRecommended =
+                          opt.label.endsWith(RECOMMENDED_SUFFIX);
+                        const displayLabel = isRecommended
+                          ? opt.label
+                              .slice(0, -RECOMMENDED_SUFFIX.length)
+                              .trimEnd()
+                          : opt.label;
+                        return (
+                          <Button
+                            key={opt.label}
+                            size="small"
+                            block
+                            type={
+                              (picks[qidx] ?? []).includes(opt.label)
+                                ? "primary"
+                                : "default"
+                            }
+                            className={styles.optionButton}
+                            disabled={loading !== null || isTimedOut}
+                            aria-pressed={(picks[qidx] ?? []).includes(
+                              opt.label,
+                            )}
+                            onClick={() =>
+                              toggleOption(qidx, opt.label, q.multi_select)
+                            }
+                          >
+                            <span className={styles.optionLabel}>
+                              {displayLabel}
+                              {isRecommended ? (
+                                <Tag
+                                  color="success"
+                                  className={styles.recommendedTag}
+                                >
+                                  {t("approval.recommended", "Recommended")}
+                                </Tag>
+                              ) : null}
                             </span>
-                          ) : null}
-                        </Button>
-                      ))}
+                            {opt.description ? (
+                              <span className={styles.optionDescription}>
+                                {opt.description}
+                              </span>
+                            ) : null}
+                          </Button>
+                        );
+                      })}
                     </div>
                   )}
                   {previewOf(qidx) ? (

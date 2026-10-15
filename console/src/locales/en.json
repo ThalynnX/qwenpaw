@@ -5162,6 +5162,7 @@
     "previousQuestion": "Previous question",
     "nextQuestion": "Next question",
     "questionProgress": "{{current}} / {{total}}",
+    "recommended": "Recommended",
     "agent": "Agent",
     "ownerAgent": "Owner Agent",
     "executingAgent": "Executing Agent",

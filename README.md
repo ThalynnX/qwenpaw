@@ -334,7 +334,7 @@ After installation, configure your model in **Console → Settings → Models**,
 - [Add Skills](https://qwenpaw.agentscope.io/docs/skills) to extend capabilities (PDF, Office, browser, news, etc.)
 - [Set up Channels](https://qwenpaw.agentscope.io/docs/channels) for DingTalk, Lark, Discord, and more
 - [Configure Cron](https://qwenpaw.agentscope.io/docs/cron) for scheduled tasks and automation
-- [Answer agent questions](https://qwenpaw.agentscope.io/docs/security#answering-agent-questions) with choices or free text, then resume the same turn
+- [Answer agent questions](https://qwenpaw.agentscope.io/docs/security#answering-agent-questions) with choices or free text, see the agent's recommendation when provided, then resume the same turn
 - See the full [Quick Start guide](https://qwenpaw.agentscope.io/docs/quickstart) for all options and verification steps
 
 ---
