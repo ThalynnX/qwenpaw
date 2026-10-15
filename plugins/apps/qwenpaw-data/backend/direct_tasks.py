@@ -33,19 +33,12 @@ async def dispatch_console_chat(request: Request, gateway):
         raise HTTPException(422, "Invalid JSON analysis inputs") from None
     if not isinstance(inputs, dict):
         raise HTTPException(422, "Invalid analysis inputs")
-    # Console-only hints are not silently accepted as analysis constraints.
-    if (
-        inputs.get("dataset_names")
-        or inputs.get("enable_clarification") is False
-    ):
+    if inputs.get("enable_clarification") is False:
         raise HTTPException(
-            422,
-            (
-                "Dataset filtering and disabled clarification are "
-                "not supported by this Engine"
-            ),
+            422, "Disabled clarification is not supported by this Engine"
         )
-    inputs.pop("dataset_names", None)
+    if inputs.get("dataset_names") is None:
+        inputs.pop("dataset_names", None)
     inputs.pop("enable_clarification", None)
     # The Console's "All data sources" selection is null. The contract uses
     # absence so datasource-specific grant constraints still reject it.

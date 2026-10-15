@@ -67,6 +67,20 @@ def data_session_action_descriptor() -> ActionDescriptor:
     schema["properties"].update(
         {
             "session_id": {"type": "string", "minLength": 1, "maxLength": 256},
+            "dataset_names": {
+                "type": "array",
+                "maxItems": 64,
+                "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "pattern": r"\S",
+                },
+                "description": (
+                    "Dataset names to focus analysis on; "
+                    "not an access-control filter."
+                ),
+            },
             "attachment_ids": {
                 "type": "array",
                 "maxItems": 32,
@@ -456,6 +470,13 @@ class DataTaskAdapter:
                         state="blocked",
                         reason="analysis_model_missing",
                     )
+            if (
+                inputs.get("dataset_names")
+                and caps.get("dataset_context") is not True
+            ):
+                return Readiness(
+                    state="blocked", reason="dataset_context_unsupported"
+                )
             if "session_id" in inputs and "datasource_id" not in inputs:
                 if caps.get("optional_session_datasource") is not True:
                     return Readiness(
@@ -558,6 +579,11 @@ class DataTaskAdapter:
             and caps.get("optional_session_datasource") is not True
         ):
             raise TaskStoreError("optional_datasource_unsupported")
+        if (
+            submission.inputs.get("dataset_names")
+            and caps.get("dataset_context") is not True
+        ):
+            raise TaskStoreError("dataset_context_unsupported")
         body = {
             "protocol_version": 1,
             "submission_id": submission_id,

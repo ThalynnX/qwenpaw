@@ -1054,3 +1054,45 @@ async def test_optional_datasource_does_not_bypass_restricted_grant(
     await policy.check(
         submission.handle.scope, action, {**inputs, "datasource_id": "sales"}
     )
+
+
+@pytest.mark.parametrize("supported", [True, False])
+async def test_dataset_selection_requires_engine_support(
+    submission, supported
+):
+    action = BRIDGE.data_session_action_descriptor()
+    scoped = submission.model_copy(
+        update={
+            "action": action,
+            "inputs": {
+                "session_id": "ses_1",
+                "text": "analyze",
+                "datasource_id": "sales",
+                "dataset_names": ["dws_gaap_di"],
+            },
+        }
+    )
+    requests = []
+    adapter = client(
+        scoped,
+        capabilities={
+            **CAPS,
+            "session_submissions": True,
+            "dataset_context": supported,
+        },
+        requests=requests,
+    )
+    try:
+        if supported:
+            assert await adapter.submit(scoped) == REF
+            assert json.loads(requests[-1].content)["dataset_names"] == [
+                "dws_gaap_di"
+            ]
+        else:
+            with pytest.raises(
+                TaskStoreError, match="dataset_context_unsupported"
+            ):
+                await adapter.submit(scoped)
+            assert all(request.method == "GET" for request in requests)
+    finally:
+        await adapter.aclose()

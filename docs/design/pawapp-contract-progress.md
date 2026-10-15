@@ -20,7 +20,7 @@ verified separately.
 
 The machine-readable source is
 [`tests/fixtures/pawapp-compatibility.json`](../../tests/fixtures/pawapp-compatibility.json).
-The Engine is fork revision `66eba6f16a56af0f552969542e91a06693f1548a`,
+The Engine is fork revision `4bb93f345f5217b51494bcf2d74e0b927b909ab4`,
 which includes scoped-session ownership and per-run Host model bindings. CI checks out and verifies
 that exact revision. No compatibility patch is required. Run
 `scripts/prepare-pawapp-engine.py <checkout>` to verify the pairing locally.
@@ -230,3 +230,35 @@ DataBridge MCP tools with session-scoped clients.
 Live native-chat acceptance with no explicit datasource selection found
 `DemoProduct → dws_gaap_di` and executed `SELECT 1 AS connection_ok`, returning
 `[[1]]` with successful SQL execution. The Host task reached `succeeded`.
+
+
+## Dataset reload and selected analysis context — 2026-10-15
+
+The embedded Console requested `/api/v1/datasets`, which the OSS Engine did
+not implement; reload therefore repeated a 404. The Engine now loads the
+semantic dataset catalog with the OSS `datasource_id` filter, authenticated
+requests, validated pagination, and explicit upstream errors. The Cloud-only
+`source_datasource` parameter is not used because OSS would ignore it.
+
+Native `analyze-session` also accepts bounded `dataset_names`. The Engine
+advertises `dataset_context`, persists names with the chat in SQL/JSON stores,
+returns them on history reads, preserves them on forks, and includes them in
+the agent's analysis context. Names participate in submission idempotency;
+omitted/empty names preserve older submission digests. Selection is an
+analysis focus, not a database authorization or hard query filter. Existing
+source grants and session ownership still apply. Older Engines are blocked
+before selected-dataset submissions are sent.
+
+Validation: the full Engine suite passed (749 tests, three skips), including
+catalog pagination and filtering, submission persistence and idempotency.
+Host adapter tests passed (56), and 12 separate-process integration cases
+passed, including dataset
+selection, retries, clarification and cancellation. The local app was
+reinstalled and activated. Its existing unrestricted Direct analysis grant
+was refreshed with the same constraints for the updated descriptor.
+
+Live browser acceptance: selecting `Demo PG - GAAP use case` populated
+`dws_gaap_di`. A selected-dataset turn inspected metadata and successfully ran
+`SELECT COUNT(*) AS row_count FROM dws_gaap_di`, returning **475** rows.
+The completed result remains in the verification session. A request for an
+unrelated datasource returned an empty catalog.

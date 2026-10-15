@@ -42,13 +42,17 @@ host = host_fixture
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("intent", ["finish", "clarify", "pause"])
-@pytest.mark.parametrize("datasource_id", ["sales", None])
+@pytest.mark.parametrize(
+    "datasource_id,dataset_names",
+    [("sales", None), (None, None), ("sales", ["dws_gaap_di"])],
+)
 # pylint: disable-next=R0915
 async def test_native_console_uses_durable_existing_session(
     host,
     engine,
     intent,
     datasource_id,
+    dataset_names,
 ):
     package = ModuleType("native_data_under_test")
     package.__path__ = [
@@ -124,7 +128,7 @@ async def test_native_console_uses_durable_existing_session(
             "session_id": session_id,
             "datasource_id": datasource_id,
             "text": intent,
-            "dataset_names": None,
+            "dataset_names": dataset_names,
             "attachment_ids": [],
             "artifact_comments": [],
             "enable_clarification": True,
@@ -150,6 +154,7 @@ async def test_native_console_uses_durable_existing_session(
         )
         assert first.status_code == 200, first.text
         assert first.json()["chat"]["session_id"] == session_id
+        assert first.json()["chat"]["dataset_names"] == (dataset_names or [])
         task_id = first.json()["task_id"]
         expected = "succeeded"
         if intent != "finish":
