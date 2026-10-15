@@ -3535,6 +3535,11 @@
     "prompt1": "Let's start a new journey!",
     "prompt2": "Can you tell me what skills you have?",
     "inputPlaceholder": "\"↑↓\" for message navigation · \"/\" for quick commands",
+    "composer": {
+      "attach": "Anexar arquivos",
+      "send": "Enviar mensagem",
+      "stop": "Parar geração"
+    },
     "emptyOutputError": "O assistente retornou uma resposta vazia.",
     "commands": {
       "clear": {

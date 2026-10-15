@@ -3276,6 +3276,11 @@
     "prompt1": "新しい旅を始めましょう！",
     "prompt2": "あなたのスキルを教えてください。",
     "inputPlaceholder": "\"↑↓\"でメッセージ移動 · \"/\"でクイックコマンド",
+    "composer": {
+      "attach": "ファイルを添付",
+      "send": "メッセージを送信",
+      "stop": "生成を停止"
+    },
     "emptyOutputError": "アシスタントが空のレスポンスを返しました。",
     "commands": {
       "clear": {

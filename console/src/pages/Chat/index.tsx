@@ -255,6 +255,7 @@ import {
 } from "../../utils/sessionRoute";
 import { useUploadLimitStore } from "../../stores/uploadLimitStore";
 import ChatSenderTabsPanel from "./components/ChatSenderTabsPanel";
+import ComposerAccessibilityLabels from "./components/ComposerAccessibilityLabels";
 import {
   selectTasksForSession,
   useBackgroundTasksStore,
@@ -4007,6 +4008,7 @@ export default function ChatPage() {
               sessionId={chatId}
               agentTransition={isAgentTransition}
             />
+            <ComposerAccessibilityLabels />
             <ChatHeaderTitle />
             <span className={styles.headerSpacer} />
             <ChatActionGroup
@@ -4180,6 +4182,7 @@ export default function ChatPage() {
                   return (
                     <Tooltip title={tooltipTitle}>
                       <IconButton
+                        aria-label={t("chat.composer.attach")}
                         disabled={props?.disabled}
                         icon={<SparkAttachmentLine size="1em" />}
                         bordered={false}
