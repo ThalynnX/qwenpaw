@@ -1,6 +1,14 @@
 import { useEffect, useState, useDeferredValue } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, Form, Modal, Table, Button, Tabs } from "@agentscope-ai/design";
+import {
+  Button,
+  Card,
+  Checkbox,
+  Form,
+  Modal,
+  Table,
+  Tabs,
+} from "@agentscope-ai/design";
 import { useAppMessage } from "../../../hooks/useAppMessage";
 import { useTranslation } from "react-i18next";
 import {
@@ -15,6 +23,8 @@ import api from "../../../api";
 import { PageHeader } from "@/components/PageHeader";
 import { ChannelIcon } from "../Channels/components";
 import styles from "./index.module.less";
+
+const MOBILE_PAGE_SIZE = 20;
 
 function SessionsPage() {
   const { t } = useTranslation();
@@ -41,6 +51,8 @@ function SessionsPage() {
   const [form] = Form.useForm<Session>();
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [mobileVisibleCount, setMobileVisibleCount] =
+    useState(MOBILE_PAGE_SIZE);
 
   // Filter states
   const [filterUserId, setFilterUserId] = useState<string>("");
@@ -104,6 +116,10 @@ function SessionsPage() {
   useEffect(() => {
     setSelectedRowKeys([]);
   }, [activeTab]);
+
+  useEffect(() => {
+    setMobileVisibleCount(MOBILE_PAGE_SIZE);
+  }, [activeTab, filterUserId, filterChannel, deferredTitle]);
 
   const handleEdit = (session: Session) => {
     setEditingSession(session);
@@ -221,6 +237,23 @@ function SessionsPage() {
     },
   };
 
+  const mobileSessions = filteredSessions.slice(0, mobileVisibleCount);
+  const hasMoreMobileSessions = mobileVisibleCount < filteredSessions.length;
+
+  const handleMobileSelectionChange = (sessionId: string, checked: boolean) => {
+    setSelectedRowKeys((current) =>
+      checked
+        ? Array.from(new Set([...current, sessionId]))
+        : current.filter((key) => key !== sessionId),
+    );
+  };
+
+  const handleLoadMoreMobileSessions = () => {
+    setMobileVisibleCount((current) =>
+      Math.min(current + MOBILE_PAGE_SIZE, filteredSessions.length),
+    );
+  };
+
   return (
     <div className={styles.sessionsPage}>
       <PageHeader
@@ -280,7 +313,7 @@ function SessionsPage() {
 
       {isMobile ? (
         <div className={styles.mobileCardList}>
-          {filteredSessions.map((session) => (
+          {mobileSessions.map((session) => (
             <Card
               key={session.id}
               className={styles.mobileSessionCard}
@@ -288,6 +321,20 @@ function SessionsPage() {
               bodyStyle={{ padding: 24 }}
             >
               <div className={styles.mobileSessionHeader}>
+                <Checkbox
+                  className={styles.mobileSelection}
+                  checked={selectedRowKeys.includes(session.id)}
+                  aria-label={t("sessions.selectSession", {
+                    defaultValue: "Select {{name}}",
+                    name: session.name || session.id,
+                  })}
+                  onChange={(event) =>
+                    handleMobileSelectionChange(
+                      session.id,
+                      event.target.checked,
+                    )
+                  }
+                />
                 <span className={styles.mobileSessionName}>
                   {session.name || session.id}
                 </span>
@@ -355,6 +402,16 @@ function SessionsPage() {
               </div>
             </Card>
           ))}
+          {hasMoreMobileSessions && (
+            <div className={styles.mobileLoadMore}>
+              <Button
+                className={styles.mobileLoadMoreButton}
+                onClick={handleLoadMoreMobileSessions}
+              >
+                {t("common.loadMore", "Load more")}
+              </Button>
+            </div>
+          )}
         </div>
       ) : (
         <Card className={styles.tableCard} bodyStyle={{ padding: 0 }}>

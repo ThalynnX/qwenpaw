@@ -128,6 +128,15 @@
   gap: 12px;
 }
 
+.mobileSelection {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 .mobileSessionName {
   font-weight: 600;
   font-size: 16px;
@@ -170,7 +179,8 @@
 
   .mobileActionBtn {
     font-size: 13px;
-    height: 28px;
+    min-width: 44px;
+    min-height: 44px;
     padding: 0 10px;
     color: var(--app-text-secondary);
     background: transparent;
@@ -198,6 +208,17 @@
       }
     }
   }
+}
+
+.mobileLoadMore {
+  display: flex;
+  justify-content: center;
+  padding-bottom: 8px;
+}
+
+.mobileLoadMoreButton {
+  min-width: 120px;
+  min-height: 44px;
 }
 
 @media (max-width: 768px) {
