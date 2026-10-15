@@ -1,4 +1,65 @@
 const LARGE_BASE64_CHARS = 4_096;
+const RAW_DISPLAY_CHAR_BUDGET = 100_000;
+const RAW_DISPLAY_NODE_BUDGET = 2_000;
+const RAW_DISPLAY_DEPTH_BUDGET = 100;
+
+type BudgetKind = "character" | "node";
+
+function budgetSummary(kind: BudgetKind): string {
+  const limit =
+    kind === "character"
+      ? `${RAW_DISPLAY_CHAR_BUDGET}-character`
+      : `${RAW_DISPLAY_NODE_BUDGET}-node`;
+  return (
+    `[Raw value omitted: exceeds the ${limit} display budget. ` +
+    "Switch to Current view or rerun the tool with narrower output.]"
+  );
+}
+
+function inspectDisplayBudget(value: unknown): BudgetKind | null {
+  let characters = 0;
+  let nodes = 0;
+  const ancestors = new WeakSet<object>();
+
+  const inspect = (item: unknown, depth: number): BudgetKind | null => {
+    nodes += 1;
+    if (nodes > RAW_DISPLAY_NODE_BUDGET || depth > RAW_DISPLAY_DEPTH_BUDGET) {
+      return "node";
+    }
+
+    if (typeof item === "string") {
+      characters += item.length;
+      return characters > RAW_DISPLAY_CHAR_BUDGET ? "character" : null;
+    }
+    if (item === null || item === undefined) return null;
+    if (typeof item !== "object") {
+      characters += String(item).length;
+      return characters > RAW_DISPLAY_CHAR_BUDGET ? "character" : null;
+    }
+    if (ancestors.has(item)) return null;
+
+    ancestors.add(item);
+    if (Array.isArray(item)) {
+      for (const child of item) {
+        const exceeded = inspect(child, depth + 1);
+        if (exceeded) return exceeded;
+      }
+    } else {
+      const container = item as Record<string, unknown>;
+      for (const key in container) {
+        if (!Object.prototype.hasOwnProperty.call(container, key)) continue;
+        characters += key.length;
+        if (characters > RAW_DISPLAY_CHAR_BUDGET) return "character";
+        const exceeded = inspect(container[key], depth + 1);
+        if (exceeded) return exceeded;
+      }
+    }
+    ancestors.delete(item);
+    return null;
+  };
+
+  return inspect(value, 0);
+}
 
 function base64Placeholder(length: number): string {
   return `[base64 data omitted: ${length} characters]`;
@@ -89,11 +150,19 @@ function parseJsonString(value: string): unknown {
 export function formatRawToolValue(value: unknown): string {
   if (value === undefined) return "";
 
+  const initialBudget = inspectDisplayBudget(value);
+  if (initialBudget) return budgetSummary(initialBudget);
+
   const parsed = typeof value === "string" ? parseJsonString(value) : value;
   if (typeof parsed === "string") {
     return isLargeBase64DataUrl(parsed)
       ? base64Placeholder(parsed.length)
       : parsed;
+  }
+
+  if (parsed !== value) {
+    const parsedBudget = inspectDisplayBudget(parsed);
+    if (parsedBudget) return budgetSummary(parsedBudget);
   }
 
   try {
