@@ -388,9 +388,9 @@ describe("installed SDK session lifecycle with CoPaw's blank-new hook", () => {
     );
     const gate = deferred();
     gates.push(gate);
-    fixture.history.mockImplementation(async () => {
+    fixture.history.mockImplementation(async (id) => {
       await gate.promise;
-      return { status: "idle", messages: [] };
+      return { ...record(id), status: "idle", messages: [] };
     });
     await act(async () => {
       host.current().navigate(`/chat/${B}`);
@@ -421,6 +421,7 @@ describe("installed SDK session lifecycle with CoPaw's blank-new hook", () => {
     fixture.history.mockImplementation(async (id) => {
       if (id === B) await gate.promise;
       return {
+        ...record(id),
         status: "idle",
         messages: [
           {
