@@ -12,12 +12,14 @@ vi.mock("react-i18next", () => ({
 
 beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, "scrollTo");
+  vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(162);
   HTMLElement.prototype.setPointerCapture = vi.fn();
   HTMLElement.prototype.releasePointerCapture = vi.fn();
   HTMLElement.prototype.hasPointerCapture = vi.fn(() => true);
 });
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   preferences.reduced = false;
 });
 
@@ -29,6 +31,73 @@ function settle(element: HTMLElement, row: number) {
 }
 
 describe("DurationWheel", () => {
+  it("positions a wheel mounted in a detached portal when it becomes visible", () => {
+    const observers: {
+      notify: () => void;
+      disconnect: ReturnType<typeof vi.fn>;
+    }[] = [];
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        disconnect = vi.fn();
+        observe = vi.fn();
+        constructor(notify: () => void) {
+          observers.push({ notify, disconnect: this.disconnect });
+        }
+      },
+    );
+    const container = document.createElement("div");
+    const onChange = vi.fn();
+    const view = render(<DurationWheel value={510} onChange={onChange} />, {
+      container,
+    });
+    const [hour, minute] = view.getAllByRole("spinbutton");
+    expect(hour.scrollTop).toBe(0);
+    expect(minute.scrollTop).toBe(0);
+    document.body.appendChild(container);
+    act(() => observers.forEach(({ notify }) => notify()));
+    expect(hour.scrollTop).toBe(32 * 72);
+    expect(minute.scrollTop).toBe(90 * 72);
+    expect(onChange).not.toHaveBeenCalled();
+    view.unmount();
+    expect(
+      observers.every(({ disconnect }) => disconnect.mock.calls.length > 0),
+    ).toBe(true);
+    container.remove();
+  });
+
+  it("restores the latest time after a hidden tab becomes visible again", () => {
+    const observers = new Map<Element, () => void>();
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        notify: () => void;
+        constructor(notify: () => void) {
+          this.notify = notify;
+        }
+        observe(element: Element) {
+          observers.set(element, this.notify);
+        }
+        disconnect() {}
+      },
+    );
+    const height = vi.spyOn(HTMLElement.prototype, "clientHeight", "get");
+    const onChange = vi.fn();
+    const view = render(<DurationWheel value={510} onChange={onChange} />);
+    const [hour, minute] = view.getAllByRole("spinbutton");
+    height.mockReturnValue(0);
+    act(() => observers.forEach((notify) => notify()));
+    hour.scrollTop = 0;
+    minute.scrollTop = 0;
+    view.rerender(<DurationWheel value={645} onChange={onChange} />);
+    expect(hour.scrollTop).toBe(0);
+    height.mockReturnValue(162);
+    act(() => observers.forEach((notify) => notify()));
+    expect(hour.scrollTop).toBe(34 * 72);
+    expect(minute.scrollTop).toBe(105 * 72);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it("initializes without saving and animates external selections without emitting edits", () => {
     const onChange = vi.fn();
     const view = render(<DurationWheel value={300} onChange={onChange} />);

@@ -179,14 +179,17 @@ vi.mock("@/components/interaction/SettingsDrawer", () => ({
     title,
     children,
     footer,
+    onClose,
   }: {
     open: boolean;
     title: React.ReactNode;
     children: React.ReactNode;
     footer: React.ReactNode;
+    onClose: () => void;
   }) =>
     open ? (
       <div>
+        <button aria-label="Close" onClick={onClose} />
         {title}
         {children}
         {footer}
@@ -703,8 +706,8 @@ describe("JobDrawer footer actions", () => {
   });
 });
 
-describe("JobDrawer automatic edits", () => {
-  it("saves an existing task without dismissing its editor", async () => {
+describe("JobDrawer explicit edits", () => {
+  it("only saves on Save, including preserved request context and metadata", async () => {
     const { getForm, onSubmit, onClose } = renderDrawer({
       editingJob: { id: "existing", name: "Before" } as CronJobSpecOutput,
     });
@@ -714,6 +717,8 @@ describe("JobDrawer automatic edits", () => {
         name: "Before",
         task_type: "text",
         text: "Reminder",
+        request: { input: "[]", request_context: { custom: "keep" } },
+        meta: { custom: "keep" },
         dispatch: {
           channel: "console",
           target: { user_id: "admin", session_id: "default" },
@@ -726,20 +731,51 @@ describe("JobDrawer automatic edits", () => {
         target: { value: "After" },
       },
     );
-    await waitFor(
-      () =>
-        expect(onSubmit).toHaveBeenCalledWith(
-          expect.objectContaining({
-            id: "existing",
-            name: "After",
-            text: "Reminder",
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+    });
+    fireEvent.click(screen.getByRole("tab", { name: "cronJobs.taskType" }));
+    expect(onSubmit).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("common.save"));
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "existing",
+          name: "After",
+          text: "Reminder",
+          request: expect.objectContaining({
+            request_context: { custom: "keep" },
           }),
-        ),
-      { timeout: 2500 },
+          meta: { custom: "keep" },
+        }),
+      ),
     );
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.queryByText("common.create")).not.toBeInTheDocument();
   });
+
+  it.each(["common.cancel", "Close"])(
+    "allows %s to discard an invalid edit without saving",
+    async (button) => {
+      const { getForm, onSubmit, onClose } = renderDrawer({
+        editingJob: { id: "existing", name: "Before" } as CronJobSpecOutput,
+      });
+      act(() =>
+        getForm().setFieldsValue({
+          name: "Before",
+          request: { input: "{broken" },
+        }),
+      );
+      fireEvent.change(
+        screen.getByPlaceholderText("cronJobs.jobNamePlaceholder"),
+        { target: { value: "" } },
+      );
+      fireEvent.click(screen.getByRole("tab", { name: "cronJobs.taskType" }));
+      fireEvent.click(screen.getByRole("button", { name: button }));
+      await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+      expect(onSubmit).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("visual recurring schedules", () => {
