@@ -89,6 +89,7 @@ def data_session_action_descriptor() -> ActionDescriptor:
             },
         },
     )
+    schema["required"].remove("datasource_id")
     schema["required"].append("session_id")
     return base.model_copy(
         update={
@@ -182,7 +183,8 @@ def _data_experience_update(
                     default="Data source",
                     translations={"zh-CN": "数据源"},
                 ),
-                value=submission.inputs["datasource_id"],
+                value=submission.inputs.get("datasource_id")
+                or "All available sources",
             ),
         ),
         view_id="summary",
@@ -454,6 +456,13 @@ class DataTaskAdapter:
                         state="blocked",
                         reason="analysis_model_missing",
                     )
+            if "session_id" in inputs and "datasource_id" not in inputs:
+                if caps.get("optional_session_datasource") is not True:
+                    return Readiness(
+                        state="blocked",
+                        reason="optional_datasource_unsupported",
+                    )
+                return Readiness(state="ready")
             sources = await self._json(
                 connection,
                 "GET",
@@ -543,6 +552,12 @@ class DataTaskAdapter:
             and caps.get("session_submissions") is not True
         ):
             raise TaskStoreError("unsupported_session_submissions")
+        if (
+            "session_id" in submission.inputs
+            and "datasource_id" not in submission.inputs
+            and caps.get("optional_session_datasource") is not True
+        ):
+            raise TaskStoreError("optional_datasource_unsupported")
         body = {
             "protocol_version": 1,
             "submission_id": submission_id,

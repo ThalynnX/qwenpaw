@@ -110,6 +110,11 @@ The native Console's chat POST now enters the same Host coordinator through
 the Direct-only `analyze-session` action. It requires an explicit grant, a
 stable `X-Request-Id`, and Engine `session_submissions: true`. The submission
 retains the existing Engine session, attachment IDs and artifact comments.
+Its datasource selector is optional: Console `null` becomes an omitted input.
+An unselected datasource requires Engine `optional_session_datasource: true`;
+model and session readiness still apply. The delegated action continues to
+require a named datasource, and datasource-restricted grants reject unscoped
+Direct inputs. Upgrading this Direct schema changes its grant digest.
 Scoped `submission-readiness` checks reject legacy/unavailable or busy sessions
 before task creation; the Engine transaction rechecks ownership and concurrency.
 The Host stamps Engine calls with the authenticated principal/workspace

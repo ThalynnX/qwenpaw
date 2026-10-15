@@ -47,6 +47,10 @@ async def dispatch_console_chat(request: Request, gateway):
         )
     inputs.pop("dataset_names", None)
     inputs.pop("enable_clarification", None)
+    # The Console's "All data sources" selection is null. The contract uses
+    # absence so datasource-specific grant constraints still reject it.
+    if inputs.get("datasource_id") is None:
+        inputs.pop("datasource_id", None)
     try:
         action = await runtime.describe(scope, "analyze-session")
         action.validate_inputs(inputs)
@@ -116,6 +120,12 @@ async def dispatch_console_chat(request: Request, gateway):
             "Analysis admission is pending; retry with the same request ID",
         )
     except (TaskStoreError, ValueError) as exc:
+        if isinstance(exc, TaskStoreError) and exc.code == "action_forbidden":
+            raise HTTPException(
+                403,
+                "Data analysis access is not enabled for this request. "
+                "Review Data app access in main chat settings.",
+            ) from None
         raise _error(exc) from None
 
 

@@ -978,3 +978,79 @@ async def test_runtime_binding_is_resolved_for_scope_and_sent_privately(
         == "runtime-only"
     )
     assert "runtime-only" not in submission.model_dump_json()
+
+
+@pytest.mark.parametrize("supported", [True, False])
+async def test_session_without_datasource_checks_model_and_engine_capability(
+    submission, supported
+):
+    def handler(request):
+        if request.url.path.endswith("/capabilities/submissions"):
+            return httpx.Response(
+                200,
+                json={
+                    **CAPS,
+                    "session_submissions": True,
+                    "optional_session_datasource": supported,
+                },
+            )
+        if request.url.path.endswith("/submission-readiness"):
+            return httpx.Response(200, json={"ready": True})
+        assert request.url.path.endswith("/capabilities/analysis")
+        return httpx.Response(
+            200, json={"readiness_version": 1, "model_configured": True}
+        )
+
+    adapter = BRIDGE.DataTaskAdapter(
+        lambda: ("http://engine.test", "test-token"),
+        executor_id="engine",
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        ready = await adapter.readiness(
+            submission.handle.scope,
+            {"session_id": "ses_1", "text": "check model"},
+        )
+        assert ready.state == ("ready" if supported else "blocked")
+        assert ready.reason == (
+            None if supported else "optional_datasource_unsupported"
+        )
+    finally:
+        await adapter.aclose()
+
+
+async def test_optional_datasource_does_not_bypass_restricted_grant(
+    tmp_path, submission
+):
+    from qwenpaw.pawapp.tasks.policy import (
+        TaskGrant,
+        TaskPolicy,
+        FileTaskPolicy,
+    )
+
+    action = BRIDGE.data_session_action_descriptor()
+    inputs = {"text": "check model", "session_id": "ses_1"}
+    action.validate_inputs(inputs)
+    with pytest.raises(ValueError):
+        BRIDGE.data_action_descriptor().validate_inputs(
+            {"text": "check model"}
+        )
+    path = tmp_path / "policy.json"
+    path.write_text(
+        TaskPolicy(
+            grants=(
+                TaskGrant(
+                    scope=submission.handle.scope,
+                    action_id=action.action_id,
+                    descriptor_digest=action.descriptor_digest,
+                    input_values={"datasource_id": ["sales"]},
+                ),
+            )
+        ).model_dump_json()
+    )
+    policy = FileTaskPolicy(path)
+    with pytest.raises(TaskStoreError, match="action_forbidden"):
+        await policy.check(submission.handle.scope, action, inputs)
+    await policy.check(
+        submission.handle.scope, action, {**inputs, "datasource_id": "sales"}
+    )

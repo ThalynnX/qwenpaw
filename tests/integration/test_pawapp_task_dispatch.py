@@ -42,11 +42,13 @@ host = host_fixture
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("intent", ["finish", "clarify", "pause"])
+@pytest.mark.parametrize("datasource_id", ["sales", None])
 # pylint: disable-next=R0915
 async def test_native_console_uses_durable_existing_session(
     host,
     engine,
     intent,
+    datasource_id,
 ):
     package = ModuleType("native_data_under_test")
     package.__path__ = [
@@ -120,8 +122,12 @@ async def test_native_console_uses_durable_existing_session(
         session_id = session["session"]["id"]
         body = {
             "session_id": session_id,
-            "datasource_id": "sales",
+            "datasource_id": datasource_id,
             "text": intent,
+            "dataset_names": None,
+            "attachment_ids": [],
+            "artifact_comments": [],
+            "enable_clarification": True,
         }
         headers = {"X-Agent-Id": "sales", "X-Request-Id": "native-first"}
         legacy = await gateway.json(

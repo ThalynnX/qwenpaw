@@ -20,7 +20,7 @@ verified separately.
 
 The machine-readable source is
 [`tests/fixtures/pawapp-compatibility.json`](../../tests/fixtures/pawapp-compatibility.json).
-The Engine is fork revision `3a68fc15b8e815f64dc1e4f4c3e682b7874a6656`,
+The Engine is fork revision `ccf11e9aafab745f13cfc5ce4d8cffa11770c904`,
 which includes scoped-session ownership and per-run Host model bindings. CI checks out and verifies
 that exact revision. No compatibility patch is required. Run
 `scripts/prepare-pawapp-engine.py <checkout>` to verify the pairing locally.
@@ -185,3 +185,25 @@ The readiness follow-up passed 16 model-settings/provenance tests and a browser
 save-and-return check: a missing inherited model shows the warning, then saving a
 configured override clears it without a reload. No live model inference or
 embedding rebuild was performed.
+
+
+## Native chat datasource selection fix — 2026-10-15
+
+Native Data chat now accepts the Console's null datasource selection. Host
+normalizes it to an omitted optional input for `analyze-session`; the Engine
+advertises `optional_session_datasource` and accepts it only for an owned,
+existing session. Delegated `analyze` still requires a datasource. Named-source
+grant constraints still reject unscoped inputs, and existing grant digests must
+be refreshed for the changed Direct action. Admission reports an actionable
+App access error when that grant is absent or stale.
+
+Validation: 84 Host adapter/policy tests, 41 Engine submission tests, and 19
+separate-process Host–Engine integration tests passed. Native chat cases cover
+selected/no source, retries, clarification, cancellation and session ownership.
+The controlled Engine fixture also accepts the runtime model-binding arguments.
+
+Live acceptance: the installed app accepted an unscoped native turn. Its first
+execution exposed stopped local Colima; after starting the existing runtime,
+a second turn completed with `Connection OK`, and the Host task reached
+`succeeded`. The already enabled unrestricted Direct grant was re-saved for the
+new descriptor with the same constraints; other grants were preserved.
