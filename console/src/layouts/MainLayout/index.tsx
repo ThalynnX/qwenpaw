@@ -84,7 +84,7 @@ export default function MainLayout({ hubMode = false }: { hubMode?: boolean }) {
                 <ChunkRecoverySuspense
                   fallback={
                     <Spin
-                      tip={t("common.loading")}
+                      aria-label={t("common.loading")}
                       style={{ display: "block", margin: "20vh auto" }}
                     />
                   }
