@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=protected-access
 from __future__ import annotations
 
 import importlib.util
@@ -121,7 +122,24 @@ def test_backend_entry_loads_with_plugin_loader_package_shape() -> None:
                 sys.modules.pop(loaded_name, None)
 
 
-def test_data_gateway_tools_are_app_private_not_main_chat_tools() -> None:
+def test_data_gateway_tools_are_app_private_not_main_chat_tools(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    # Exercise registration without depending on a developer's Engine install.
+    for layer in (
+        "atomic",
+        "domains",
+        "meta",
+        "planning",
+        "routing",
+        "runtime",
+        "workflows",
+    ):
+        skill = tmp_path / layer / "example"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text("# Example\n", encoding="utf-8")
+    monkeypatch.setenv("QWENPAW_DATA_SKILLS_DIR", str(tmp_path))
     module_name = "plugin_qwenpaw_data_private_tools_test"
     spec = importlib.util.spec_from_file_location(
         module_name,

@@ -699,7 +699,7 @@ def browse_directory_action_descriptor() -> ActionDescriptor:
                                     "symlink",
                                     "other",
                                     "unavailable",
-                                ]
+                                ],
                             },
                             "size_bytes": {"type": ["integer", "null"]},
                             "modified_at": {"type": ["number", "null"]},
@@ -716,7 +716,7 @@ async def browse_directory(ctx):
     from qwenpaw.pawapp.tasks import ActionResult
 
     listing = json.loads(
-        await asyncio.to_thread(render_directory, ctx.inputs["directory"])
+        await asyncio.to_thread(render_directory, ctx.inputs["directory"]),
     )
     return ActionResult(
         summary=(

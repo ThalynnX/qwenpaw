@@ -48,7 +48,9 @@ function CollectionCard({
       );
       setItems((current: PawAppArtifactRef[]) => {
         const seen = new Set(
-          current.map((artifact) => `${artifact.artifact_id}:${artifact.version}`),
+          current.map(
+            (artifact) => `${artifact.artifact_id}:${artifact.version}`,
+          ),
         );
         return [
           ...current,

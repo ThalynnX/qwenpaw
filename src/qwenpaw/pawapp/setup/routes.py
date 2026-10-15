@@ -49,7 +49,10 @@ class DirectSetupRequest(Contract):
 
 @router.post("/actions/{action_id}/direct-setup-requests")
 async def start_direct_setup(
-    request: Request, action_id: str, scope: Scope, body: DirectSetupRequest
+    request: Request,
+    action_id: str,
+    scope: Scope,
+    body: DirectSetupRequest,
 ):
     from ..tasks.client import ScopedSetup
 

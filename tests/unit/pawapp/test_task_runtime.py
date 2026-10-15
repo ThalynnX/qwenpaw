@@ -462,18 +462,18 @@ async def test_capability_grant_updates_bundle_atomically(host):
             "adapter_ref": "fixture.list-records.v1",
         },
     )
-    host.registrations[(SCOPE.app_id, second_action.action_id)] = (
-        ActionRegistration(
-            action=second_action,
-            factory=lambda: Executor(host.runs),
-            settings_entry="/apps/qwenpaw-data",
-            capability_id="data_analysis",
-            capability_label="Analyze data",
-            capability_summary=(
-                "Run governed analysis against an approved data source."
-            ),
-            capability_risk="analysis",
-        )
+    host.registrations[
+        (SCOPE.app_id, second_action.action_id)
+    ] = ActionRegistration(
+        action=second_action,
+        factory=lambda: Executor(host.runs),
+        settings_entry="/apps/qwenpaw-data",
+        capability_id="data_analysis",
+        capability_label="Analyze data",
+        capability_summary=(
+            "Run governed analysis against an approved data source."
+        ),
+        capability_risk="analysis",
     )
     runtime = host.app.state.pawapp_tasks
     catalog = await runtime.grant_catalog(
@@ -672,13 +672,13 @@ async def test_create_video_grant_cannot_authorize_private_actions(host):
         settings_entry="/apps/qwenpaw-data",
     )
     for private_action in private_actions:
-        host.registrations[(SCOPE.app_id, private_action.action_id)] = (
-            ActionRegistration(
-                action=private_action,
-                factory=lambda: Executor(host.runs),
-                settings_entry="/apps/qwenpaw-data",
-                exposure="app_private",
-            )
+        host.registrations[
+            (SCOPE.app_id, private_action.action_id)
+        ] = ActionRegistration(
+            action=private_action,
+            factory=lambda: Executor(host.runs),
+            settings_entry="/apps/qwenpaw-data",
+            exposure="app_private",
         )
     host.policy_path.write_text(
         TaskPolicy(
@@ -1435,7 +1435,7 @@ async def test_generic_setup_blocks_without_creating_latent_task(host):
     assert not host.runs
 
     workspace = await host.app.state.pawapp_task_origins.manager.get_agent(
-        "sales"
+        "sales",
     )
 
     async def create_chat(chat):
@@ -1563,6 +1563,7 @@ async def test_generic_setup_blocks_without_creating_latent_task(host):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("restart_before_retry", [False, True])
+# pylint: disable-next=too-many-statements
 async def test_deferred_setup_retry_and_restart_recovery(
     host,
     restart_before_retry,
@@ -1711,7 +1712,7 @@ async def test_deferred_setup_retry_and_restart_recovery(
 
 async def test_direct_sdk_route_creates_scoped_origin_and_retries(host):
     workspace = await host.app.state.pawapp_task_origins.manager.get_agent(
-        "sales"
+        "sales",
     )
 
     async def create(chat):
@@ -1734,7 +1735,9 @@ async def test_direct_sdk_route_creates_scoped_origin_and_retries(host):
     assert replay.json()["task"]["task_id"] == task["task_id"]
     assert workspace.chat_manager.create_chat.call_count == 1
     mismatch = await host.client.post(
-        url, json=body, headers={"X-Agent-Id": "other"}
+        url,
+        json=body,
+        headers={"X-Agent-Id": "other"},
     )
     assert mismatch.status_code == 403
     other = await host.client.get(
@@ -1743,6 +1746,7 @@ async def test_direct_sdk_route_creates_scoped_origin_and_retries(host):
     )
     assert other.status_code == 404
     conflict = await host.client.post(
-        url, json={**body, "app_session_id": "native-two"}
+        url,
+        json={**body, "app_session_id": "native-two"},
     )
     assert conflict.status_code == 409

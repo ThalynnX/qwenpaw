@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=protected-access
 # pylint: disable=redefined-outer-name
 """Data task adapter protocol, text replay, and failure-boundary tests."""
 
@@ -65,7 +66,7 @@ def test_explicit_stage_survives_normal_events_and_replay():
                 "sequence_number": 4,
                 "object": "analysis.progress",
                 "stage": "invented",
-            }
+            },
         )
 
 
@@ -82,7 +83,7 @@ def test_explicit_artifact_role_overrides_legacy_filename_heuristic():
                 "kind": "data/diagnostic",
                 "visibility": "app_only",
             },
-        }
+        },
     )
     assert result["visibility"] == "app_only"
 
@@ -766,9 +767,9 @@ async def test_resume_after_non_text_event_retains_last_text_snapshot(
                     "replay_cursor": "2",
                     "executor_sequence": 2,
                     "text_result": "Revenue",
-                }
-            )
-        }
+                },
+            ),
+        },
     )
     events = await collect(client(resumed, events=items), resumed)
     assert [event.sequence for event in events] == [3]

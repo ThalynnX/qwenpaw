@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Scoped SDK: Host owns origins and authenticates scope."""
 
 from .contracts import TaskScope, TaskStoreError
@@ -48,7 +49,10 @@ class ScopedTasks:
     async def events(self, task_id, *, after=0, limit=100):
         await self.get(task_id)
         return await self.runtime.store.events(
-            self.scope, task_id, after=after, limit=limit
+            self.scope,
+            task_id,
+            after=after,
+            limit=limit,
         )
 
 

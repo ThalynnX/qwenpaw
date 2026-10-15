@@ -62,7 +62,9 @@ class _ReadyAdapter:
                 if self.artifacts is None:
                     raise TaskStoreError("artifact_store_unavailable")
                 event = await self.adapter.materialize_event(
-                    submission, event, self.artifacts
+                    submission,
+                    event,
+                    self.artifacts,
                 )
             yield event
 
@@ -161,7 +163,9 @@ class HostTaskRuntime:
                         from .managed import ManagedHandlerAdapter
 
                         adapter = ManagedHandlerAdapter(
-                            self.store, registration, self.artifacts
+                            self.store,
+                            registration,
+                            self.artifacts,
                         )
                     else:
                         adapter = registration.factory()
@@ -240,7 +244,12 @@ class HostTaskRuntime:
         return binding.coordinator.describe(scope.app_id, action_id)
 
     async def catalog(
-        self, principal_id, workspace_id, *, intent="", engagement=None
+        self,
+        principal_id,
+        workspace_id,
+        *,
+        intent="",
+        engagement=None,
     ):
         """Compact granted descriptors; no readiness probes or dispatch."""
         await self._sync()
@@ -918,6 +927,7 @@ class HostTaskRuntime:
         handle = submission.handle
         request = record.request
         if (
+            # pylint: disable-next=too-many-boolean-expressions
             request.scope != handle.scope
             or request.task_id != handle.task_id
             or request.action_id != handle.action_id
@@ -929,6 +939,7 @@ class HostTaskRuntime:
             raise TaskStoreError("setup_link_conflict")
         return request.requirement_ids[0]
 
+    # pylint: disable-next=too-many-return-statements
     async def _reconcile_setup(self, binding, submission):
         handle = submission.handle
         if (

@@ -41,6 +41,10 @@ async function fetchFrontendPlugins(): Promise<FrontendPluginInfo[]> {
 }
 
 async function executePluginScript(entryUrl: string): Promise<void> {
+  // Direct App navigation can beat PluginProvider's idle initialization.
+  // Install hooks before any App renders so its hook order stays stable.
+  const { installHostSdk } = await import("./hostSdk/install");
+  installHostSdk();
   const response = await fetch(entryUrl, { headers: authHeaders() });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} for ${entryUrl}`);

@@ -106,6 +106,7 @@ _SCHEMA = (
 )
 
 
+# pylint: disable-next=too-many-public-methods
 class TaskStore:
     """Open explicitly with ``await TaskStore.open(host_owned_path)``.
 
@@ -370,7 +371,9 @@ class TaskStore:
         )
 
     async def find_run(
-        self, scope: TaskScope, run: ExecutorRunRef
+        self,
+        scope: TaskScope,
+        run: ExecutorRunRef,
     ) -> TaskSubmission:
         """Resolve an App's native run without leaking another scope's task."""
 
@@ -850,6 +853,7 @@ class TaskStore:
 
         return await self._run(operation, write=True)
 
+    # pylint: disable-next=too-many-statements
     async def apply_event(
         self,
         scope: TaskScope,
@@ -866,6 +870,7 @@ class TaskStore:
         digest = event.replay_digest
         event = event.model_copy(update={"detail": event.payload()})
 
+        # pylint: disable-next=too-many-branches,too-many-statements
         def operation(connection: sqlite3.Connection) -> TaskSubmission:
             submission = self._get(connection, scope, task_id)
             handle = submission.handle
@@ -939,6 +944,7 @@ class TaskStore:
                     raise TaskStoreError("invalid_artifact_ref") from None
                 producer = artifact_ref.producer
                 if (
+                    # pylint: disable-next=too-many-boolean-expressions
                     artifact_ref.type not in submission.action.output_types
                     or producer.app_id != handle.scope.app_id
                     or producer.action_id != handle.action_id

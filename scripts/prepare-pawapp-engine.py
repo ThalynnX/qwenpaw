@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Verify the tested Engine revision and any explicit compatibility patches."""
 
 import argparse
@@ -14,14 +15,16 @@ def main():
     parser.add_argument("engine_source", type=Path)
     args = parser.parse_args()
     manifest = json.loads(
-        (ROOT / "tests/fixtures/pawapp-compatibility.json").read_text()
+        (ROOT / "tests/fixtures/pawapp-compatibility.json").read_text(),
     )
     revision = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=args.engine_source, text=True
+        ["git", "rev-parse", "HEAD"],
+        cwd=args.engine_source,
+        text=True,
     ).strip()
     if revision != manifest["engine_revision"]:
         raise SystemExit(
-            "Engine revision differs from the tested compatibility pin"
+            "Engine revision differs from the tested compatibility pin",
         )
     for item in manifest["patches"]:
         patch = ROOT / item["path"]
@@ -30,7 +33,10 @@ def main():
         command = ["git", "apply", "--check", str(patch)]
         if (
             subprocess.run(
-                command, cwd=args.engine_source, capture_output=True
+                command,
+                cwd=args.engine_source,
+                capture_output=True,
+                check=False,
             ).returncode
             == 0
         ):

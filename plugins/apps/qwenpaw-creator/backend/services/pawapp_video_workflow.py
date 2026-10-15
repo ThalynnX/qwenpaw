@@ -73,7 +73,7 @@ from services.pawapp_artifacts import (
 from services.project_files.creation import ProjectCreationResult
 from services.project_files.facade import CreatorFileServices
 from services.project_files.final_film import resolve_canonical_final_film
-from services.project_files.models import Project, narrative_timeline_ids
+from services.project_files.models import narrative_timeline_ids
 from services.project_files.store import ProjectSnapshot
 from services.runtime_files.atomic_store import AtomicJsonRecordStore
 from services.runtime_files.execution_models import (
@@ -723,6 +723,7 @@ class CreatorVideoWorkflowSubmission(_FrozenWorkflowModel):
         return tuple(value) if isinstance(value, list) else value
 
     @model_validator(mode="after")
+    # pylint: disable-next=too-many-branches,too-many-statements
     def validate_workflow_state(self) -> CreatorVideoWorkflowSubmission:
         if self.updated_at < self.created_at:
             raise ValueError("workflow updated_at cannot precede created_at")
@@ -1343,6 +1344,7 @@ class _FinalSourceResolution:
     failure_code: str | None = None
 
 
+# pylint: disable-next=too-many-return-statements
 def _resolve_final_source(
     snapshot: ProjectSnapshot,
     graph: WorkGraph,
@@ -1402,6 +1404,7 @@ def _resolve_final_source(
         ),
     )
     if (
+        # pylint: disable-next=too-many-boolean-expressions
         task is None
         or not isinstance(task_id, str)
         or not isinstance(run_id, str)
@@ -1527,6 +1530,7 @@ def _expire_stale_pending_authorizations(
     return tuple(pending), expired
 
 
+# pylint: disable-next=R0911,R0912,R0915
 def _classify_observed_state(
     *,
     record: CreatorVideoWorkflowSubmission,
@@ -1635,9 +1639,9 @@ def _classify_observed_state(
     ) -> _ObservedWorkflowState:
         state_evidence = {**evidence, "stage": stage}
         if source_receipt is not None:
-            state_evidence["source_receipt_digest"] = (
-                source_receipt.receipt_digest
-            )
+            state_evidence[
+                "source_receipt_digest"
+            ] = source_receipt.receipt_digest
         return _ObservedWorkflowState(
             stage=stage,
             evidence=state_evidence,
@@ -1941,6 +1945,7 @@ class CreatorVideoWorkflowTaskAdapter:
         candidate: CreatorVideoWorkflowSubmission,
     ) -> None:
         if (
+            # pylint: disable-next=too-many-boolean-expressions
             current.task_id != candidate.task_id
             or current.submission_id != candidate.submission_id
             or current.descriptor_digest != candidate.descriptor_digest
@@ -2691,6 +2696,7 @@ class CreatorVideoWorkflowTaskAdapter:
         executions = ProjectExecutionStore(services.root)
         publishable = False
 
+        # pylint: disable-next=too-many-return-statements
         def update(
             current: CreatorVideoWorkflowSubmission,
         ) -> CreatorVideoWorkflowSubmission:
@@ -3035,6 +3041,7 @@ class CreatorVideoWorkflowTaskAdapter:
             run_ref=self._run_ref(record),
         )
 
+    # pylint: disable-next=too-many-branches
     async def attach(self, submission: TaskSubmission):
         services = self._services()
         record, _candidate, _request = await asyncio.to_thread(
@@ -3111,12 +3118,14 @@ class CreatorVideoWorkflowTaskAdapter:
                         authorization,
                     ).model_dump(mode="json")
                 if submission.handle.experience is not None:
-                    event_detail["experience_update"] = (
-                        _creator_experience_update(
-                            submission,
-                            record,
-                            workflow_event,
-                        ).model_dump(mode="json")
+                    event_detail[
+                        "experience_update"
+                    ] = _creator_experience_update(
+                        submission,
+                        record,
+                        workflow_event,
+                    ).model_dump(
+                        mode="json",
                     )
                 yield ExecutorEvent(
                     run_ref=run_ref,
@@ -3195,6 +3204,7 @@ class CreatorVideoWorkflowTaskAdapter:
         return event.model_copy(update={"detail": detail})
 
     @staticmethod
+    # pylint: disable-next=too-many-branches
     def _cancel_correlated_work(
         services: CreatorFileServices,
         record: CreatorVideoWorkflowSubmission,
@@ -3509,6 +3519,7 @@ class CreatorVideoWorkflowTaskAdapter:
             target,
         )
 
+    # pylint: disable-next=too-many-return-statements
     async def query_command(
         self,
         submission: TaskSubmission,

@@ -59,7 +59,10 @@ class HostOrigins:
         from .contracts import content_digest
 
         identity = content_digest(
-            {"scope": scope.model_dump(mode="json"), "session": app_session_id}
+            {
+                "scope": scope.model_dump(mode="json"),
+                "session": app_session_id,
+            },
         )
         return await self.ensure_direct(
             scope,
@@ -88,9 +91,9 @@ class HostOrigins:
                             "pawapp": {
                                 "app_id": scope.app_id,
                                 "agent_id": scope.workspace_id,
-                            }
+                            },
                         },
-                    )
+                    ),
                 )
         return await self.resolve(scope, "direct", chat_id)
 
@@ -213,7 +216,10 @@ Scope = Annotated[TaskScope, Depends(task_scope)]
 
 @router.post("/actions/{action_id}/direct-tasks")
 async def dispatch_direct(
-    request: Request, action_id: str, scope: Scope, body: DirectDispatchRequest
+    request: Request,
+    action_id: str,
+    scope: Scope,
+    body: DirectDispatchRequest,
 ):
     from .client import ScopedTasks
 

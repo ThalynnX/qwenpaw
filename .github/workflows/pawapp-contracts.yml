@@ -5,8 +5,10 @@ on:
   pull_request:
     paths:
       - 'src/qwenpaw/pawapp/**'
+      - 'src/qwenpaw/plugins/validation.py'
       - 'plugins/apps/**'
       - 'console/src/plugins/pawapp-sdk/**'
+      - 'console/src/plugins/usePluginLoader*'
       - 'console/src/api/modules/pawappTasks*'
       - 'console/src/components/Chat/ToolCards/cards/PawAppTaskCard*'
       - 'tests/**'
@@ -53,7 +55,7 @@ jobs:
       - name: Check generated contract drift and Host conformance
         run: |
           python scripts/generate-pawapp-contracts.py --check
-          python -m pytest -q tests/unit/pawapp plugins/apps/qwenpaw-file-browser/backend/tests
+          python -m pytest -q tests/unit/pawapp tests/unit/plugins/test_plugin_api_extensions.py tests/unit/cli/test_plugin_commands.py plugins/apps/qwenpaw-file-browser/backend/tests
       - name: Check real Host and Engine boundary
         env:
           QWENPAW_TEST_ENGINE_SOURCE: ${{ github.workspace }}/.engine-contract
@@ -67,4 +69,4 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npx tsc -b --noEmit
-          npm run test:run -- src/plugins/pawapp-sdk src/api/modules/pawappTasks.test.ts src/components/Chat/ToolCards/cards/PawAppTaskCard.test.tsx
+          npm run test:run -- src/plugins/pawapp-sdk src/plugins/usePluginLoader.test.ts src/api/modules/pawappTasks.test.ts src/components/Chat/ToolCards/cards/PawAppTaskCard.test.tsx

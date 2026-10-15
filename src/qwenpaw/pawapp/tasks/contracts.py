@@ -118,7 +118,7 @@ class ActionDescriptor(Contract):
             check_refs(self.result_schema)
             if self.result_schema.get("type") != "object":
                 raise ValueError(
-                    "action result schema must describe an object"
+                    "action result schema must describe an object",
                 )
             if self.result_schema.get("$schema") not in (
                 None,
@@ -141,7 +141,7 @@ class ActionDescriptor(Contract):
             return
         if len(canonical_json(data).encode()) > 65536:
             raise ValueError(
-                "action result exceeds 64 KiB; publish an artifact"
+                "action result exceeds 64 KiB; publish an artifact",
             )
         if self.result_schema is None:
             raise ValueError("structured results require a result schema")

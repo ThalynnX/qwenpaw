@@ -86,13 +86,19 @@ class EngineGateway:
         return response.json()
 
     async def proxy(
-        self, path: str, request: Request, *, user_id: str | None = None
+        self,
+        path: str,
+        request: Request,
+        *,
+        user_id: str | None = None,
     ) -> Response:
         upstream_path = self._upstream_path(path)
         # Legacy session APIs require Engine ownership checks.
         if upstream_path.startswith("/api/v1/"):
             caps = await self.json(
-                "GET", "/api/v1/capabilities/submissions", user_id=user_id
+                "GET",
+                "/api/v1/capabilities/submissions",
+                user_id=user_id,
             )
             if (
                 not isinstance(caps, dict)
@@ -120,7 +126,11 @@ class EngineGateway:
         )
 
     async def _stream(
-        self, path: str, request: Request, *, user_id: str | None = None
+        self,
+        path: str,
+        request: Request,
+        *,
+        user_id: str | None = None,
     ) -> StreamingResponse:
         headers = self._request_headers(request)
         if user_id is not None:

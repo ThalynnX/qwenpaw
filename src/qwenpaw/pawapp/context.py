@@ -269,6 +269,7 @@ class AppSettings:
 
 
 @dataclass
+# pylint: disable-next=too-many-public-methods
 class PawAppContext:
     """The ``ctx`` object — PawApp developer's gateway to QwenPaw.
 
@@ -307,7 +308,9 @@ class PawAppContext:
         from .tasks.client import ScopedTasks
 
         return ScopedTasks(
-            self._task_runtime, self._task_origins, self._task_scope()
+            self._task_runtime,
+            self._task_origins,
+            self._task_scope(),
         )
 
     @property
@@ -321,7 +324,9 @@ class PawAppContext:
         from .tasks.client import ScopedSetup
 
         return ScopedSetup(
-            self._task_runtime, self._task_origins, self._task_scope()
+            self._task_runtime,
+            self._task_origins,
+            self._task_scope(),
         )
 
     # ─── Chat ───────────────────────────────────────────────────────

@@ -1,4 +1,7 @@
+# -*- coding: utf-8 -*-
 """A neutral App exercises the shared Main Chat and SDK runtime."""
+
+# pylint: disable=redefined-outer-name,protected-access
 
 import asyncio
 from types import SimpleNamespace
@@ -29,10 +32,14 @@ from qwenpaw.pawapp.tasks.policy import FileTaskPolicy, TaskGrant, TaskPolicy
 from qwenpaw.pawapp.tasks.runtime import HostTaskRuntime
 
 SCOPE = TaskScope(
-    principal_id="alice", workspace_id="sales", app_id="neutral-app"
+    principal_id="alice",
+    workspace_id="sales",
+    app_id="neutral-app",
 )
 ORIGIN = TaskOrigin(
-    engagement="delegated", origin_ref="main", return_session_ref="chat-one"
+    engagement="delegated",
+    origin_ref="main",
+    return_session_ref="chat-one",
 )
 ACTION = ActionDescriptor(
     app_id=SCOPE.app_id,
@@ -73,13 +80,16 @@ async def harness(tmp_path):
                     action_id=ACTION.action_id,
                     descriptor_digest=ACTION.descriptor_digest,
                 ),
-            )
-        ).model_dump_json()
+            ),
+        ).model_dump_json(),
     )
     runtimes = []
 
     async def start(
-        handler, recovery="interrupt", action=ACTION, experience=None
+        handler,
+        recovery="interrupt",
+        action=ACTION,
+        experience=None,
     ):
         registration = ActionRegistration(
             action=action,
@@ -91,7 +101,7 @@ async def harness(tmp_path):
             store,
             policy=FileTaskPolicy(policy_path),
             registrations=lambda: {
-                (SCOPE.app_id, action.action_id): registration
+                (SCOPE.app_id, action.action_id): registration,
             },
             authorize_origin=AsyncMock(),
             artifacts=artifacts,
@@ -102,7 +112,10 @@ async def harness(tmp_path):
         return runtime
 
     yield SimpleNamespace(
-        start=start, store=store, artifacts=artifacts, policy=policy_path
+        start=start,
+        store=store,
+        artifacts=artifacts,
+        policy=policy_path,
     )
     for runtime in runtimes:
         await runtime.aclose()
@@ -140,7 +153,11 @@ async def test_terminal_commit_between_stream_reads(harness, monkeypatch):
     coordinator = TaskCoordinator(harness.store, authorize=AsyncMock())
     coordinator.register(ACTION, adapter)
     submission = await coordinator.dispatch(
-        SCOPE, ACTION.action_id, request_id="race", inputs={}, origin=ORIGIN
+        SCOPE,
+        ACTION.action_id,
+        request_id="race",
+        inputs={},
+        origin=ORIGIN,
     )
     # Control exactly when the handler commits, without a background job.
     monkeypatch.setattr(adapter, "_ensure_job", AsyncMock())
@@ -185,7 +202,8 @@ async def test_question_replay_artifact_and_scoped_reuse(harness):
         )
         answers = await ctx.request_input(QUESTION)
         return ActionResult(
-            "Checked", {"answer": answers[0].selected_options[0]}
+            "Checked",
+            {"answer": answers[0].selected_options[0]},
         )
 
     runtime = await harness.start(handler, "replay_safe")
@@ -216,7 +234,7 @@ async def test_question_replay_artifact_and_scoped_reuse(harness):
         1
     ] == b"reusable"
     other_origin = ORIGIN.model_copy(
-        update={"origin_ref": "second", "return_session_ref": "chat-two"}
+        update={"origin_ref": "second", "return_session_ref": "chat-two"},
     )
     assert (
         await dispatch(runtime, "two", other_origin)
@@ -228,7 +246,9 @@ async def test_question_replay_artifact_and_scoped_reuse(harness):
     ]:
         with pytest.raises(TaskStoreError):
             await harness.artifacts.read(
-                SCOPE.model_copy(update=update), ref.artifact_id, ref.version
+                SCOPE.model_copy(update=update),
+                ref.artifact_id,
+                ref.version,
             )
     # The command receipt survives completion and reconnect.
     receipt = await runtime.answer(
@@ -284,18 +304,19 @@ def test_additive_models_preserve_old_grant_and_event_digests():
     assert descriptor.descriptor_digest == content_digest(old)
     assert (
         descriptor.model_copy(
-            update={"guidance": "Explain choices"}
+            update={"guidance": "Explain choices"},
         ).descriptor_digest
         == descriptor.descriptor_digest
     )
-    fields = dict(
-        run_ref=ExecutorRunRef(executor_id="x", session_id="s", run_id="r"),
-        sequence=0,
-        cursor="0",
-        status="waiting_for_input",
-    )
+    fields = {
+        "run_ref": ExecutorRunRef(executor_id="x", session_id="s", run_id="r"),
+        "sequence": 0,
+        "cursor": "0",
+        "status": "waiting_for_input",
+    }
     legacy = ExecutorEvent(
-        **fields, detail={"input_request": QUESTION.model_dump(mode="json")}
+        **fields,
+        detail={"input_request": QUESTION.model_dump(mode="json")},
     )
     typed = ExecutorEvent(**fields, input_request=QUESTION)
     assert legacy.replay_digest == typed.replay_digest
@@ -309,11 +330,13 @@ def test_additive_models_preserve_old_grant_and_event_digests():
                 "experience_update",
                 "result_data",
             },
-        )
+        ),
     )
     with pytest.raises(ValueError):
         ExecutorEvent(
-            **fields, input_request=QUESTION, detail={"input_request": {}}
+            **fields,
+            input_request=QUESTION,
+            detail={"input_request": {}},
         )
 
 
@@ -327,8 +350,8 @@ async def test_delegated_catalog_omits_direct_only_actions(harness):
                     action_id=direct.action_id,
                     descriptor_digest=direct.descriptor_digest,
                 ),
-            )
-        ).model_dump_json()
+            ),
+        ).model_dump_json(),
     )
     runtime = await harness.start(AsyncMock(), action=direct)
     assert len(await runtime.catalog("alice", "sales")) == 1
@@ -354,7 +377,7 @@ async def test_simple_handler_projects_generic_experience_and_project(harness):
         await ctx.report(
             "inspected",
             experience={
-                "step_states": [{"step_id": "inspect", "status": "complete"}]
+                "step_states": [{"step_id": "inspect", "status": "complete"}],
             },
             project=project,
         )

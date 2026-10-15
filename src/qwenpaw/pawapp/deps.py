@@ -174,11 +174,13 @@ async def get_scoped_ctx(request: Request) -> PawAppContext:
         or "default"
     )
     claims = request.query_params.getlist(
-        "agent_id"
+        "agent_id",
     ) + request.headers.getlist("X-Agent-Id")
     if any(value != workspace for value in claims):
         raise HTTPException(403, "workspace scope mismatch")
     ctx.agent_id = workspace
+    # Scoped dependency injection owns these private Host services.
+    # pylint: disable=protected-access
     ctx._task_runtime = getattr(request.app.state, "pawapp_tasks", None)
     ctx._task_origins = getattr(request.app.state, "pawapp_task_origins", None)
     return ctx

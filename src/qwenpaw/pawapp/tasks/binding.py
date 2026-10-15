@@ -49,11 +49,9 @@ class ManagedTaskAdapter(TaskAdapter, Protocol):
         inputs: dict[str, Any],
     ) -> Readiness:
         """Check prerequisites without submitting work."""
-        ...
 
     async def aclose(self) -> None:
         """Close connections and stop locally owned execution."""
-        ...
 
 
 @runtime_checkable
@@ -61,10 +59,12 @@ class ArtifactMaterializingAdapter(Protocol):
     """Optional extension for materializing immutable artifact bytes."""
 
     async def materialize_event(
-        self, submission: TaskSubmission, event: ExecutorEvent, artifacts
+        self,
+        submission: TaskSubmission,
+        event: ExecutorEvent,
+        artifacts,
     ) -> ExecutorEvent:
         """Publish verified artifact bytes and return the reference event."""
-        ...
 
 
 InputResolver = Callable[
@@ -95,6 +95,7 @@ class ActionRegistration:
     ) = None
     recovery: Literal["interrupt", "replay_safe"] = "interrupt"
 
+    # pylint: disable-next=too-many-branches
     def __post_init__(self):
         if (self.factory is None) == (self.handler is None):
             raise ValueError("register exactly one handler or adapter factory")
@@ -102,7 +103,9 @@ class ActionRegistration:
             raise ValueError("invalid handler recovery policy")
         if not self.settings_entry:
             object.__setattr__(
-                self, "settings_entry", f"/apps/{self.action.app_id}"
+                self,
+                "settings_entry",
+                f"/apps/{self.action.app_id}",
             )
         if (
             self.experience is not None

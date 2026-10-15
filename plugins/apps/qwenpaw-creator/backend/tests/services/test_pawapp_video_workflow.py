@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Contract and durable bootstrap tests for Creator create-video."""
 
+# pylint: disable=protected-access
+
 import asyncio
 from datetime import timedelta
 import hashlib
@@ -711,9 +713,7 @@ def _install_final_video(
         compose_fingerprint,
         dispatch_model_scope("compose", ("", "")),
     )
-    dispatch_key = (
-        f"dag-compose:{timeline_id}-{dispatch_slot(compose_ledger)}"
-    )
+    dispatch_key = f"dag-compose:{timeline_id}-{dispatch_slot(compose_ledger)}"
     read_set = [{"ref": f"artifact-version:source-{suffix}"}]
     source_selections = [{"elementId": f"shot-{suffix}"}]
     executions = ProjectExecutionStore(services.root)
@@ -1099,7 +1099,7 @@ async def test_query_recovers_crash_after_project_publication(
 
     before = _workflow_record(services, submission.handle.submission_id)
     assert before.stage == "bootstrapping"
-    assert notifications == []
+    assert not notifications
     assert len(services.projects.list()) == 1
 
     recovered = CreatorVideoWorkflowTaskAdapter(lambda: services)
@@ -1456,10 +1456,15 @@ async def test_setup_expires_stale_authorization_before_approval_presentation(
     await adapter.query(submission)
     setup = _workflow_record(services, record.submission_id)
     assert setup.events[-1].setup_requirement_id == "storyboard-image"
-    assert ProjectExecutionStore(services.root).get_execution_authorization(
-        record.project_id,
-        stale.authorization_id,
-    ).status is ExecutionAuthorizationStatus.PENDING
+    assert (
+        ProjectExecutionStore(services.root)
+        .get_execution_authorization(
+            record.project_id,
+            stale.authorization_id,
+        )
+        .status
+        is ExecutionAuthorizationStatus.PENDING
+    )
     notifications_before_expiration = len(notifications)
 
     active_identity[0] = ("dashscope", "wan2.2-t2i-flash")
@@ -1482,10 +1487,13 @@ async def test_setup_expires_stale_authorization_before_approval_presentation(
         "expiredBy": "pawapp_video_workflow",
         "reason": "execution_configuration_changed",
     }
-    assert _workflow_record(
-        services,
-        record.submission_id,
-    ).approval_request_id is None
+    assert (
+        _workflow_record(
+            services,
+            record.submission_id,
+        ).approval_request_id
+        is None
+    )
 
     fresh = _authorization(
         services,

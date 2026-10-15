@@ -123,7 +123,7 @@ app.task_action(
         recovery="replay_safe",  # bounded read-only listing
         requirement_ids=(REQUIREMENT_ID,),
         input_resolver=make_input_resolver(store),
-    )
+    ),
 )
 
 

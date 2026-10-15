@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Native Data Console admission through the same durable Host boundary."""
 
 from __future__ import annotations
@@ -53,7 +54,7 @@ async def dispatch_console_chat(request: Request, gateway):
             {
                 "scope": scope.model_dump(mode="json"),
                 "session_id": inputs["session_id"],
-            }
+            },
         )
         origins = request.app.state.pawapp_task_origins
         origin = await origins.ensure_direct(
@@ -80,10 +81,12 @@ async def dispatch_console_chat(request: Request, gateway):
                 )
             if result.get("reason") == "session_busy":
                 raise HTTPException(
-                    409, "This Data session already has a running turn"
+                    409,
+                    "This Data session already has a running turn",
                 )
             raise HTTPException(
-                409, "Analysis setup is required in Data settings"
+                409,
+                "Analysis setup is required in Data settings",
             )
         handle = result["task"]
         # Only wait for admission, not model completion. Retrying the same
@@ -117,7 +120,11 @@ async def dispatch_console_chat(request: Request, gateway):
 
 
 async def command_console_chat(
-    request: Request, gateway, session_id: str, run_id: str, kind: str
+    request: Request,
+    gateway,
+    session_id: str,
+    run_id: str,
+    kind: str,
 ):
     scope = await console_scope(request)
     runtime = request.app.state.pawapp_tasks
@@ -144,7 +151,8 @@ async def command_console_chat(
         else:
             body = await request.json()
             if not isinstance(body, dict) or not isinstance(
-                body.get("clarification_id"), str
+                body.get("clarification_id"),
+                str,
             ):
                 raise HTTPException(422, "A clarification ID is required")
             result = body.get("result", {})
@@ -153,11 +161,13 @@ async def command_console_chat(
                 or result.get("status") != "answered"
             ):
                 raise HTTPException(
-                    422, "An explicit clarification answer is required"
+                    422,
+                    "An explicit clarification answer is required",
                 )
             if not isinstance(result.get("answers"), list):
                 raise HTTPException(
-                    422, "Explicit clarification answers are required"
+                    422,
+                    "Explicit clarification answers are required",
                 )
             answers = tuple(
                 TaskAnswer.model_validate(item)

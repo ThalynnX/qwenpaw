@@ -288,11 +288,13 @@ async def test_proxy_refuses_engine_without_session_scope_capability():
                 "path": "/api/v1/sessions",
                 "headers": [],
                 "query_string": b"",
-            }
+            },
         )
         with pytest.raises(HTTPException) as error:
             await gateway.proxy(
-                "api/v1/sessions", request, user_id="alice-sales"
+                "api/v1/sessions",
+                request,
+                user_id="alice-sales",
             )
         assert error.value.status_code == 503
         assert seen == ["/api/v1/capabilities/submissions"]

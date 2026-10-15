@@ -396,8 +396,10 @@ class PawApp:  # pylint: disable=too-many-public-methods
         def register(handler):
             self.task_action(
                 ActionRegistration(
-                    action=descriptor, handler=handler, **options
-                )
+                    action=descriptor,
+                    handler=handler,
+                    **options,
+                ),
             )
             return handler
 

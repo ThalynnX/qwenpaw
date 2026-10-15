@@ -1,9 +1,13 @@
+# -*- coding: utf-8 -*-
 """Host-managed execution for small Apps; external engines keep TaskAdapter.
 
 The journal shares the Host task database. Replay is opt-in: a handler marked
 safe must be read-only or use submission_id to deduplicate external effects.
 This is single-Host execution, not a distributed worker lease protocol.
 """
+
+# The managed journal is part of TaskStore's implementation boundary.
+# pylint: disable=protected-access
 
 from __future__ import annotations
 
@@ -65,7 +69,9 @@ class TaskExecution:
     """
 
     def __init__(
-        self, adapter: ManagedHandlerAdapter, submission: TaskSubmission
+        self,
+        adapter: ManagedHandlerAdapter,
+        submission: TaskSubmission,
     ):
         self._adapter = adapter
         self.submission = submission
@@ -91,7 +97,10 @@ class TaskExecution:
         )
 
     async def request_input(
-        self, request: TaskInputRequest, *, approval: bool = False
+        self,
+        request: TaskInputRequest,
+        *,
+        approval: bool = False,
     ) -> tuple[TaskAnswer, ...]:
         request = TaskInputRequest.model_validate(request)
         while True:
@@ -124,20 +133,24 @@ class TaskExecution:
     ) -> ArtifactRef:
         if self._adapter.artifacts is None:
             raise TaskStoreError("artifact_store_unavailable")
-        source = dict(
-            source_id=source_id,
-            name=name,
-            path=name,
-            media_type=media_type,
-            size_bytes=len(content),
-            digest="sha256:" + hashlib.sha256(content).hexdigest(),
-            presentation=presentation,
-        )
+        source = {
+            "source_id": source_id,
+            "name": name,
+            "path": name,
+            "media_type": media_type,
+            "size_bytes": len(content),
+            "digest": "sha256:" + hashlib.sha256(content).hexdigest(),
+            "presentation": presentation,
+        }
         ref = await self._adapter.artifacts.publish(
-            self.submission, source, content
+            self.submission,
+            source,
+            content,
         )
         await self._adapter.emit(
-            self.submission, "artifact:" + source_id, artifact_ref=ref
+            self.submission,
+            "artifact:" + source_id,
+            artifact_ref=ref,
         )
         return ref
 
@@ -169,7 +182,7 @@ class ManagedHandlerAdapter:
         return ExecutorRunRef(
             executor_id="qwenpaw.managed",
             session_id=content_digest(
-                submission.handle.scope.model_dump(mode="json")
+                submission.handle.scope.model_dump(mode="json"),
             ),
             run_id=submission.handle.submission_id,
         )
@@ -177,7 +190,9 @@ class ManagedHandlerAdapter:
     async def record(self, submission):
         def read(connection):
             self.store._get(
-                connection, submission.handle.scope, submission.handle.task_id
+                connection,
+                submission.handle.scope,
+                submission.handle.task_id,
             )
             row = connection.execute(
                 "SELECT * FROM managed_runs WHERE task_id = ?",
@@ -190,7 +205,9 @@ class ManagedHandlerAdapter:
     async def submit(self, submission):
         def insert(connection):
             self.store._get(
-                connection, submission.handle.scope, submission.handle.task_id
+                connection,
+                submission.handle.scope,
+                submission.handle.task_id,
             )
             connection.execute(
                 (
@@ -236,7 +253,7 @@ class ManagedHandlerAdapter:
         if previous:
             if (
                 ExecutorEvent.model_validate_json(
-                    previous["event_json"]
+                    previous["event_json"],
                 ).replay_digest
                 != event.replay_digest
             ):
@@ -269,7 +286,7 @@ class ManagedHandlerAdapter:
         try:
             await self.emit(submission, "started", status="running")
             result = await self.registration.handler(
-                TaskExecution(self, submission)
+                TaskExecution(self, submission),
             )
             if isinstance(result, str):
                 result = ActionResult(result)
@@ -284,8 +301,6 @@ class ManagedHandlerAdapter:
                 result_data=result.data,
                 project_ref=result.project,
             )
-        except asyncio.CancelledError:
-            raise
         except Exception:
             record = await self.record(submission)
             if record["state"] not in TERMINAL_STATUSES:
@@ -325,7 +340,7 @@ class ManagedHandlerAdapter:
             job = asyncio.create_task(self._execute(submission))
             self._jobs[task_id] = job
             job.add_done_callback(
-                lambda finished: self._jobs.pop(task_id, None)
+                lambda finished: self._jobs.pop(task_id, None),
             )
 
     async def attach(self, submission):
@@ -371,7 +386,7 @@ class ManagedHandlerAdapter:
                             "task_id=? ORDER BY sequence DESC LIMIT 1"
                         ),
                         (submission.handle.task_id,),
-                    ).fetchone()
+                    ).fetchone(),
                 )
                 if latest is not None:
                     yield ExecutorEvent.model_validate_json(latest[0])
@@ -385,7 +400,7 @@ class ManagedHandlerAdapter:
                 "kind": command.kind,
                 "request_id": command.request_id,
                 "payload": command.payload,
-            }
+            },
         )
 
         def apply(connection):
@@ -401,7 +416,8 @@ class ManagedHandlerAdapter:
                     raise TaskStoreError("command_conflict")
                 return CommandLookup.model_validate_json(prior[1])
             row = connection.execute(
-                "SELECT * FROM managed_runs WHERE task_id=?", (task_id,)
+                "SELECT * FROM managed_runs WHERE task_id=?",
+                (task_id,),
             ).fetchone()
             receipt = CommandLookup(state="accepted")
             if command.kind == "cancel":
@@ -432,7 +448,8 @@ class ManagedHandlerAdapter:
                     not in {"waiting_for_input", "waiting_for_approval"}
                 ):
                     receipt = CommandLookup(
-                        state="rejected", reason="stale_request"
+                        state="rejected",
+                        reason="stale_request",
                     )
                 else:
                     answers = json.loads(row["answers_json"])

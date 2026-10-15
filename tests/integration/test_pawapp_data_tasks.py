@@ -513,7 +513,8 @@ async def test_legacy_sessions_are_scoped_before_reads_and_mutations(engine):
     """Real service must not bypass submission ownership via its legacy API."""
     headers = {"Authorization": f"Bearer {TOKEN}", "X-User-Id": "owner-sales"}
     async with httpx.AsyncClient(
-        base_url=engine.base, headers=headers
+        base_url=engine.base,
+        headers=headers,
     ) as client:
         caps = (await client.get("/api/v1/capabilities/submissions")).json()
         assert caps["scoped_sessions"] is True

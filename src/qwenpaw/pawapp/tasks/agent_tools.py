@@ -106,6 +106,7 @@ def _result(payload, *, error=False):
     )
 
 
+# pylint: disable-next=too-many-statements
 def make_task_tools(context: TaskToolContext):
     """Fixed tool set; action schemas are returned on demand, never injected
     as one top-level tool per App action. Scope and return chat are closures.

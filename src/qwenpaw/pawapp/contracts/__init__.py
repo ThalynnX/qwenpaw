@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Versioned, transport-neutral public models for PawApp authors.
 
 The Python adapter is the execution transport. These JSON schemas describe

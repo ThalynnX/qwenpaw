@@ -2,6 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { routeRegistry } from "./registry/store";
+import { installHostSdk } from "./hostSdk/install";
+vi.mock("./hostSdk/install", () => ({ installHostSdk: vi.fn() }));
 import {
   loadAllPlugins,
   loadPawApp,
@@ -33,6 +35,7 @@ describe("frontend plugin loader", () => {
     resetPawAppLoaderForTests();
     routeRegistry.__resetForTests();
     vi.restoreAllMocks();
+    vi.mocked(installHostSdk).mockClear();
     URL.createObjectURL = vi.fn(
       () => `data:text/javascript,${encodeURIComponent("export default true")}`,
     );
@@ -55,7 +58,10 @@ describe("frontend plugin loader", () => {
           plugin("notes", "app"),
         ]),
       )
-      .mockImplementation(async () => new Response("export default true"));
+      .mockImplementation(async () => {
+        expect(installHostSdk).toHaveBeenCalled();
+        return new Response("export default true");
+      });
 
     await expect(loadAllPlugins()).resolves.toEqual({
       loaded: 2,

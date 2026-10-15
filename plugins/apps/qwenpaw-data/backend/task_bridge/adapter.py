@@ -87,7 +87,7 @@ def data_session_action_descriptor() -> ActionDescriptor:
                     "required": ["path", "line_start", "line_end", "comment"],
                 },
             },
-        }
+        },
     )
     schema["required"].append("session_id")
     return base.model_copy(
@@ -99,7 +99,7 @@ def data_session_action_descriptor() -> ActionDescriptor:
                 "retaining its files and history."
             ),
             "input_schema": schema,
-        }
+        },
     )
 
 
@@ -192,7 +192,7 @@ def _data_experience_update(
 def _artifact_presentation(source: dict[str, Any]) -> dict[str, Any]:
     if source.get("presentation") is not None:
         return ArtifactPresentation.model_validate(
-            source["presentation"]
+            source["presentation"],
         ).model_dump(mode="json")
     # Compatibility only: new Engines explicitly classify every artifact.
     name = str(source.get("name", "")).casefold()
@@ -349,6 +349,7 @@ class DataTaskAdapter:
                 raise TaskStoreError("unsupported_engine_protocol") from None
             raise
         if (
+            # pylint: disable-next=too-many-boolean-expressions
             type(caps.get("protocol_version")) is not int
             or caps["protocol_version"] != 1
             or caps.get("durable_submissions") is not True
@@ -367,6 +368,7 @@ class DataTaskAdapter:
         """Read-only durable submission protocol probe."""
         await self._check_protocol(self._connection(scope))
 
+    # pylint: disable-next=too-many-return-statements
     async def readiness(self, scope: TaskScope, inputs: dict):
         """Check analysis model configuration and DataBridge source presence.
 
@@ -383,15 +385,17 @@ class DataTaskAdapter:
                 and caps.get("session_submissions") is not True
             ):
                 return Readiness(
-                    state="blocked", reason="unsupported_session_submissions"
+                    state="blocked",
+                    reason="unsupported_session_submissions",
                 )
             if "session_id" in inputs:
                 session_id = inputs["session_id"]
                 if not isinstance(session_id, str) or not _ID.fullmatch(
-                    session_id
+                    session_id,
                 ):
                     return Readiness(
-                        state="blocked", reason="session_unavailable"
+                        state="blocked",
+                        reason="session_unavailable",
                     )
                 try:
                     session = await self._json(
@@ -402,7 +406,8 @@ class DataTaskAdapter:
                 except TaskStoreError as exc:
                     if exc.code == "engine_http_404":
                         return Readiness(
-                            state="blocked", reason="session_unavailable"
+                            state="blocked",
+                            reason="session_unavailable",
                         )
                     raise
                 if session.get("ready") is not True:
@@ -677,6 +682,7 @@ class DataTaskAdapter:
         detail["artifact_ref"] = ref.model_dump(mode="json")
         return event.model_copy(update={"detail": detail})
 
+    # pylint: disable-next=too-many-branches
     async def attach(
         self,
         submission: TaskSubmission,

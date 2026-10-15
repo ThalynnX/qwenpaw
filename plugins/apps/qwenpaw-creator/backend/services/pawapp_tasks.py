@@ -551,7 +551,7 @@ class CreatorCreateProjectTaskAdapter:
     ) -> CommandLookup:
         if command.task_id != submission.handle.task_id:
             raise TaskStoreError(
-                "creator_create_project_command_task_mismatch"
+                "creator_create_project_command_task_mismatch",
             )
         record, _ = await asyncio.to_thread(
             self._read,

@@ -351,7 +351,9 @@ async def test_managed_handler_returns_structured_listing(tmp_path):
     adapter = ManagedHandlerAdapter(
         task_store,
         ActionRegistration(
-            action=action, handler=browse_directory, recovery="replay_safe"
+            action=action,
+            handler=browse_directory,
+            recovery="replay_safe",
         ),
     )
     coordinator = TaskCoordinator(task_store, authorize=AsyncMock())

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Generate portable schemas and TypeScript types; --check fails on drift."""
 
 import argparse
@@ -9,6 +10,7 @@ from qwenpaw.pawapp.contracts import schema_bundle
 ROOT = Path(__file__).resolve().parents[1]
 
 
+# pylint: disable-next=too-many-return-statements
 def ts(schema):
     if schema is True or schema == {}:
         return "unknown"
@@ -75,7 +77,8 @@ def main():
     outputs = {
         ROOT
         / "docs/design/pawapp-contract-v1.schema.json": json.dumps(
-            bundle, indent=2
+            bundle,
+            indent=2,
         )
         + "\n",
         ROOT / "console/src/plugins/pawapp-sdk/contracts.generated.ts": types,
@@ -84,7 +87,7 @@ def main():
         if args.check:
             if not path.exists() or path.read_text() != content:
                 raise SystemExit(
-                    f"Generated contract drift: {path.relative_to(ROOT)}"
+                    f"Generated contract drift: {path.relative_to(ROOT)}",
                 )
         else:
             path.write_text(content)
