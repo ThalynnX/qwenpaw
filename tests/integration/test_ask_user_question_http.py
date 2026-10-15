@@ -34,6 +34,8 @@ from qwenpaw.governance.policy import GovernanceAction, GovernancePolicy
 from qwenpaw.governance.resource_governor import ResourceGovernor
 from qwenpaw.governance.tool_registry import ToolRegistry
 
+pytestmark = pytest.mark.p1
+
 mod = importlib.import_module("qwenpaw.agents.tools.ask_user_question")
 
 QUESTIONS = [

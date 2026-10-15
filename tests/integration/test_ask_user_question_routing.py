@@ -41,6 +41,8 @@ from qwenpaw.schemas import AgentRequest
 from qwenpaw.security.tool_guard.approval import ApprovalDecision
 from qwenpaw.tool_calls import ToolCoordinator, ToolCoordinatorMiddleware
 
+pytestmark = pytest.mark.p1
+
 # `agents/tools/__init__.py` re-exports the function under its own name, so
 # attribute access on the package resolves to the function, not the module.
 mod = importlib.import_module("qwenpaw.agents.tools.ask_user_question")
