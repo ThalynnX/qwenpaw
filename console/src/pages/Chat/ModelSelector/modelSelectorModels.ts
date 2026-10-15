@@ -67,41 +67,30 @@ export function buildEligibleProviders(
 ): EligibleProvider[] {
   return providers
     .map((provider) => ({
-      provider,
+      ...provider,
       models: [
         ...(provider.models ?? []),
         ...(provider.extra_models ?? []),
       ].filter((model) => (model.model_type ?? "chat") === modelType),
+      has_api_key: Boolean(provider.api_key),
     }))
-    .filter(({ provider, models }) => {
+    .filter((provider) => {
       if (provider.enabled === false) return false;
-      if (!models.length && provider.chat_model === "") return false;
+      if (!provider.models.length && provider.chat_model === "") return false;
       if (
         modelType === "chat" &&
         (provider.id === "hub-managed" || provider.is_free_tier)
       )
         return true;
       return (
-        models.length > 0 &&
+        provider.models.length > 0 &&
         Boolean(
           provider.require_api_key === false || provider.is_custom
             ? provider.base_url
             : provider.api_key,
         )
       );
-    })
-    .map(({ provider, models }) => ({
-      id: provider.id,
-      name: provider.name,
-      models,
-      is_free_tier: provider.is_free_tier,
-      is_custom: provider.is_custom,
-      is_local: provider.is_local,
-      supports_oauth: provider.supports_oauth,
-      oauth_connected: provider.oauth_connected,
-      has_api_key: Boolean(provider.api_key),
-      require_api_key: provider.require_api_key,
-    }));
+    });
 }
 
 export function buildDiscoveryCandidates(

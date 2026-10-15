@@ -205,7 +205,7 @@ def decision_settings(config, override: bool | None) -> dict:
     """Resolve the session toggle against agent and global configuration."""
     configured = config.backend == "qwenpaw" and bool(
         config.decision_model
-        or ProviderManager.get_instance().get_active_model("decision")
+        or ProviderManager.get_instance().default_models["decision"]
     )
     return {
         "configured": configured,

@@ -293,32 +293,8 @@ class ProviderManager(
                     )
                 )
 
-    async def clear_invalid_default_models(
-        self, provider_id: str, provider: Provider | None
-    ) -> None:
-        for model_type, slot in list(self.default_models.items()):
-            if (
-                slot is None
-                or self._normalize_provider_id(slot.provider_id) != provider_id
-            ):
-                continue
-            model = provider.get_model_info(slot.model) if provider else None
-            if (
-                not provider
-                or not provider.enabled
-                or not model
-                or model.model_type != model_type
-            ):
-                await self.clear_active_model_async(
-                    provider_id, model_type=model_type
-                )
-
-    def get_active_model(
-        self, model_type: ModelType = "chat"
-    ) -> ModelSlotConfig | None:
+    def get_active_model(self) -> ModelSlotConfig | None:
         """Resolve the active model; Hub resolution refreshes its catalog."""
-        if model_type != "chat":
-            return self.default_models[model_type]
         if (
             hub_mode()
             and self.active_model

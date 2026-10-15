@@ -9,7 +9,7 @@ import logging
 import os
 import tempfile
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, Literal, get_args
+from typing import Any, Awaitable, Callable, Dict, Literal
 
 from ..config.config import ModelSlotConfig, ModelType
 from ..exceptions import ProviderError
@@ -881,6 +881,26 @@ class ProviderManagerPersistenceMixin(
         apply_custom_discovery_policy(provider)
         return provider
 
+    async def clear_invalid_default_models(
+        self, provider_id: str, provider: Provider | None
+    ) -> None:
+        for model_type, slot in self.default_models.items():
+            if (
+                slot is None
+                or self._normalize_provider_id(slot.provider_id) != provider_id
+            ):
+                continue
+            model = provider.get_model_info(slot.model) if provider else None
+            if (
+                not provider
+                or not provider.enabled
+                or not model
+                or model.model_type != model_type
+            ):
+                await self.clear_active_model_async(
+                    provider_id, model_type=model_type
+                )
+
     def _default_model_path(self, model_type: ModelType) -> Path:
         filename = (
             "active_model.json"
@@ -1181,7 +1201,7 @@ class ProviderManagerPersistenceMixin(
                     continue
                 self.custom_providers[provider_key] = provider
         # Load active model config
-        for model_type in get_args(ModelType):
+        for model_type in self.default_models:
             self.default_models[model_type] = self.load_active_model(
                 model_type
             )

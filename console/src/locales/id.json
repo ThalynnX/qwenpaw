@@ -3668,7 +3668,6 @@
     "defaultModels": "Model default",
     "defaultChatModel": "Model percakapan",
     "defaultDecisionModel": "Model keputusan",
-    "noDefaultModel": "Belum diatur",
     "defaultLlm": "LLM Default",
     "notConfiguredYet": "Belum dikonfigurasi",
     "llmDescription": "Atur model LLM default global dari penyedia yang diotorisasi. Anda dapat memilih model tertentu untuk setiap Agen di halaman Chat.",

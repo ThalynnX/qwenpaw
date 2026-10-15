@@ -55,11 +55,6 @@ class ProviderManagerHost:
     # ------------------------------------------------------------------
     # Helpers implemented by ProviderManager
     # ------------------------------------------------------------------
-    async def clear_invalid_default_models(
-        self, provider_id: str, provider: Provider | None
-    ) -> None:
-        raise NotImplementedError
-
     def get_provider(self, provider_id: str) -> Provider | None:
         raise NotImplementedError
 
