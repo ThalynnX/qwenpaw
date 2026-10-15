@@ -1,8 +1,8 @@
 # PawApp contract implementation status — 2026-10-15
 
 The contract now supports managed small Apps and existing external adapters on
-one Host task model. The compatible Engine revision is published; Host browser acceptance and
-hosted CI are being completed against the exact pairing below.
+one Host task model. The compatible Engine revision is published; Host browser acceptance has passed against the exact pairing below.
+Hosted CI is being rerun after acceptance fixes.
 
 | Area | Implementation |
 | --- | --- |
@@ -62,10 +62,10 @@ Local verification results:
 
 | Check | Result |
 | --- | --- |
-| Host/PawApp/plugin and selected Creator/File Browser tests | 958 passed, 7 skipped (before the additional CLI validation regression) |
+| Host/PawApp/plugin and selected Creator/File Browser tests | 958 passed, 7 skipped; additional CLI/runtime regression suite: 137 passed |
 | Engine session stores and affected API suites | 126 passed |
 | Separate-process Host–Engine integration | 16 passed |
-| Console SDK/task API/task card tests | 66 passed |
+| Console SDK/task API/task card tests | 72 passed (including 6 plugin-loader tests) |
 | Data UI tests | 3 passed |
 | Console/Data UI TypeScript, generated contract drift, Python lint, new SDK ESLint, diff checks | Passed |
 
@@ -88,3 +88,23 @@ event snapshot, preventing a concurrent completion from being dropped. CLI
 module validation accepts the same `app` export as the runtime loader, allowing
 PawApps to pass installation validation. Console production build and its
 bundle/CSS checks passed.
+
+## Browser acceptance — 2026-10-15
+
+The production Console and real Host ran on loopback in an isolated acceptance
+working directory. File Browser was installed through the CLI/API and activated
+through its normal App route. Browser checks verified:
+
+- Ungranted listing is rejected with the App access link.
+- `browse-directory` accepts an exact directory grant saved in Settings.
+- The granted listing renders its structured result (`acceptance.txt`, 35 B).
+- Reload restores the completed task without a duplicate run.
+- The parent directory remains forbidden under that exact grant.
+- Saving the default and omitting the input produces the same authorized result.
+
+Cold App navigation exposed late installation of Host hooks. The loader now
+installs the SDK before executing any App script; a regression test covers the
+ordering. The corrected production build passed the browser flow without a new
+render error. The broader Creator UI check also exposed three old whole-film
+fixtures that used `timeline_render`; they now explicitly use `final_video`,
+matching the canonical-film contract. All six tests in that file passed.
