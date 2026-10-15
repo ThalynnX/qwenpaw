@@ -8,35 +8,39 @@ import styles from "../../index.module.less";
 
 export function ProviderCloseButton({
   ids,
+  providerName,
   onSaved,
   onConfigure,
 }: {
   ids: string[];
+  providerName: string;
   onSaved: () => void;
   onConfigure?: () => void;
 }) {
   const { t } = useTranslation();
   const { message } = useAppMessage();
   const [busy, setBusy] = useState(false);
+  const settingsLabel = `${t("models.settings")}: ${providerName}`;
+  const disableLabel = `${t("common.disable")}: ${providerName}`;
   return (
     <>
       {onConfigure && (
-        <Tooltip title={t("models.settings")}>
+        <Tooltip title={settingsLabel}>
           <button
             type="button"
             className={styles.providerSettings}
-            aria-label={t("models.settings")}
+            aria-label={settingsLabel}
             onClick={onConfigure}
           >
             <Settings size={16} strokeWidth={1.6} />
           </button>
         </Tooltip>
       )}
-      <Tooltip title={t("common.disable")}>
+      <Tooltip title={disableLabel}>
         <button
           type="button"
           className={styles.providerClose}
-          aria-label={t("common.disable")}
+          aria-label={disableLabel}
           disabled={busy}
           onClick={async () => {
             setBusy(true);
