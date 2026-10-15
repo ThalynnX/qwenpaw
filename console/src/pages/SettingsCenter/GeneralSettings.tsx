@@ -133,6 +133,7 @@ export default function GeneralSettings() {
   const mobile =
     screens.md === false || (screens.md === undefined && viewportIsMobile);
   const surfaceId = useId();
+  const languageLabelId = useId();
   const reduced = useReducedMotion();
   const closeEditor = () => {
     void flushTheme();
@@ -384,7 +385,9 @@ export default function GeneralSettings() {
                   <Languages size={18} />
                 </span>
                 <span className={styles.settingCopy}>
-                  <strong>{t("sidebar.settings.language")}</strong>
+                  <strong id={languageLabelId}>
+                    {t("sidebar.settings.language")}
+                  </strong>
                   <small>
                     {t(
                       "settingsCenter.languageHint",
@@ -394,6 +397,7 @@ export default function GeneralSettings() {
                 </span>
                 <Select
                   className={styles.settingControl}
+                  aria-labelledby={languageLabelId}
                   value={currentLanguage}
                   options={LANGUAGES}
                   onChange={changeLanguage}
