@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, AsyncGenerator, Callable
+from typing import Any, AsyncGenerator, Awaitable, Callable
 
 import httpx
 
@@ -267,6 +267,7 @@ class DataTaskAdapter:
         capability_bridge: (
             Callable[[TaskSubmission], dict[str, Any]] | None
         ) = None,
+        model_resolver: Callable[[TaskScope], Awaitable[dict]] | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
     ):
         if not executor_id or len(executor_id) > 256:
@@ -274,6 +275,7 @@ class DataTaskAdapter:
         self._endpoint = endpoint
         self._executor_id = executor_id
         self._capability_bridge = capability_bridge
+        self._model_resolver = model_resolver
         self._client = httpx.AsyncClient(
             transport=transport,
             timeout=httpx.Timeout(60.0, connect=5.0),
@@ -412,25 +414,46 @@ class DataTaskAdapter:
                     raise
                 if session.get("ready") is not True:
                     return Readiness(state="blocked", reason="session_busy")
-            model = await self._json(
-                connection,
-                "GET",
-                "/api/v1/capabilities/analysis",
-            )
+            runtime_models = None
+            if self._model_resolver is not None:
+                if caps.get("runtime_model_bindings") is not True:
+                    return Readiness(
+                        state="blocked", reason="model_bindings_unsupported"
+                    )
+                try:
+                    runtime_models = await self._model_resolver(scope)
+                except ValueError:
+                    return Readiness(
+                        state="blocked", reason="analysis_model_missing"
+                    )
             if (
-                type(model.get("readiness_version")) is not int
-                or model["readiness_version"] != 1
-                or type(model.get("model_configured")) is not bool
+                runtime_models is None
+                or runtime_models.get("analysis") is None
             ):
-                return Readiness(
-                    state="blocked",
-                    reason="readiness_unsupported",
+                model = await self._json(
+                    connection,
+                    "GET",
+                    "/api/v1/capabilities/analysis",
+                    params=(
+                        {"local_only": "true"}
+                        if runtime_models is not None
+                        else None
+                    ),
                 )
-            if not model["model_configured"]:
-                return Readiness(
-                    state="blocked",
-                    reason="analysis_model_missing",
-                )
+                if (
+                    type(model.get("readiness_version")) is not int
+                    or model["readiness_version"] != 1
+                    or type(model.get("model_configured")) is not bool
+                ):
+                    return Readiness(
+                        state="blocked",
+                        reason="readiness_unsupported",
+                    )
+                if not model["model_configured"]:
+                    return Readiness(
+                        state="blocked",
+                        reason="analysis_model_missing",
+                    )
             sources = await self._json(
                 connection,
                 "GET",
@@ -526,6 +549,15 @@ class DataTaskAdapter:
             "agent_id": "default",
             **submission.inputs,
         }
+        if self._model_resolver is not None:
+            if caps.get("runtime_model_bindings") is not True:
+                raise TaskStoreError("model_bindings_unsupported")
+            try:
+                body["runtime_models"] = await self._model_resolver(
+                    submission.handle.scope
+                )
+            except ValueError as exc:
+                raise TaskStoreError("analysis_model_missing") from exc
         if self._capability_bridge is not None:
             body["capability_bridge"] = self._capability_bridge(submission)
         payload = await self._json(

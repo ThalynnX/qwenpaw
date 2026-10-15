@@ -20,8 +20,8 @@ verified separately.
 
 The machine-readable source is
 [`tests/fixtures/pawapp-compatibility.json`](../../tests/fixtures/pawapp-compatibility.json).
-The Engine is fork revision `2f9a44461525d04dffc9f719f1745ee741ec06cd`,
-which includes the scoped-session ownership changes. CI checks out and verifies
+The Engine is fork revision `3a68fc15b8e815f64dc1e4f4c3e682b7874a6656`,
+which includes scoped-session ownership and per-run Host model bindings. CI checks out and verifies
 that exact revision. No compatibility patch is required. Run
 `scripts/prepare-pawapp-engine.py <checkout>` to verify the pairing locally.
 
@@ -139,3 +139,42 @@ Live-provider acceptance remains the only credential-dependent gate. Restore
 the Creator Wan credential in its settings, then run the bounded acceptance
 recipe in [real-provider acceptance](pawapp-real-provider-acceptance.md).
 The failed preflight made zero provider submissions.
+
+
+## Workspace model settings preview — 2026-10-15
+
+Data now defaults to the selected Host workspace model. Analysis, lightweight
+summaries, and DataBridge each have an explicit inherited, Host override, or
+app-local source. The embedded settings page shows the resolved model and
+configuration errors. Provider credentials for inherited/Host overrides are
+resolved server-side; the saved choices contain only references and a revision.
+A stale editor receives HTTP 409 instead of overwriting newer choices.
+
+New submissions snapshot model connections at acceptance. The Engine uses the
+snapshot for analysis and background summaries; existing agent memory is retained
+when a later turn selects a different model. DataBridge receives the run's model
+through a private service-authenticated header. MCP clients are session-specific,
+and Context keeps the binding request-local. Model credentials are excluded from
+submission serialization, digests, and durable stores. Replaying an accepted
+Engine submission retains the original run even after model settings change.
+
+The Data settings page separates model choices from supported Engine behavior
+controls. Existing app-specific connections remain under Advanced. Embeddings
+retain a separate service/index connection and vector dimension; they do not
+follow chat-model changes. The embedding save action explicitly says that it
+rebuilds the index. Context model settings now use the authenticated App gateway,
+fixing the previous root-level 404 responses.
+
+Bound analysis currently supports OpenAI-compatible and DashScope chat models.
+It inherits provider/model identity and connection credentials; Engine generation
+and agent behavior remain independently configured. Other Host model protocols
+fail with a configuration message. Model choices grant no datasource or task
+permissions. The marketplace package is unchanged; this is a local development
+preview on the paired branches.
+
+Verification: 139 Host adapter/configuration/gateway tests; 11 console provenance
+tests; 130 embedded-console tests; 760 Engine/Context suite tests with three skips,
+plus concurrent MCP-to-REST and session-memory model-switch regressions. TypeScript and both Data UI builds
+passed. Browser checks cover the inherited settings view, missing-provider message,
+override/reset controls, and saving the supported behavior settings. Live API
+checks confirm saving unchanged choices and rejecting stale revisions with 409. No live model inference or embedding rebuild was performed.

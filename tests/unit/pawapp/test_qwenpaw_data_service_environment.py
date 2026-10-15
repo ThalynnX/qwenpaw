@@ -60,7 +60,6 @@ def backend(tmp_path, monkeypatch):
             monkeypatch.setattr(module, name, value)
     monkeypatch.setattr(module, "ENGINE_HOME", tmp_path / "engine")
     monkeypatch.setattr(module, "_push_model_config", AsyncMock())
-    monkeypatch.setattr(module, "_host_llm_payload", lambda: {})
     return module
 
 
@@ -217,3 +216,59 @@ async def test_first_start_imports_persisted_defaults_without_host_mutation(
     await backend._initialize_config()
     assert backend.load_config().llm.api_key == ""
     assert os.environ["OPENAI_API_KEY"] == "host-owned"
+
+
+@pytest.mark.asyncio
+async def test_local_model_metadata_uses_scoped_preferences(
+    backend, monkeypatch
+):
+    from qwenpaw.pawapp.tasks import TaskScope
+
+    scope = TaskScope(
+        principal_id="alice", workspace_id="w1", app_id="qwenpaw-data"
+    )
+    metadata = {
+        "settings": {
+            "analysis": {"source": "local"},
+            "lightweight": {"source": "inherit"},
+            "databridge": {"source": "inherit"},
+        },
+        "effective": {
+            role: {"source": "app-local", "configured": False}
+            for role in ("analysis", "lightweight", "databridge")
+        },
+    }
+    monkeypatch.setattr(
+        backend._model_settings, "describe", AsyncMock(return_value=metadata)
+    )
+    calls = []
+
+    async def read(method, path, *, user_id):
+        calls.append(user_id)
+        if path.endswith("active-models"):
+            return {
+                "active_models": {
+                    "default_provider_id": "openai",
+                    "default_model_id": "saved-model",
+                }
+            }
+        return {
+            "providers": [
+                {
+                    "id": "openai",
+                    "configured": True,
+                    "api_key_masked": "never-forward-this",
+                    "models": [{"id": "saved-model"}],
+                }
+            ]
+        }
+
+    monkeypatch.setattr(backend._engine_gateway, "json", read)
+    result = await backend._describe_models(scope)
+    assert all(role["configured"] for role in result["effective"].values())
+    assert all(
+        role["model_id"] == "saved-model"
+        for role in result["effective"].values()
+    )
+    assert calls == [backend.DataTaskAdapter.identity_namespace(scope)] * 2
+    assert "never-forward-this" not in str(result)

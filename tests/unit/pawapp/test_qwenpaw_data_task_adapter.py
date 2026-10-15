@@ -940,3 +940,41 @@ async def test_malformed_or_truncated_stream_is_not_success(submission, body):
     )
     with pytest.raises(TaskStoreError):
         await collect(adapter, submission)
+
+
+async def test_runtime_binding_is_resolved_for_scope_and_sent_privately(
+    submission,
+):
+    requests = []
+    scopes = []
+
+    async def resolve(scope):
+        scopes.append(scope)
+        return {"analysis": {"model_id": "model-a", "api_key": "runtime-only"}}
+
+    def handler(request):
+        requests.append(request)
+        if request.url.path.endswith("/capabilities/submissions"):
+            return httpx.Response(
+                200, json={**CAPS, "runtime_model_bindings": True}
+            )
+        return httpx.Response(200, json=receipt(submission))
+
+    adapter = BRIDGE.DataTaskAdapter(
+        lambda: ("http://engine.test", "token"),
+        executor_id=REF.executor_id,
+        model_resolver=resolve,
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        assert await adapter.submit(submission) == REF
+    finally:
+        await adapter.aclose()
+    assert scopes == [submission.handle.scope]
+    assert (
+        json.loads(requests[-1].content)["runtime_models"]["analysis"][
+            "api_key"
+        ]
+        == "runtime-only"
+    )
+    assert "runtime-only" not in submission.model_dump_json()

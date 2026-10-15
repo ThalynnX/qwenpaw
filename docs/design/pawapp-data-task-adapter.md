@@ -245,3 +245,28 @@ retained partial output. This validates the backend protocol, not production
 analytics or UI. `tests/integration/test_pawapp_task_dispatch.py` additionally
 tests authenticated Console ingress through the real Engine into a persisted
 Main Chat continuation, using a controlled provider substitute.
+
+
+## Model bindings
+
+`DataTaskAdapter(model_resolver=...)` resolves server-owned model connections for
+new submissions. The resolver receives the trusted `TaskScope`, never model IDs,
+endpoints, or credentials from action inputs. Bound submissions require the
+Engine's `runtime_model_bindings` capability and an updated Context service.
+Inherited analysis uses the workspace's saved default, falling back to the global
+Host default; a main-chat request override does not alter this choice.
+
+`GET/PUT /api/qwenpaw-data/model-settings` exposes reference-only choices scoped
+to the authenticated principal, workspace, and App. A revision prevents stale
+writes. Analysis defaults to the workspace model; summaries and DataBridge default
+to analysis. Explicit app-local choices resolve the same scoped Engine preferences
+used by the native console, while a local DataBridge connection remains managed
+by the Context service. No selection mutates the main-chat model or widens grants.
+
+The private Engine submission field `runtime_models` is transient. The Engine
+snapshots it before launching a run and excludes it from persisted requests and
+idempotency digests. Local analysis and summary choices are resolved at admission. An explicitly local
+DataBridge connection remains governed by the service configuration. DataBridge model
+headers are sent only to the recognized Context MCP endpoint, and browser-supplied
+binding headers are not forwarded by the Host gateway. Embedding/index configuration
+is independent of these per-run chat roles.

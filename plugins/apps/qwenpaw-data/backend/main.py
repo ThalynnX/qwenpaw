@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import os
@@ -48,6 +49,7 @@ if __package__ and __package__.startswith("plugin_"):
         make_data_command,
         make_datasource_command,
     )
+    from .backend.model_settings import ModelSettings, ModelSettingsService
     from .backend.context_gateway import ContextGateway
     from .backend.engine_gateway import EngineGateway
     from .backend.direct_tasks import (
@@ -92,6 +94,7 @@ else:
         make_data_command,
         make_datasource_command,
     )
+    from backend.model_settings import ModelSettings, ModelSettingsService
     from backend.context_gateway import ContextGateway  # noqa: E402
     from backend.engine_gateway import EngineGateway  # noqa: E402
     from backend.direct_tasks import (
@@ -337,6 +340,35 @@ def _engine_endpoint() -> tuple[str, str]:
     return _engine_service.base_url, token
 
 
+_model_settings = ModelSettingsService(APP_DATA_DIR / "model-bindings")
+
+
+async def _runtime_models(scope):
+    models = await _model_settings.runtime(scope)
+    if any(
+        models.get(role) is None
+        for role in ("analysis", "lightweight", "databridge")
+    ):
+        from qwenpaw.pawapp.tasks import TaskStoreError
+
+        effective = (await _describe_models(scope))["effective"]
+        for role, model in effective.items():
+            if not model["configured"]:
+                raise TaskStoreError(f"{role}_model_missing")
+    if models.get("databridge") is not None or "databridge" in models.get(
+        "inherit_analysis", []
+    ):
+        from qwenpaw.pawapp.tasks import TaskStoreError
+
+        try:
+            health = await _gateway.json("GET", "/api/health")
+        except HTTPException as exc:
+            raise TaskStoreError("context_unavailable") from exc
+        if health.get("runtime_model_bindings") is not True:
+            raise TaskStoreError("context_model_bindings_unsupported")
+    return models
+
+
 app.task_action(
     ActionRegistration(
         action=data_action_descriptor(),
@@ -344,6 +376,7 @@ app.task_action(
             _engine_endpoint,
             executor_id="qwenpaw-data.engine",
             capability_bridge=task_capability_bridge,
+            model_resolver=_runtime_models,
         ),
         settings_entry="/apps/qwenpaw-data",
         capability_id="data_analysis",
@@ -363,6 +396,7 @@ app.task_action(
             _engine_endpoint,
             executor_id="qwenpaw-data.engine",
             capability_bridge=task_capability_bridge,
+            model_resolver=_runtime_models,
         ),
         settings_entry="/apps/qwenpaw-data",
         capability_id="data_analysis",
@@ -552,19 +586,8 @@ async def _initialize_config() -> None:
     if not CONFIG_JSON_PATH.is_file():
         from qwenpaw.envs import load_envs
 
-        host_llm = _host_llm_payload()
-        if host_llm:
-            config.llm.provider = "openai"
-            config.llm.base_url = host_llm["base_url"]
-            config.llm.model = host_llm["model"]
-            config.llm.api_key = host_llm["api_key"]
-            # Default embedding to the same provider/credentials.
-            config.embedding.base_url = host_llm["base_url"]
-            config.embedding.api_key = host_llm["api_key"]
-        # Fill anything the host model did not cover (Neo4j credentials,
-        # embedding model) from the environment so the Configure page
-        # reflects the values the service actually uses.
-        # Read persisted defaults without reloading them into the Host.
+        # Model inheritance is resolved per task. Seed only explicitly supplied
+        # app environment settings; never copy Host provider credentials here.
         seed_from_env(config, {**os.environ, **load_envs()})
         save_config(config)
     else:
@@ -713,64 +736,95 @@ async def _register_data_source_dependencies() -> None:
 router = APIRouter()
 
 
-_llm_bootstrap_done = False
-
-
-def _host_llm_payload() -> dict[str, Any] | None:
-    """Read the host's active model as an OpenAI-compatible payload."""
+async def _describe_models(scope):
+    result = await _model_settings.describe(scope)
+    roles = result["effective"]
+    if not any(role["source"] == "app-local" for role in roles.values()):
+        return result
     try:
-        from qwenpaw.providers.provider_manager import ProviderManager
-
-        manager = ProviderManager.get_instance()
-        slot = manager.get_active_model()
-        provider = manager.get_provider(slot.provider_id) if slot else None
-    except Exception:  # pragma: no cover - host internals unavailable
-        return None
-    if slot is None or provider is None:
-        return None
-    model = (slot.model or "").strip()
-    base_url = (getattr(provider, "base_url", "") or "").strip()
-    api_key = (getattr(provider, "api_key", "") or "").strip()
-    if not model or not base_url or not api_key:
-        return None
-    return {"model": model, "base_url": base_url, "api_key": api_key}
-
-
-async def _bootstrap_llm_from_host() -> None:
-    """Bootstrap the Context service's LLM from the QwenPaw host model.
-
-    The app owns its model configuration, matching standalone qwenpaw-data-cli
-    and Data-Cloud deployments. The host's active model is used only as a
-    first-run default when no LLM has been configured yet; an existing
-    configuration is never overwritten.
-    """
-    global _llm_bootstrap_done
-    if _llm_bootstrap_done or not _context_service.is_ready:
-        return
-    try:
-        current = await _gateway.json("GET", "/api/system/model-config/")
+        identity = DataTaskAdapter.identity_namespace(scope)
+        active_response = await _engine_gateway.json(
+            "GET", "/api/v1/preferences/active-models", user_id=identity
+        )
+        provider_response = await _engine_gateway.json(
+            "GET", "/api/v1/preferences/providers", user_id=identity
+        )
+        active = active_response["active_models"]
+        providers = provider_response["providers"]
+        for role in ("analysis", "lightweight", "databridge"):
+            if roles[role]["source"] != "app-local":
+                continue
+            choice = result["settings"][role]
+            if role == "databridge" and choice["source"] == "local":
+                config = (
+                    await _gateway.json("GET", "/api/system/model-config/")
+                )["llm"]
+                model = config.get("model")
+                provider = None
+                configured = all(
+                    config.get(key) for key in ("model", "base_url", "api_key")
+                )
+            else:
+                prefix = (
+                    "light"
+                    if role == "lightweight"
+                    and choice["source"] == "local"
+                    and active.get("light_model_id")
+                    else "default"
+                )
+                model = active.get(f"{prefix}_model_id")
+                provider = active.get(f"{prefix}_provider_id")
+                configured = any(
+                    p["id"] == provider
+                    and p["configured"]
+                    and any(m["id"] == model for m in p["models"])
+                    for p in providers
+                )
+            roles[role].update(
+                model_id=model,
+                provider_id=provider,
+                configured=bool(configured),
+                error=(
+                    None
+                    if configured
+                    else "Configure the app-specific model "
+                    "in Advanced settings."
+                ),
+            )
     except HTTPException:
-        return
-    llm_config = (current or {}).get("llm") or {}
-    if (llm_config.get("api_key") or "").strip():
-        # App-specific configuration exists; leave it alone for good.
-        _llm_bootstrap_done = True
-        return
-    body = _host_llm_payload()
-    if body is None:
-        return
-    try:
-        await _gateway.json("PUT", "/api/system/model-config/llm", body=body)
-    except HTTPException:
-        return
-    _llm_bootstrap_done = True
+        for role in roles.values():
+            if role["source"] == "app-local":
+                role.update(
+                    configured=False,
+                    error=(
+                        "App-specific settings are unavailable. "
+                        "Check the Data service."
+                    ),
+                )
+    return result
+
+
+@router.get("/model-settings")
+async def get_model_settings(request: Request):
+    return await _describe_models(await console_scope(request))
+
+
+@router.put("/model-settings")
+async def put_model_settings(request: Request, settings: ModelSettings):
+    scope = await console_scope(request)
+    # Validate explicit references without making provider calls.
+    _, effective = _model_settings.resolve(scope, settings)
+    for role, (_, error) in effective.items():
+        if error and getattr(settings, role).source == "host":
+            raise HTTPException(422, error)
+    await _model_settings.save(scope, settings)
+    return await _describe_models(scope)
 
 
 @router.get("/status")
 async def status() -> dict[str, Any]:
     health: dict[str, Any] | None = None
     if _context_service.is_ready:
-        await _bootstrap_llm_from_host()
         health = await _gateway.json("GET", "/api/health")
     return {
         "app": "qwenpaw-data",
@@ -853,10 +907,6 @@ async def _proxy_delete_datasource(
     methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
 )
 async def context_proxy(path: str, request: Request) -> Any:
-    # First-run default: seed the LLM config from the host before the
-    # console reads it; configured values are never overwritten.
-    if request.method == "GET" and "system/model-config" in path:
-        await _bootstrap_llm_from_host()
     # The shell polls the source list; piggyback the persisted-active
     # restore and a throttled reconcile so the selection survives
     # restarts and console-side changes converge onto the dependency
@@ -874,7 +924,21 @@ async def context_proxy(path: str, request: Request) -> Any:
         return await _proxy_set_active_datasource(path, request)
     if request.method == "DELETE" and _DATASOURCE_ITEM_RE.search(path):
         return await _proxy_delete_datasource(path, request)
-    return await _gateway.proxy(path, request)
+    binding = None
+    if "system/model-config" not in path:
+        _, effective = _model_settings.resolve(await console_scope(request))
+        model, _ = effective["databridge"]
+        if model is not None:
+            binding = base64.urlsafe_b64encode(
+                json.dumps(
+                    {
+                        "model": model["model_id"],
+                        "base_url": model["base_url"],
+                        "api_key": model["api_key"],
+                    }
+                ).encode()
+            ).decode()
+    return await _gateway.proxy(path, request, model_binding=binding)
 
 
 @router.api_route(
