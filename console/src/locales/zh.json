@@ -2903,6 +2903,7 @@
     "preview": "预览",
     "htmlPreview": "HTML 预览",
     "openHtmlInBrowser": "在浏览器中打开",
+    "openHtmlOutsideWorkspace": "该文件在工作区之外，已在预览窗口中打开。",
     "edit": "编辑",
     "selectFile": "选择文件以打开",
     "closeTab": "关闭标签页",

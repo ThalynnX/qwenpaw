@@ -3043,6 +3043,7 @@
     "preview": "Preview",
     "htmlPreview": "HTML preview",
     "openHtmlInBrowser": "Open in browser",
+    "openHtmlOutsideWorkspace": "This file is outside the workspace, so it opened in a preview window instead.",
     "edit": "Edit",
     "selectFile": "Select a file to open",
     "closeTab": "Close tab",
