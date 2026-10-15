@@ -60,3 +60,13 @@ Creator, and other apps are outside this branch.
 
 An Engine without the scoped-console capability contract fails explicitly;
 the app never falls back to an unscoped legacy Engine.
+
+## Existing data
+
+Sessions created by the scoped vNext app use the same identity namespace.
+Older unscoped Engine sessions are preserved on disk but are not automatically
+assigned to the current user or workspace, so they will not appear in the new
+scoped listing. Back up the app data directory before upgrading; any legacy
+session migration must explicitly establish its owner. Existing app-specific
+model settings remain available under Advanced; the new default is workspace
+model inheritance.
