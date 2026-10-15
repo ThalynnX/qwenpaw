@@ -31,6 +31,7 @@ import {
 import {
   useCallback,
   useEffect,
+  memo,
   useMemo,
   useRef,
   useState,
@@ -101,6 +102,17 @@ interface ProfileFileRowProps {
   onTreeItemFocus: (path: string) => void;
 }
 
+interface WorkspaceFileRowProps {
+  entry: DirectoryEntry;
+  level: number;
+  paddingInlineStart?: number;
+  root: WorkspaceRoot;
+  selected: boolean;
+  tabbable: boolean;
+  onSelect: (target: FileTarget) => void;
+  onTreeItemFocus: (path: string) => void;
+}
+
 type NavigatorSource = "workspace" | "profile" | "daily" | "digest";
 
 /** Switcher entry that opens the binding panel instead of changing the root. */
@@ -124,6 +136,37 @@ function treeItemAttributes(
     onFocus,
   };
 }
+
+const WorkspaceFileRow = memo(function WorkspaceFileRow({
+  entry,
+  level,
+  paddingInlineStart,
+  root,
+  selected,
+  tabbable,
+  onSelect,
+  onTreeItemFocus,
+}: WorkspaceFileRowProps) {
+  return (
+    <button
+      type="button"
+      className={`${styles.treeRow} ${selected ? styles.treeRowSelected : ""}`}
+      style={
+        paddingInlineStart === undefined ? undefined : { paddingInlineStart }
+      }
+      onClick={() => onSelect({ source: "workspace", path: entry.path, root })}
+      role="treeitem"
+      aria-level={level}
+      aria-selected={selected}
+      data-tree-path={entry.path}
+      tabIndex={tabbable ? 0 : -1}
+      onFocus={() => onTreeItemFocus(entry.path)}
+    >
+      <FileGlyph name={entry.name} />
+      <span>{entry.name}</span>
+    </button>
+  );
+});
 
 /** Last path segment, for the short display name of a directory. */
 function basenameOf(path: string): string {
@@ -282,28 +325,19 @@ function DirectoryNode({
               onTreeItemFocus={onTreeItemFocus}
             />
           ) : (
-            <button
-              type="button"
+            <WorkspaceFileRow
               key={child.path}
-              className={`${styles.treeRow} ${
-                child.path === selectedPath ? styles.treeRowSelected : ""
-              }`}
-              style={{ paddingInlineStart: 29 + (depth + 1) * 16 }}
-              onClick={() =>
-                onSelect({ source: "workspace", path: child.path, root })
+              entry={child}
+              level={depth + 2}
+              paddingInlineStart={29 + (depth + 1) * 16}
+              root={root}
+              selected={child.path === selectedPath}
+              tabbable={
+                (activeTreeItemPath ?? defaultTreeItemPath) === child.path
               }
-              {...treeItemAttributes(
-                child.path,
-                depth + 2,
-                child.path === selectedPath,
-                activeTreeItemPath,
-                defaultTreeItemPath,
-                onTreeItemFocus,
-              )}
-            >
-              <FileGlyph name={child.name} />
-              <span>{child.name}</span>
-            </button>
+              onSelect={onSelect}
+              onTreeItemFocus={onTreeItemFocus}
+            />
           ),
         )}
       {expanded && hasMore && (
@@ -523,13 +557,16 @@ export default function FilesNavigator({
     workspaceRoot,
   ]);
   const expandedPaths = expansion[directoryIdentity] ?? new Set<string>();
-  const toggleDirectory = (path: string) =>
-    setExpansion((current) => {
-      const paths = new Set(current[directoryIdentity]);
-      if (paths.has(path)) paths.delete(path);
-      else paths.add(path);
-      return { ...current, [directoryIdentity]: paths };
-    });
+  const toggleDirectory = useCallback(
+    (path: string) =>
+      setExpansion((current) => {
+        const paths = new Set(current[directoryIdentity]);
+        if (paths.has(path)) paths.delete(path);
+        else paths.add(path);
+        return { ...current, [directoryIdentity]: paths };
+      }),
+    [directoryIdentity],
+  );
   const {
     entries,
     hasMore,
@@ -1253,6 +1290,23 @@ export default function FilesNavigator({
                       onToggle={() => void toggleProfileFile(entry.path)}
                       activeTreeItemPath={activeTreeItemPath}
                       defaultTreeItemPath={defaultTreeItemPath}
+                      onTreeItemFocus={setActiveTreeItemPath}
+                    />
+                  );
+                }
+                if (source === "workspace") {
+                  return (
+                    <WorkspaceFileRow
+                      key={entry.path}
+                      entry={entry}
+                      level={1}
+                      root={workspaceRoot}
+                      selected={entry.path === selectedPath}
+                      tabbable={
+                        (activeTreeItemPath ?? defaultTreeItemPath) ===
+                        entry.path
+                      }
+                      onSelect={onSelect}
                       onTreeItemFocus={setActiveTreeItemPath}
                     />
                   );

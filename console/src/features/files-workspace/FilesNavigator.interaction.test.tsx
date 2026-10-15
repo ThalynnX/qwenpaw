@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   listFiles: vi.fn(),
   listMemoryFiles: vi.fn(),
   setSystemPromptFiles: vi.fn(),
+  fileGlyphRender: vi.fn(),
 }));
 
 vi.mock("react-i18next", () => ({
@@ -67,6 +68,13 @@ vi.mock("../../stores/codingTabsStore", () => ({
 
 vi.mock("../project-directory/SessionProjectDirectory", () => ({
   default: () => <span>Project</span>,
+}));
+
+vi.mock("./FileGlyph", () => ({
+  default: ({ name }: { name: string }) => {
+    mocks.fileGlyphRender(name);
+    return <span data-file-glyph={name} />;
+  },
 }));
 
 const mdFile = (filename: string) => ({
@@ -156,6 +164,7 @@ describe("FilesNavigator interactions", () => {
     mocks.listFiles.mockResolvedValue([]);
     mocks.getSystemPromptFiles.mockResolvedValue([]);
     mocks.setSystemPromptFiles.mockImplementation(async (files) => files);
+    mocks.fileGlyphRender.mockClear();
   });
 
   it("shows loading instead of an empty state while the root request is pending", async () => {
@@ -587,6 +596,36 @@ describe("FilesNavigator interactions", () => {
     expect(items).toHaveLength(72);
     expect(items.filter((item) => item.tabIndex === 0)).toHaveLength(1);
     expect(items.filter((item) => item.tabIndex === -1)).toHaveLength(71);
+  });
+
+  it("isolates unchanged workspace leaves across refresh renders", async () => {
+    let modified = false;
+    mocks.listDirectory.mockImplementation(async () =>
+      page([
+        entry("stable.txt"),
+        {
+          ...entry("changed.txt"),
+          modified_at: modified
+            ? "2026-10-10T00:00:00Z"
+            : "2026-10-09T00:00:00Z",
+        },
+      ]),
+    );
+    renderNavigator();
+    await screen.findByRole("treeitem", { name: "stable.txt" });
+    await waitFor(() =>
+      expect(screen.getByRole("tree")).toHaveAttribute("aria-busy", "false"),
+    );
+    mocks.fileGlyphRender.mockClear();
+    modified = true;
+
+    refresh();
+    await waitFor(() => expect(mocks.listDirectory).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(screen.getByRole("tree")).toHaveAttribute("aria-busy", "false"),
+    );
+
+    expect(mocks.fileGlyphRender.mock.calls).toEqual([["changed.txt"]]);
   });
 
   it("restores a tab stop when a focused nested file disappears", async () => {
