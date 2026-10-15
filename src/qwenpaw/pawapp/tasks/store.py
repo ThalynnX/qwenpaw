@@ -162,6 +162,10 @@ class TaskStore:
                 connection.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
             elif version != _SCHEMA_VERSION:
                 raise TaskStoreError("unsupported_store_version")
+            from .managed import SCHEMA as managed_schema
+
+            for statement in managed_schema:
+                connection.execute(statement)
             connection.commit()
         except BaseException:
             connection.rollback()
@@ -242,11 +246,7 @@ class TaskStore:
                 event.sequence,
                 event.model_dump_json(),
                 source.sequence if source is not None else None,
-                (
-                    content_digest(source.model_dump(mode="json"))
-                    if source is not None
-                    else None
-                ),
+                (source.replay_digest if source is not None else None),
             ),
         )
         origin = handle.origin
@@ -683,6 +683,10 @@ class TaskStore:
                     json_extract(submission_json, '$.handle.status')
                         != 'waiting_for_input'
                     OR EXISTS (
+                        SELECT 1 FROM managed_runs
+                        WHERE managed_runs.task_id = tasks.task_id
+                    )
+                    OR EXISTS (
                         SELECT 1 FROM task_commands
                         WHERE task_commands.task_id = tasks.task_id
                     )
@@ -859,7 +863,8 @@ class TaskStore:
         event = ExecutorEvent.model_validate_json(
             canonical_json(event.model_dump(mode="json")),
         )
-        digest = content_digest(event.model_dump(mode="json"))
+        digest = event.replay_digest
+        event = event.model_copy(update={"detail": event.payload()})
 
         def operation(connection: sqlite3.Connection) -> TaskSubmission:
             submission = self._get(connection, scope, task_id)
@@ -948,7 +953,22 @@ class TaskStore:
                     raise TaskStoreError("invalid_artifact_ref")
                 if artifact_ref not in output_refs:
                     output_refs.append(artifact_ref)
-            if status == "succeeded" and result is None and not output_refs:
+            result_data = (
+                event.result_data
+                if event.result_data is not None
+                else handle.result_data
+            )
+            if status == "succeeded" or event.result_data is not None:
+                try:
+                    submission.action.validate_result(result_data)
+                except ValueError:
+                    raise TaskStoreError("invalid_action_result") from None
+            if (
+                status == "succeeded"
+                and result is None
+                and not output_refs
+                and result_data is None
+            ):
                 raise TaskStoreError("result_required")
             input_request = handle.input_request
             if event.status in ANSWERABLE_STATUSES:
@@ -983,6 +1003,7 @@ class TaskStore:
                 update={
                     "status": status,
                     "text_result": result,
+                    "result_data": result_data,
                     "output_refs": tuple(output_refs),
                     "project_ref": project_ref,
                     "experience": experience,

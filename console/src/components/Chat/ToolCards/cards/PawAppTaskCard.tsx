@@ -503,8 +503,6 @@ function TaskCard({
   const experience = task?.experience ?? null;
   const title = experience
     ? localizedText(experience.definition.title, language)
-    : appId === "qwenpaw-creator"
-    ? t("tool.pawappTask.creatorTitle")
     : appId
     ? t("tool.pawappTask.title", { app: appId })
     : t("tool.pawappTask.defaultTitle");
@@ -513,13 +511,8 @@ function TaskCard({
   );
   const openLabel = selectedView
     ? localizedText(selectedView.open_label, language)
-    : appId === "qwenpaw-creator"
-    ? t("tool.pawappTask.openCreator")
     : t("tool.pawappTask.openApp");
-  const openingLabel =
-    appId === "qwenpaw-creator"
-      ? t("tool.pawappTask.openingCreator")
-      : t("tool.pawappTask.openingApp");
+  const openingLabel = t("tool.pawappTask.openingApp");
   const appHref = appId
     ? addRouterBasename(window.location.pathname, `/apps/${appId}`)
     : undefined;
@@ -704,20 +697,13 @@ function OpenAppCard({
   result,
 }: BuiltinCardProps & { result: PawAppOpenResult }) {
   const { t } = useTranslation();
-  const openLabel =
-    result.app_id === "qwenpaw-creator"
-      ? t("tool.pawappTask.openCreator")
-      : t("tool.pawappTask.openApp");
+  const openLabel = t("tool.pawappTask.openApp");
   return (
     <ToolCardShell
       content={content}
       isStreaming={isStreaming}
       icon={<RocketOutlined />}
-      title={
-        result.app_id === "qwenpaw-creator"
-          ? t("tool.pawappTask.creatorTitle")
-          : t("tool.pawappTask.title", { app: result.app_id })
-      }
+      title={t("tool.pawappTask.title", { app: result.app_id })}
       inlineResult={openLabel}
       defaultExpanded
     >

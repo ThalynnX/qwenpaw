@@ -288,6 +288,42 @@ class PawAppContext:
     _sse_channel: Any = field(default=None, repr=False)
     _capability_broker: Any = field(default=None, repr=False)
 
+    _task_runtime: Any = field(default=None, repr=False)
+    _task_origins: Any = field(default=None, repr=False)
+
+    def _task_scope(self):
+        from .tasks import TaskScope, TaskStoreError
+
+        if self._task_runtime is None:
+            raise TaskStoreError("task_runtime_unavailable")
+        return TaskScope(
+            principal_id=self.user_id,
+            workspace_id=self.agent_id,
+            app_id=self.app_id,
+        )
+
+    @property
+    def tasks(self):
+        from .tasks.client import ScopedTasks
+
+        return ScopedTasks(
+            self._task_runtime, self._task_origins, self._task_scope()
+        )
+
+    @property
+    def artifacts(self):
+        from .tasks.client import ScopedArtifacts
+
+        return ScopedArtifacts(self._task_runtime, self._task_scope())
+
+    @property
+    def setup(self):
+        from .tasks.client import ScopedSetup
+
+        return ScopedSetup(
+            self._task_runtime, self._task_origins, self._task_scope()
+        )
+
     # ─── Chat ───────────────────────────────────────────────────────
 
     async def chat(

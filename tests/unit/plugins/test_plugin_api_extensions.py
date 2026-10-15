@@ -20,7 +20,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Stub missing agentscope 2.0 modules so MultiAgentManager can be imported
 # in environments where agentscope 2.0 is not installed.
@@ -625,6 +624,17 @@ class TestPluginValidatorImports:
                 if k.startswith("_plugin_validation_bad_plugin")
             ]
             assert leaked == [], f"Leaked modules: {leaked}"
+
+    def test_cli_validate_accepts_pawapp_export(self, tmp_path):
+        from qwenpaw.plugins.validation import validate_plugin_module
+
+        (tmp_path / "main.py").write_text(
+            "from qwenpaw.pawapp import PawApp\n"
+            'app = PawApp("Example", app_id="example")\n',
+            encoding="utf-8",
+        )
+        validate_plugin_module("example", tmp_path, "main.py")
+        assert "_plugin_validation_example" not in sys.modules
 
 
 # ---------------------------------------------------------------------------

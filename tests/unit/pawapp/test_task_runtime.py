@@ -462,18 +462,18 @@ async def test_capability_grant_updates_bundle_atomically(host):
             "adapter_ref": "fixture.list-records.v1",
         },
     )
-    host.registrations[
-        (SCOPE.app_id, second_action.action_id)
-    ] = ActionRegistration(
-        action=second_action,
-        factory=lambda: Executor(host.runs),
-        settings_entry="/apps/qwenpaw-data",
-        capability_id="data_analysis",
-        capability_label="Analyze data",
-        capability_summary=(
-            "Run governed analysis against an approved data source."
-        ),
-        capability_risk="analysis",
+    host.registrations[(SCOPE.app_id, second_action.action_id)] = (
+        ActionRegistration(
+            action=second_action,
+            factory=lambda: Executor(host.runs),
+            settings_entry="/apps/qwenpaw-data",
+            capability_id="data_analysis",
+            capability_label="Analyze data",
+            capability_summary=(
+                "Run governed analysis against an approved data source."
+            ),
+            capability_risk="analysis",
+        )
     )
     runtime = host.app.state.pawapp_tasks
     catalog = await runtime.grant_catalog(
@@ -672,13 +672,13 @@ async def test_create_video_grant_cannot_authorize_private_actions(host):
         settings_entry="/apps/qwenpaw-data",
     )
     for private_action in private_actions:
-        host.registrations[
-            (SCOPE.app_id, private_action.action_id)
-        ] = ActionRegistration(
-            action=private_action,
-            factory=lambda: Executor(host.runs),
-            settings_entry="/apps/qwenpaw-data",
-            exposure="app_private",
+        host.registrations[(SCOPE.app_id, private_action.action_id)] = (
+            ActionRegistration(
+                action=private_action,
+                factory=lambda: Executor(host.runs),
+                settings_entry="/apps/qwenpaw-data",
+                exposure="app_private",
+            )
         )
     host.policy_path.write_text(
         TaskPolicy(
@@ -1434,6 +1434,30 @@ async def test_generic_setup_blocks_without_creating_latent_task(host):
     assert await host.store.find_request(SCOPE, BODY["request_id"]) is None
     assert not host.runs
 
+    workspace = await host.app.state.pawapp_task_origins.manager.get_agent(
+        "sales"
+    )
+
+    async def create_chat(chat):
+        host.chats[chat.id] = chat
+        return chat
+
+    workspace.chat_manager.create_chat = AsyncMock(side_effect=create_chat)
+    direct_body = {"request_id": "native-setup", "inputs": BODY["inputs"]}
+    direct_url = PREFIX + "/actions/analyze/direct-setup-requests"
+    direct_setup = await host.client.post(direct_url, json=direct_body)
+    assert direct_setup.status_code == 201, direct_setup.text
+    direct_request = direct_setup.json()["request"]
+    origin_chat = host.chats[direct_request["origin_ref"]]
+    assert origin_chat.meta["pawapp"]["app_id"] == SCOPE.app_id
+    replay_direct = await host.client.post(direct_url, json=direct_body)
+    assert replay_direct.status_code == 200
+    assert (
+        replay_direct.json()["request"]["request_id"]
+        == direct_request["request_id"]
+    )
+    assert not host.runs
+
     setup_body = {
         "chat_id": BODY["chat_id"],
         "engagement": BODY["engagement"],
@@ -1683,3 +1707,42 @@ async def test_deferred_setup_retry_and_restart_recovery(
             "SELECT COUNT(*) FROM setup_requests",
         ).fetchone()[0]
     assert count == 2
+
+
+async def test_direct_sdk_route_creates_scoped_origin_and_retries(host):
+    workspace = await host.app.state.pawapp_task_origins.manager.get_agent(
+        "sales"
+    )
+
+    async def create(chat):
+        host.chats[chat.id] = chat
+        return chat
+
+    workspace.chat_manager.create_chat = AsyncMock(side_effect=create)
+    body = {
+        "request_id": "sdk-intent",
+        "app_session_id": "native-one",
+        "inputs": BODY["inputs"],
+    }
+    url = PREFIX + "/actions/analyze/direct-tasks"
+    first = await host.client.post(url, json=body)
+    assert first.status_code == 202, first.text
+    task = first.json()["task"]
+    assert task["origin"]["engagement"] == "direct"
+    assert task["origin"]["return_session_ref"] is None
+    replay = await host.client.post(url, json=body)
+    assert replay.json()["task"]["task_id"] == task["task_id"]
+    assert workspace.chat_manager.create_chat.call_count == 1
+    mismatch = await host.client.post(
+        url, json=body, headers={"X-Agent-Id": "other"}
+    )
+    assert mismatch.status_code == 403
+    other = await host.client.get(
+        PREFIX + "/tasks/" + task["task_id"],
+        headers={"Authorization": "Bearer bob-token"},
+    )
+    assert other.status_code == 404
+    conflict = await host.client.post(
+        url, json={**body, "app_session_id": "native-two"}
+    )
+    assert conflict.status_code == 409

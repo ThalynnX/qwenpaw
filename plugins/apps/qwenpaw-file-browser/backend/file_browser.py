@@ -651,3 +651,77 @@ def make_input_resolver(store: FileBrowserStore):
         return {"directory": normalize_directory(directory)}
 
     return resolve
+
+
+# The legacy descriptor/adapter stays available for accepted protocol-1 tasks.
+# New grants target a new descriptor instead of silently widening old grants.
+MANAGED_ACTION_ID = "browse-directory"
+
+
+def browse_directory_action_descriptor() -> ActionDescriptor:
+    descriptor = list_directory_action_descriptor().model_dump(mode="json")
+    descriptor.update(
+        action_id=MANAGED_ACTION_ID,
+        adapter_ref="qwenpaw-file-browser.browse-directory.v1",
+        result_schema={
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "schema_version",
+                "directory",
+                "entries",
+                "truncated",
+                "limit",
+            ],
+            "properties": {
+                "schema_version": {"const": 1},
+                "directory": {"type": "string"},
+                "truncated": {"type": "boolean"},
+                "limit": {"type": "integer", "const": MAX_ENTRIES},
+                "entries": {
+                    "type": "array",
+                    "maxItems": MAX_ENTRIES,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": [
+                            "name",
+                            "type",
+                            "size_bytes",
+                            "modified_at",
+                        ],
+                        "properties": {
+                            "name": {"type": "string"},
+                            "type": {
+                                "enum": [
+                                    "directory",
+                                    "file",
+                                    "symlink",
+                                    "other",
+                                    "unavailable",
+                                ]
+                            },
+                            "size_bytes": {"type": ["integer", "null"]},
+                            "modified_at": {"type": ["number", "null"]},
+                        },
+                    },
+                },
+            },
+        },
+    )
+    return ActionDescriptor.model_validate(descriptor)
+
+
+async def browse_directory(ctx):
+    from qwenpaw.pawapp.tasks import ActionResult
+
+    listing = json.loads(
+        await asyncio.to_thread(render_directory, ctx.inputs["directory"])
+    )
+    return ActionResult(
+        summary=(
+            f"Listed {len(listing['entries'])} entries "
+            f"in {listing['directory']}."
+        ),
+        data=listing,
+    )

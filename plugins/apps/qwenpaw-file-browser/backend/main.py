@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """QwenPaw File Browser PawApp entry point."""
+
 # pylint: disable=wrong-import-order,wrong-import-position
 
 from __future__ import annotations
@@ -34,6 +35,9 @@ if str(BACKEND_DIR) not in sys.path:
 
 from file_browser import (  # noqa: E402
     ACTION_ID,
+    MANAGED_ACTION_ID,
+    browse_directory,
+    browse_directory_action_descriptor,
     APP_ID,
     ENTRY_ID,
     REQUIREMENT_ID,
@@ -91,7 +95,7 @@ app.setup_entry(
         requirement=SetupRequirement(
             id=REQUIREMENT_ID,
             summary="Choose a default directory for omitted list inputs.",
-            required_for=(ACTION_ID,),
+            required_for=(ACTION_ID, MANAGED_ACTION_ID),
             authority="AppLocal",
             setup_entry_ref=ENTRY_ID,
             check_ref="file-browser.check-default-root@1",
@@ -102,6 +106,7 @@ app.setup_entry(
 ).task_action(
     ActionRegistration(
         action=list_directory_action_descriptor(),
+        exposure="app_private",
         factory=lambda: FileBrowserTaskAdapter(store),
         settings_entry=f"/apps/{APP_ID}",
         requirement_ids=(REQUIREMENT_ID,),
@@ -110,15 +115,30 @@ app.setup_entry(
 )
 
 
+app.task_action(
+    ActionRegistration(
+        action=browse_directory_action_descriptor(),
+        handler=browse_directory,
+        readiness=FileBrowserTaskAdapter(store).readiness,
+        recovery="replay_safe",  # bounded read-only listing
+        requirement_ids=(REQUIREMENT_ID,),
+        input_resolver=make_input_resolver(store),
+    )
+)
+
+
 class PreferenceUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     directory: Annotated[str, Field(min_length=1, max_length=4096)]
     expected_revision: Annotated[int, Field(ge=0)]
-    setup_request_id: Annotated[
-        str,
-        Field(min_length=1, max_length=256),
-    ] | None = None
+    setup_request_id: (
+        Annotated[
+            str,
+            Field(min_length=1, max_length=256),
+        ]
+        | None
+    ) = None
 
 
 def _principal(request: Request) -> str:

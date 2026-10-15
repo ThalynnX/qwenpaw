@@ -1,0 +1,18 @@
+{
+  "contract_version": 1,
+  "host_base_revision": "6841e6e339973778023c474345d970e78427681a",
+  "engine_repository": "cyruszhang/QwenPaw-Data",
+  "engine_revision": "df044e8d91733982851befbe0e740883b2632a92",
+  "patches": [],
+  "required_capabilities": [
+    "durable_submissions",
+    "event_replay",
+    "durable_commands",
+    "scoped_host_capabilities",
+    "artifact_handoff",
+    "analysis_experience",
+    "session_submissions",
+    "scoped_sessions"
+  ],
+  "validation": "Controlled execution: real HTTP, SSE and SQLite; no live provider calls."
+}

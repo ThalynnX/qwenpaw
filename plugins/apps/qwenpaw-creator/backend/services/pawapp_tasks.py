@@ -79,6 +79,11 @@ def creator_create_project_action_descriptor() -> ActionDescriptor:
     return ActionDescriptor(
         app_id=APP_ID,
         action_id=CREATE_PROJECT_ACTION_ID,
+        guidance=(
+            "Use only when the user requests an empty "
+            "project. For a finished video, choose "
+            "create-video."
+        ),
         summary=(
             "Create a new empty Creator project and return a reference "
             "that can be opened in Creator."

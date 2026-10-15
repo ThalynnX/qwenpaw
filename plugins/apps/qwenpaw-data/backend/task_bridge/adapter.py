@@ -94,7 +94,10 @@ def data_session_action_descriptor() -> ActionDescriptor:
         update={
             "action_id": "analyze-session",
             "engagements": ("direct",),
-            "summary": "Analyze data in an existing Data session, retaining its files and history.",
+            "summary": (
+                "Analyze data in an existing Data session, "
+                "retaining its files and history."
+            ),
             "input_schema": schema,
         }
     )
@@ -349,6 +352,7 @@ class DataTaskAdapter:
             type(caps.get("protocol_version")) is not int
             or caps["protocol_version"] != 1
             or caps.get("durable_submissions") is not True
+            or caps.get("scoped_sessions") is not True
             or caps.get("event_replay") is not True
             or caps.get("artifact_handoff") is not True
             or (

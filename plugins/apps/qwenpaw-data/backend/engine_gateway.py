@@ -89,6 +89,16 @@ class EngineGateway:
         self, path: str, request: Request, *, user_id: str | None = None
     ) -> Response:
         upstream_path = self._upstream_path(path)
+        # Legacy session APIs require Engine ownership checks.
+        if upstream_path.startswith("/api/v1/"):
+            caps = await self.json(
+                "GET", "/api/v1/capabilities/submissions", user_id=user_id
+            )
+            if (
+                not isinstance(caps, dict)
+                or caps.get("scoped_sessions") is not True
+            ):
+                raise HTTPException(503, "unsupported_engine_scope")
         if request.method == "GET" and _SSE_PATH_RE.search(upstream_path):
             return await self._stream(upstream_path, request, user_id=user_id)
         body = await request.body()

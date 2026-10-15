@@ -63,6 +63,13 @@ def enqueue(connection, handle, *, sequence=None, status=None, text=None):
             else None
         ),
     }
+    if (
+        handle.result_data is not None
+        and (status or handle.status) == handle.status
+    ):
+        bounded = len(canonical_json(handle.result_data).encode()) <= 16000
+        summary["result_data"] = handle.result_data if bounded else None
+        summary["result_data_truncated"] = not bounded
     connection.execute(
         """INSERT OR IGNORE INTO task_continuations
         (task_id, event_sequence, principal_id, workspace_id, target_ref,

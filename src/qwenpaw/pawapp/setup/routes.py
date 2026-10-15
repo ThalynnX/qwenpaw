@@ -39,6 +39,43 @@ class StartSetupRequest(Contract):
     expires_in_seconds: int = Field(default=900, ge=60, le=3600)
 
 
+class DirectSetupRequest(Contract):
+    request_id: Identity
+    app_session_id: Identity = "default"
+    inputs: dict
+    entry_id: Identity | None = None
+    requirement_ids: tuple[Identity, ...] = ()
+
+
+@router.post("/actions/{action_id}/direct-setup-requests")
+async def start_direct_setup(
+    request: Request, action_id: str, scope: Scope, body: DirectSetupRequest
+):
+    from ..tasks.client import ScopedSetup
+
+    try:
+        client = ScopedSetup(
+            request.app.state.pawapp_tasks,
+            request.app.state.pawapp_task_origins,
+            scope,
+        )
+        record, replayed = await client.request(
+            action_id,
+            body.inputs,
+            idempotency_key=body.request_id,
+            app_session_id=body.app_session_id,
+            entry_id=body.entry_id,
+            requirement_ids=body.requirement_ids,
+        )
+        return JSONResponse(
+            content=jsonable_encoder(_payload(record)),
+            status_code=200 if replayed else 201,
+            headers={"X-Idempotent-Replay": str(replayed).lower()},
+        )
+    except (TaskStoreError, ValueError) as exc:
+        raise _error(exc) from None
+
+
 def _payload(record) -> dict:
     return {
         "request": record.request,

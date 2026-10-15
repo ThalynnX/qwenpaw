@@ -7,7 +7,6 @@ import re
 
 from fastapi import HTTPException, Request
 
-from qwenpaw.app.chats.models import ChatSpec
 from qwenpaw.pawapp.tasks import TaskStoreError, ExecutorRunRef, TaskAnswer
 from qwenpaw.pawapp.tasks.contracts import content_digest
 from qwenpaw.pawapp.tasks.routes import task_scope, _error
@@ -21,7 +20,7 @@ async def console_scope(request: Request):
 
 
 async def dispatch_console_chat(request: Request, gateway):
-    """Persist first; never fall back to a raw Engine chat after uncertainty."""
+    """Persist first; never fall back to raw chat after uncertainty."""
     scope = await console_scope(request)
     runtime = request.app.state.pawapp_tasks
     request_id = request.headers.get("X-Request-Id", "")
@@ -40,7 +39,10 @@ async def dispatch_console_chat(request: Request, gateway):
     ):
         raise HTTPException(
             422,
-            "Dataset filtering and disabled clarification are not supported by this Engine",
+            (
+                "Dataset filtering and disabled clarification are "
+                "not supported by this Engine"
+            ),
         )
     inputs.pop("dataset_names", None)
     inputs.pop("enable_clarification", None)
@@ -54,28 +56,12 @@ async def dispatch_console_chat(request: Request, gateway):
             }
         )
         origins = request.app.state.pawapp_task_origins
-        if not await origins.enabled(scope.workspace_id):
-            raise TaskStoreError("workspace_unavailable")
-        workspace = await origins.manager.get_agent(scope.workspace_id)
-        chat_id = "pawdata_" + content_digest({"session": namespace})
-        chat = await workspace.chat_manager.get_chat(chat_id)
-        if chat is None:
-            await workspace.chat_manager.create_chat(
-                ChatSpec(
-                    id=chat_id,
-                    session_id=namespace,
-                    user_id=scope.principal_id,
-                    channel="console",
-                    name=inputs["text"][:60],
-                    meta={
-                        "pawapp": {
-                            "app_id": scope.app_id,
-                            "agent_id": scope.workspace_id,
-                        }
-                    },
-                )
-            )
-        origin = await origins.resolve(scope, "direct", chat_id)
+        origin = await origins.ensure_direct(
+            scope,
+            session_ref=namespace,
+            chat_id="pawdata_" + content_digest({"session": namespace}),
+            name=inputs["text"],
+        )
         result = await runtime.dispatch(
             scope,
             "analyze-session",
@@ -87,7 +73,10 @@ async def dispatch_console_chat(request: Request, gateway):
             if result.get("reason") == "session_unavailable":
                 raise HTTPException(
                     409,
-                    "This Data session is not available in the current workspace; start a new session",
+                    (
+                        "This Data session is not available in the "
+                        "current workspace; start a new session"
+                    ),
                 )
             if result.get("reason") == "session_busy":
                 raise HTTPException(
@@ -112,7 +101,10 @@ async def dispatch_console_chat(request: Request, gateway):
             if handle.status in {"failed", "cancelled", "interrupted"}:
                 raise HTTPException(
                     409,
-                    "Analysis could not start; inspect the task or start a new Data session",
+                    (
+                        "Analysis could not start; inspect the task or "
+                        "start a new Data session"
+                    ),
                 )
             await asyncio.sleep(0.1)
             handle = (await runtime.get(scope, handle.task_id)).handle
@@ -142,7 +134,10 @@ async def command_console_chat(
         if submission.handle.origin.engagement != "direct":
             raise HTTPException(
                 409,
-                "This delegated task is controlled from its originating Main Chat",
+                (
+                    "This delegated task is controlled from its "
+                    "originating Main Chat"
+                ),
             )
         if kind == "cancel":
             command = await runtime.cancel(scope, task_id)

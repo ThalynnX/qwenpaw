@@ -39,6 +39,12 @@ class AnswerTaskRequest(Contract):
     answers: tuple[TaskAnswer, ...]
 
 
+class DirectDispatchRequest(Contract):
+    request_id: Identity
+    app_session_id: Identity = "default"
+    inputs: dict
+
+
 class CancelTaskRequest(Contract):
     reason: Annotated[str, Field(max_length=2000)] | None = None
 
@@ -47,6 +53,46 @@ class HostOrigins:
     def __init__(self, manager, enabled):
         self.manager = manager
         self.enabled = enabled
+        self._direct_lock = asyncio.Lock()
+
+    async def direct(self, scope, app_session_id):
+        from .contracts import content_digest
+
+        identity = content_digest(
+            {"scope": scope.model_dump(mode="json"), "session": app_session_id}
+        )
+        return await self.ensure_direct(
+            scope,
+            session_ref=f"pawapp:{scope.app_id}:session:{identity}",
+            chat_id="pawapp_" + identity,
+            name=scope.app_id,
+        )
+
+    async def ensure_direct(self, scope, *, session_ref, chat_id, name):
+        """Register a native origin with its existing identity."""
+        from ...app.chats.models import ChatSpec
+
+        if not await self.enabled(scope.workspace_id):
+            raise TaskStoreError("workspace_unavailable")
+        async with self._direct_lock:
+            workspace = await self.manager.get_agent(scope.workspace_id)
+            if await workspace.chat_manager.get_chat(chat_id) is None:
+                await workspace.chat_manager.create_chat(
+                    ChatSpec(
+                        id=chat_id,
+                        session_id=session_ref,
+                        user_id=scope.principal_id,
+                        channel="console",
+                        name=name[:60],
+                        meta={
+                            "pawapp": {
+                                "app_id": scope.app_id,
+                                "agent_id": scope.workspace_id,
+                            }
+                        },
+                    )
+                )
+        return await self.resolve(scope, "direct", chat_id)
 
     async def resolve(self, scope, engagement, chat_id):
         if not await self.enabled(scope.workspace_id):
@@ -163,6 +209,32 @@ async def task_scope(request: Request, app_id: str, workspace_id: str):
 
 
 Scope = Annotated[TaskScope, Depends(task_scope)]
+
+
+@router.post("/actions/{action_id}/direct-tasks")
+async def dispatch_direct(
+    request: Request, action_id: str, scope: Scope, body: DirectDispatchRequest
+):
+    from .client import ScopedTasks
+
+    try:
+        client = ScopedTasks(
+            request.app.state.pawapp_tasks,
+            request.app.state.pawapp_task_origins,
+            scope,
+        )
+        result = await client.dispatch(
+            action_id,
+            body.inputs,
+            request_id=body.request_id,
+            app_session_id=body.app_session_id,
+        )
+        return JSONResponse(
+            content=jsonable_encoder(result),
+            status_code=202 if result["state"] == "accepted" else 200,
+        )
+    except (TaskStoreError, ValueError) as exc:
+        raise _error(exc) from None
 
 
 @router.get("/actions/{action_id}")

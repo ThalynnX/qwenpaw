@@ -298,6 +298,12 @@ def creator_create_video_action_descriptor() -> ActionDescriptor:
     return ActionDescriptor(
         app_id=_CREATOR_APP_ID,
         action_id=_CREATE_VIDEO_ACTION_ID,
+        guidance=(
+            "Choose create-video for a finished video. Accept "
+            "intent-level brief/script; never request "
+            "internal project, timeline, element, work, run, "
+            "or provider IDs."
+        ),
         summary=(
             "Unlike create-project, which creates an empty project, "
             "create-video creates a Creator project, builds a production "
@@ -1629,9 +1635,9 @@ def _classify_observed_state(
     ) -> _ObservedWorkflowState:
         state_evidence = {**evidence, "stage": stage}
         if source_receipt is not None:
-            state_evidence[
-                "source_receipt_digest"
-            ] = source_receipt.receipt_digest
+            state_evidence["source_receipt_digest"] = (
+                source_receipt.receipt_digest
+            )
         return _ObservedWorkflowState(
             stage=stage,
             evidence=state_evidence,
@@ -3105,14 +3111,12 @@ class CreatorVideoWorkflowTaskAdapter:
                         authorization,
                     ).model_dump(mode="json")
                 if submission.handle.experience is not None:
-                    event_detail[
-                        "experience_update"
-                    ] = _creator_experience_update(
-                        submission,
-                        record,
-                        workflow_event,
-                    ).model_dump(
-                        mode="json"
+                    event_detail["experience_update"] = (
+                        _creator_experience_update(
+                            submission,
+                            record,
+                            workflow_event,
+                        ).model_dump(mode="json")
                     )
                 yield ExecutorEvent(
                     run_ref=run_ref,

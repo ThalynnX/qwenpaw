@@ -16,12 +16,22 @@ The existing [storyboard](pawapp-vnext-creator-storyboard-action.example.json) a
 implementation actions. Neither a descriptor nor adapter registration is a
 permission grant.
 
+## App integration update
+
+See the [small App quickstart](pawapp-app-quickstart.md) and
+[implementation status / compatibility pairing](pawapp-contract-progress.md).
+Apps may now register an async handler with `app.action(...)`; the Host provides
+its durable adapter. External adapters retain the protocol described below.
+Typed events and schema-checked structured results share the generated
+[contract bundle](pawapp-contract-v1.schema.json). Guidance is excluded from
+authorization digests; descriptors without result_schema retain their old digest.
+
 ## Host ownership
 
 The Host creates one `TaskStore` at a Host-owned path in its working directory
 using `await TaskStore.open(path)`. SQLite owns task facts, action/input snapshots,
 submission identities, run mappings, events, replay cursors and delivery receipts.
-The file uses schema version 4. Additive migrations retain version 1/2/3 tasks,
+The file uses schema version 4, with additive managed-run/event/command tables. Additive migrations retain version 1/2/3 tasks,
 add boundary audit records, durable task commands, and backfill pending
 continuation jobs from the existing outbox; unsupported versions are rejected. Connections
 use WAL, full synchronous commits and short transactions on worker threads.

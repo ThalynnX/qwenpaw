@@ -2,7 +2,15 @@
 """Server-owned action registration and configuration readiness contracts."""
 
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Literal, Protocol
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Awaitable,
+    Callable,
+    Literal,
+    Protocol,
+    runtime_checkable,
+)
 
 from pydantic import model_validator
 
@@ -14,8 +22,13 @@ from .contracts import (
     TaskExperienceDefinition,
     TaskScope,
     TaskOrigin,
+    TaskSubmission,
+    ExecutorEvent,
 )
 from .coordinator import TaskAdapter
+
+if TYPE_CHECKING:
+    from .managed import ActionResult, TaskExecution
 
 
 class Readiness(Contract):
@@ -35,9 +48,22 @@ class ManagedTaskAdapter(TaskAdapter, Protocol):
         scope: TaskScope,
         inputs: dict[str, Any],
     ) -> Readiness:
+        """Check prerequisites without submitting work."""
         ...
 
     async def aclose(self) -> None:
+        """Close connections and stop locally owned execution."""
+        ...
+
+
+@runtime_checkable
+class ArtifactMaterializingAdapter(Protocol):
+    """Optional extension for materializing immutable artifact bytes."""
+
+    async def materialize_event(
+        self, submission: TaskSubmission, event: ExecutorEvent, artifacts
+    ) -> ExecutorEvent:
+        """Publish verified artifact bytes and return the reference event."""
         ...
 
 
@@ -50,8 +76,8 @@ InputResolver = Callable[
 @dataclass(frozen=True)
 class ActionRegistration:
     action: ActionDescriptor
-    factory: Callable[[], ManagedTaskAdapter]
-    settings_entry: str
+    factory: Callable[[], ManagedTaskAdapter] | None = None
+    settings_entry: str = ""
     requirement_ids: tuple[Identity, ...] = ()
     deferred_requirement_ids: tuple[Identity, ...] = ()
     input_resolver: InputResolver | None = None
@@ -61,8 +87,23 @@ class ActionRegistration:
     capability_summary: str | None = None
     capability_risk: CapabilityRisk | None = None
     experience: TaskExperienceDefinition | None = None
+    handler: (
+        Callable[["TaskExecution"], Awaitable["ActionResult | str"]] | None
+    ) = None
+    readiness: (
+        Callable[[TaskScope, dict[str, Any]], Awaitable[Readiness]] | None
+    ) = None
+    recovery: Literal["interrupt", "replay_safe"] = "interrupt"
 
     def __post_init__(self):
+        if (self.factory is None) == (self.handler is None):
+            raise ValueError("register exactly one handler or adapter factory")
+        if self.recovery not in {"interrupt", "replay_safe"}:
+            raise ValueError("invalid handler recovery policy")
+        if not self.settings_entry:
+            object.__setattr__(
+                self, "settings_entry", f"/apps/{self.action.app_id}"
+            )
         if (
             self.experience is not None
             and self.experience.action_id != self.action.action_id

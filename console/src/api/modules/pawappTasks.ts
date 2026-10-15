@@ -146,6 +146,7 @@ export interface PawAppTask {
   recovery_state: "none" | "reconciling" | "unresolved";
   event_sequence: number;
   text_result: string | null;
+  result_data?: Record<string, unknown> | null;
   output_refs?: PawAppArtifactRef[];
   project_ref?: PawAppProjectRef | null;
   experience?: PawAppTaskExperienceSnapshot | null;
@@ -495,6 +496,9 @@ export function isPawAppTask(value: unknown): value is PawAppTask {
     Number.isSafeInteger(value.event_sequence) &&
     Number(value.event_sequence) >= 0 &&
     (value.text_result === null || typeof value.text_result === "string") &&
+    (value.result_data === undefined ||
+      value.result_data === null ||
+      record(value.result_data)) &&
     (value.output_refs === undefined ||
       (Array.isArray(value.output_refs) &&
         value.output_refs.every(isArtifactRef))) &&

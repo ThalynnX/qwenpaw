@@ -507,3 +507,65 @@ async def test_resume_partial_result_after_disconnect_or_engine_restart(
         assert len(source_sequences) == len(set(source_sequences))
     finally:
         await fresh_adapter.aclose()
+
+
+async def test_legacy_sessions_are_scoped_before_reads_and_mutations(engine):
+    """Real service must not bypass submission ownership via its legacy API."""
+    headers = {"Authorization": f"Bearer {TOKEN}", "X-User-Id": "owner-sales"}
+    async with httpx.AsyncClient(
+        base_url=engine.base, headers=headers
+    ) as client:
+        caps = (await client.get("/api/v1/capabilities/submissions")).json()
+        assert caps["scoped_sessions"] is True
+        first = await client.post(
+            "/api/v1/sessions",
+            json={"title": "Private", "datasource_id": "sales"},
+        )
+        assert first.status_code == 200, first.text
+        session_id = first.json()["session"]["id"]
+        prefix = f"/api/v1/sessions/{session_id}"
+        assert (await client.get(prefix)).status_code == 200
+        for identity in ("other-user-sales", "owner-other-workspace"):
+            other = {"X-User-Id": identity}
+            listing = (
+                await client.get("/api/v1/sessions", headers=other)
+            ).json()
+            assert listing["items"] == [] and listing["total"] == 0
+            for method, path, body in (
+                ("GET", prefix, None),
+                ("PATCH", prefix, {"title": "Stolen"}),
+                ("DELETE", prefix, None),
+                ("POST", prefix + "/fork", {}),
+                ("GET", prefix + "/chats", None),
+                ("GET", prefix + "/artifacts", None),
+                (
+                    "POST",
+                    "/api/v1/console/chat",
+                    {"session_id": session_id, "text": "private"},
+                ),
+            ):
+                response = await client.request(
+                    method,
+                    path,
+                    headers=other,
+                    **({"json": body} if body is not None else {}),
+                )
+                assert response.status_code == 404, (
+                    path,
+                    response.status_code,
+                    response.text,
+                )
+            upload = await client.post(
+                "/api/v1/console/upload",
+                headers=other,
+                data={"session_id": session_id},
+                files={"file": ("x.txt", b"private", "text/plain")},
+            )
+            assert upload.status_code == 404, upload.text
+        assert (await client.get(prefix)).json()["session"][
+            "title"
+        ] == "Private"
+        owned = (
+            await client.get("/api/v1/sessions", params={"page_size": 1})
+        ).json()
+        assert owned["total"] == 1 and owned["items"][0]["id"] == session_id

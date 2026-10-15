@@ -89,7 +89,11 @@ def _build_ctx(
     # Get or create session for storage
     session = _get_session(request)
 
-    agent_id = request.query_params.get("agent_id", "default")
+    agent_id = (
+        request.query_params.get("agent_id")
+        or request.headers.get("X-Agent-Id")
+        or "default"
+    )
 
     return PawAppContext(
         app_id=app_id,
@@ -163,4 +167,18 @@ async def get_scoped_ctx(request: Request) -> PawAppContext:
             detail="channel is not available on app routes",
         )
 
-    return _build_ctx(request, user_id=user_id, channel=_SCOPED_CHANNEL)
+    ctx = _build_ctx(request, user_id=user_id, channel=_SCOPED_CHANNEL)
+    workspace = (
+        request.query_params.get("agent_id")
+        or request.headers.get("X-Agent-Id")
+        or "default"
+    )
+    claims = request.query_params.getlist(
+        "agent_id"
+    ) + request.headers.getlist("X-Agent-Id")
+    if any(value != workspace for value in claims):
+        raise HTTPException(403, "workspace scope mismatch")
+    ctx.agent_id = workspace
+    ctx._task_runtime = getattr(request.app.state, "pawapp_tasks", None)
+    ctx._task_origins = getattr(request.app.state, "pawapp_task_origins", None)
+    return ctx

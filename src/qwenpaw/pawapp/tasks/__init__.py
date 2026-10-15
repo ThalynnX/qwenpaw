@@ -78,3 +78,13 @@ __all__ = [
     "TaskCoordinator",
     "TaskCapability",
 ]
+
+from .managed import ActionResult, TaskExecution
+from .binding import ActionRegistration, ArtifactMaterializingAdapter
+
+__all__ += [
+    "ActionResult",
+    "TaskExecution",
+    "ActionRegistration",
+    "ArtifactMaterializingAdapter",
+]

@@ -208,6 +208,16 @@ there is no automatic deletion in this slice. Host reads always revalidate the
 stored digest and return the same not-found response for missing and inaccessible
 references. Read attempts are audited without storing artifact content.
 
+## Session ownership compatibility gate
+
+The Host requires `scoped_sessions: true` from the Engine before proxying its
+legacy session APIs. Session listing filters by the Host-supplied identity before
+pagination; session paths and body/form references validate ownership before
+reads, mutation or streaming. Host identities encode user and workspace.
+Artifacts remain reusable across sessions in the same authorized scope.
+See the [tested pairing](pawapp-contract-progress.md) for the pinned Engine revision
+containing the ownership changes.
+
 ## Verification
 
 Unit tests use HTTP fixtures to cover capability rejection, scoped identities,

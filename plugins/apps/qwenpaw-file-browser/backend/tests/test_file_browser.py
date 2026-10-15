@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Read-only file-browser setup, persistence, and adapter tests."""
+
 # pylint: disable=wrong-import-position
 
 from __future__ import annotations
@@ -217,7 +218,13 @@ def test_manifest_and_backend_registrations_match(tmp_path, monkeypatch):
     module.app.register(api)
 
     registration = api.register_task_action.call_args.args[0]
-    assert registration.action.action_id == "list-directory"
+    assert registration.action.action_id == "browse-directory"
+    assert registration.handler is not None
+    assert registration.factory is None
+    assert (
+        api.register_task_action.call_args_list[0].args[0].exposure
+        == "app_private"
+    )
     assert registration.action.engagements == ("delegated", "direct")
     assert registration.requirement_ids == ("default-root",)
     assert registration.input_resolver is not None
@@ -321,3 +328,49 @@ async def test_preference_api_uses_workspace_scope_and_completes_setup(
     assert result.outcome == "saved"
     assert result.changed_requirement_ids == ("default-root",)
     assert coordinator.complete.await_args_list[1].args[1] == result
+
+
+@pytest.mark.asyncio
+async def test_managed_handler_returns_structured_listing(tmp_path):
+    from file_browser import (
+        browse_directory,
+        browse_directory_action_descriptor,
+    )
+    from qwenpaw.pawapp.tasks import (
+        TaskStore,
+        TaskCoordinator,
+        ActionRegistration,
+    )
+    from qwenpaw.pawapp.tasks.managed import ManagedHandlerAdapter
+
+    directory = tmp_path / "files"
+    directory.mkdir()
+    (directory / "one.txt").write_text("one")
+    action = browse_directory_action_descriptor()
+    task_store = await TaskStore.open(tmp_path / "host-tasks.db")
+    adapter = ManagedHandlerAdapter(
+        task_store,
+        ActionRegistration(
+            action=action, handler=browse_directory, recovery="replay_safe"
+        ),
+    )
+    coordinator = TaskCoordinator(task_store, authorize=AsyncMock())
+    coordinator.register(action, adapter)
+    try:
+        created = await coordinator.dispatch(
+            scope(),
+            action.action_id,
+            request_id="listing",
+            inputs={"directory": str(directory)},
+            origin=TaskOrigin(
+                engagement="direct",
+                origin_ref="app-chat",
+                app_session_ref="files",
+            ),
+        )
+        done = await coordinator.consume(scope(), created.handle.task_id)
+        assert done.handle.status == "succeeded"
+        assert done.handle.result_data["entries"][0]["name"] == "one.txt"
+        assert done.handle.text_result.startswith("Listed 1 entries")
+    finally:
+        await adapter.aclose()

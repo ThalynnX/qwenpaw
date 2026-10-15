@@ -56,11 +56,14 @@ class _ReadyAdapter:
 
     async def attach(self, submission):
         async for event in self.adapter.attach(submission):
-            materialize = getattr(self.adapter, "materialize_event", None)
-            if materialize is not None:
+            from .binding import ArtifactMaterializingAdapter
+
+            if isinstance(self.adapter, ArtifactMaterializingAdapter):
                 if self.artifacts is None:
                     raise TaskStoreError("artifact_store_unavailable")
-                event = await materialize(submission, event, self.artifacts)
+                event = await self.adapter.materialize_event(
+                    submission, event, self.artifacts
+                )
             yield event
 
     async def command(self, submission, command):
@@ -154,7 +157,14 @@ class HostTaskRuntime:
                 del self._bindings[key]
             for key, registration in registrations.items():
                 if key not in self._bindings:
-                    adapter = registration.factory()
+                    if registration.handler is not None:
+                        from .managed import ManagedHandlerAdapter
+
+                        adapter = ManagedHandlerAdapter(
+                            self.store, registration, self.artifacts
+                        )
+                    else:
+                        adapter = registration.factory()
                     coordinator = TaskCoordinator(
                         self.store,
                         authorize=self._authorize,
@@ -229,7 +239,9 @@ class HostTaskRuntime:
         await self.policy.check(scope, binding.registration.action)
         return binding.coordinator.describe(scope.app_id, action_id)
 
-    async def catalog(self, principal_id, workspace_id, *, intent=""):
+    async def catalog(
+        self, principal_id, workspace_id, *, intent="", engagement=None
+    ):
         """Compact granted descriptors; no readiness probes or dispatch."""
         await self._sync()
         result = []
@@ -242,6 +254,8 @@ class HostTaskRuntime:
                 app_id=app_id,
             )
             action = binding.coordinator.describe(app_id, action_id)
+            if engagement is not None and engagement not in action.engagements:
+                continue
             try:
                 await self.policy.check(scope, action)
             except TaskStoreError as exc:
@@ -580,7 +594,7 @@ class HostTaskRuntime:
         existing = await self.store.find_request(scope, request_id)
         if existing is not None and registration.input_resolver is not None:
             if (
-                existing.action != action
+                existing.action.descriptor_digest != action.descriptor_digest
                 or existing.handle.origin != origin
                 or any(
                     key not in existing.inputs or existing.inputs[key] != value

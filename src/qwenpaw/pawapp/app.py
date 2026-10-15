@@ -385,6 +385,24 @@ class PawApp:  # pylint: disable=too-many-public-methods
         self._setup_checks.append(registration)
         return self
 
+    def action(self, descriptor, **options):
+        """Register a simple async handler; Host supplies the durable adapter.
+
+        Usage: @app.action(descriptor, recovery="replay_safe")
+        Replay-safe handlers must deduplicate any external effects themselves.
+        """
+        from .tasks.binding import ActionRegistration
+
+        def register(handler):
+            self.task_action(
+                ActionRegistration(
+                    action=descriptor, handler=handler, **options
+                )
+            )
+            return handler
+
+        return register
+
     def setup_entry(self, registration: Any) -> PawApp:
         """Declare an App-owned setup presentation handler."""
         self._setup_entries.append(registration)

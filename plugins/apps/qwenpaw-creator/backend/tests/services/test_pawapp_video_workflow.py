@@ -180,6 +180,12 @@ def test_create_video_descriptor_is_the_complete_public_contract() -> None:
         ],
         "effects": ["model_usage", "project_mutation"],
         "adapter_ref": "qwenpaw-creator.video-workflow.v1",
+        "result_schema": None,
+        "guidance": (
+            "Choose create-video for a finished video. Accept intent-level "
+            "brief/script; never request internal project, timeline, element, "
+            "work, run, or provider IDs."
+        ),
     }
 
 

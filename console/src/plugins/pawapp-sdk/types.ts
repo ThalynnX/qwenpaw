@@ -3,6 +3,11 @@
  */
 
 import type React from "react";
+import type {
+  PawTasksNamespace,
+  PawArtifactsNamespace,
+  PawSetupNamespace,
+} from "./durable";
 
 export interface PawDisposable {
   dispose(): void;
@@ -504,6 +509,9 @@ export interface PawSdk {
   ui: PawUiNamespace;
   dependencies: PawDependenciesNamespace;
   apps: PawAppsNamespace;
+  tasks: PawTasksNamespace;
+  artifacts: PawArtifactsNamespace;
+  setup: PawSetupNamespace;
   chat(message: string, options?: PawChatOptions): Promise<string>;
   chatStream(
     message: string,

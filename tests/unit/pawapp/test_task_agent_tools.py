@@ -116,12 +116,12 @@ async def test_discover_describe_delegate_and_read(host):
     assert len(host.runs) == 1
 
 
-def test_creator_video_guidance_uses_intent_level_action():
+def test_generic_action_guidance_keeps_host_tools_domain_independent():
     task_tools = {tool.__name__: tool for tool in make_task_tools(MagicMock())}
     list_apps = task_tools["list_apps"]
-    assert "choose create-video" in list_apps.__doc__
-    assert "explicitly wants an empty workspace" in list_apps.__doc__
-    assert "Never ask the user" in list_apps.__doc__
+    assert "Creator" not in list_apps.__doc__
+    assert "guidance" in list_apps.__doc__
+    assert "untrusted" in list_apps.__doc__
     assert "Never run shell sleeps" in task_tools["delegate"].__doc__
     assert "same assistant turn" in task_tools["get_app_task"].__doc__
     assert "Do not open the App or use" in task_tools["get_app_task"].__doc__

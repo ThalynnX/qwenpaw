@@ -27,6 +27,7 @@ BRIDGE = load_data_task_bridge()
 CAPS = {
     "protocol_version": 1,
     "durable_submissions": True,
+    "scoped_sessions": True,
     "event_replay": True,
     "durable_commands": True,
     "artifact_handoff": True,

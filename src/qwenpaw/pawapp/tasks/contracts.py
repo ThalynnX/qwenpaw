@@ -83,6 +83,8 @@ class ActionDescriptor(Contract):
     permissions: tuple[Identity, ...] = ()
     effects: tuple[Identity, ...] = ()
     adapter_ref: Identity
+    result_schema: dict[str, Any] | None = None
+    guidance: Annotated[str, Field(max_length=4000)] | None = None
 
     @model_validator(mode="after")
     def validate_schema(self) -> ActionDescriptor:
@@ -111,11 +113,40 @@ class ActionDescriptor(Contract):
         if self.input_schema.get("type") != "object":
             raise ValueError("action input schema must describe an object")
         Draft202012Validator.check_schema(self.input_schema)
+        if self.result_schema is not None:
+            canonical_json(self.result_schema)
+            check_refs(self.result_schema)
+            if self.result_schema.get("type") != "object":
+                raise ValueError(
+                    "action result schema must describe an object"
+                )
+            if self.result_schema.get("$schema") not in (
+                None,
+                Draft202012Validator.META_SCHEMA["$id"],
+            ):
+                raise ValueError("action schemas use JSON Schema 2020-12")
+            Draft202012Validator.check_schema(self.result_schema)
         return self
 
     @property
     def descriptor_digest(self) -> str:
-        return content_digest(self.model_dump(mode="json"))
+        payload = self.model_dump(mode="json", exclude={"guidance"})
+        # Preserve every previously issued grant and persisted descriptor.
+        if self.result_schema is None:
+            payload.pop("result_schema")
+        return content_digest(payload)
+
+    def validate_result(self, data: dict[str, Any] | None) -> None:
+        if data is None and self.result_schema is None:
+            return
+        if len(canonical_json(data).encode()) > 65536:
+            raise ValueError(
+                "action result exceeds 64 KiB; publish an artifact"
+            )
+        if self.result_schema is None:
+            raise ValueError("structured results require a result schema")
+        if not Draft202012Validator(self.result_schema).is_valid(data):
+            raise ValueError("invalid action result")
 
     def validate_inputs(self, inputs: dict[str, Any]) -> None:
         canonical_json(inputs)
@@ -531,6 +562,7 @@ class TaskHandle(Contract):
     executor_sequence: int | None = Field(default=None, ge=0)
     event_sequence: int = Field(default=0, ge=0)
     text_result: str | None = None
+    result_data: dict[str, Any] | None = None
     output_refs: tuple[ArtifactRef, ...] = ()
     project_ref: ProjectRef | None = None
     experience: TaskExperienceSnapshot | None = None
@@ -572,6 +604,60 @@ class ExecutorEvent(Contract):
     text_result: str | None = None
     setup_need: TaskSetupNeed | None = None
     detail: dict[str, Any] = Field(default_factory=dict)
+    project_ref: ProjectRef | None = None
+    artifact_ref: ArtifactRef | None = None
+    input_request: TaskInputRequest | None = None
+    experience_update: TaskExperienceUpdate | None = None
+    result_data: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def validate_typed_payload(self) -> ExecutorEvent:
+        self.payload()
+        if (
+            self.input_request is not None
+            and self.status not in ANSWERABLE_STATUSES
+        ):
+            raise ValueError("input requests require an answerable status")
+        if self.result_data is not None:
+            if len(canonical_json(self.result_data).encode()) > 65536:
+                raise ValueError("result exceeds 64 KiB")
+        return self
+
+    def payload(self) -> dict[str, Any]:
+        """Normalize legacy detail keys and reject conflicting claims."""
+        detail = dict(self.detail)
+        for key in (
+            "project_ref",
+            "artifact_ref",
+            "input_request",
+            "experience_update",
+        ):
+            value = getattr(self, key)
+            if value is not None:
+                value = value.model_dump(mode="json")
+                if key in detail and detail[key] != value:
+                    raise ValueError("conflicting typed event payload")
+                detail[key] = value
+        return detail
+
+    @property
+    def replay_digest(self) -> str:
+        # Typed fields are a public facade over the existing persisted wire
+        # meaning. Old event receipts must still verify after an upgrade.
+        payload = self.model_dump(
+            mode="json",
+            exclude={
+                "project_ref",
+                "artifact_ref",
+                "input_request",
+                "experience_update",
+                "result_data",
+            },
+        )
+        payload["detail"] = self.payload()
+        if self.result_data is not None:
+            payload["result_data"] = self.result_data
+        return content_digest(payload)
 
     @model_validator(mode="after")
     def validate_setup_need(self) -> ExecutorEvent:

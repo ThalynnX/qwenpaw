@@ -2,7 +2,7 @@
 (function () {
   var QwenPaw = window.QwenPaw;
   var APP_ID = "qwenpaw-file-browser";
-  var ACTION_ID = "list-directory";
+  var ACTION_ID = "browse-directory";
   if (!QwenPaw || !QwenPaw.host || !QwenPaw.paw) {
     console.error("[qwenpaw-file-browser] PawApp host is unavailable.");
     return;
@@ -25,54 +25,6 @@
   var Table = antd.Table;
   var Tag = antd.Tag;
   var Typography = antd.Typography;
-
-  function requestId() {
-    if (window.crypto && typeof window.crypto.randomUUID === "function") {
-      return "file-browser-" + window.crypto.randomUUID();
-    }
-    return "file-browser-" + Date.now() + "-" + Math.random().toString(16).slice(2);
-  }
-
-  async function responseJson(response) {
-    var payload = await response.json().catch(function () { return {}; });
-    if (!response.ok) {
-      var detail = payload && payload.detail;
-      throw new Error(typeof detail === "string" ? detail : "request_" + response.status);
-    }
-    return payload;
-  }
-
-  async function directChatId(workspaceId) {
-    var sessions = await paw.chatSessions.list({ agentId: workspaceId });
-    var current = sessions.find(function (item) { return !item.archived; });
-    if (!current) {
-      current = await paw.chatSessions.create({
-        agentId: workspaceId,
-        name: "File Browser",
-      });
-    }
-    if (!current.id) throw new Error("file_browser_session_unavailable");
-    return current.id;
-  }
-
-  async function getTask(workspaceId, taskId) {
-    var path = "/pawapps/" + encodeURIComponent(APP_ID)
-      + "/workspaces/" + encodeURIComponent(workspaceId)
-      + "/tasks/" + encodeURIComponent(taskId);
-    var payload = await responseJson(await host.fetch(path));
-    return payload.task || {};
-  }
-
-  async function waitForTask(workspaceId, taskId) {
-    for (var attempt = 0; attempt < 120; attempt += 1) {
-      var task = await getTask(workspaceId, taskId);
-      if (["succeeded", "failed", "cancelled", "interrupted"].includes(task.status)) {
-        return task;
-      }
-      await new Promise(function (resolve) { window.setTimeout(resolve, 250); });
-    }
-    throw new Error("file_browser_task_timeout");
-  }
 
   function formatSize(value) {
     if (value === null || value === undefined) return "—";
@@ -132,18 +84,20 @@
 
     useEffect(function () {
       var cancelled = false;
+      var controller = new AbortController();
+      setListing(null);
       var key = "last-directory-task:" + workspaceId;
       paw.storage.get(key, null).then(function (saved) {
         if (!saved || saved.workspace_id !== workspaceId || !saved.task_id) return null;
-        return waitForTask(workspaceId, saved.task_id);
+        return paw.tasks.wait(saved.task_id, { workspaceId: workspaceId, signal: controller.signal });
       }).then(function (task) {
         if (!cancelled && task && task.status === "succeeded" && task.text_result) {
-          setListing(JSON.parse(task.text_result));
+          setListing(task.result_data || JSON.parse(task.text_result));
         }
       }).catch(function () {
         // A revoked grant or removed task makes the saved pointer unreadable.
       });
-      return function () { cancelled = true; };
+      return function () { cancelled = true; controller.abort(); };
     }, [workspaceId]);
 
     async function saveDefault() {
@@ -159,6 +113,7 @@
         setDefaultDirectory(next.directory || "");
         await paw.toast("Default directory saved", "success");
       } catch (cause) {
+        if (paw.host.getSelectedAgentId() !== workspaceId) return;
         setError(cause instanceof Error ? cause.message : String(cause));
       } finally {
         setSaving(false);
@@ -166,25 +121,22 @@
     }
 
     async function listDirectory() {
+      if (listingBusy) return;
       setListingBusy(true);
       setError("");
       setListing(null);
       try {
-        var chatId = await directChatId(workspaceId);
-        var path = "/pawapps/" + encodeURIComponent(APP_ID)
-          + "/workspaces/" + encodeURIComponent(workspaceId)
-          + "/actions/" + encodeURIComponent(ACTION_ID) + "/tasks";
         var inputs = directory.trim() ? { directory: directory.trim() } : {};
-        var dispatched = await responseJson(await host.fetch(path, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            request_id: requestId(),
-            chat_id: chatId,
-            engagement: "direct",
-            inputs: inputs,
-          }),
-        }));
+        var pendingKey = "pending-directory-task:" + workspaceId;
+        var pending = await paw.storage.get(pendingKey, null);
+        if (!pending || JSON.stringify(pending.inputs) !== JSON.stringify(inputs)) {
+          pending = { requestId: paw.tasks.newRequestId(), inputs: inputs };
+          // Save before dispatch. An ambiguous network failure retries the same intent.
+          await paw.storage.set(pendingKey, pending);
+        }
+        var dispatched = await paw.tasks.dispatch(ACTION_ID, inputs, {
+          workspaceId: workspaceId, requestId: pending.requestId,
+        });
         if (dispatched.state === "blocked") {
           throw new Error(dispatched.reason || "file_browser_not_ready");
         }
@@ -192,12 +144,15 @@
           workspace_id: workspaceId,
           task_id: dispatched.task.task_id,
         }).catch(function () { return undefined; });
-        var task = await waitForTask(workspaceId, dispatched.task.task_id);
+        await paw.storage.set(pendingKey, null);
+        var task = await paw.tasks.wait(dispatched.task.task_id, { workspaceId: workspaceId });
         if (task.status !== "succeeded") {
           throw new Error((task.recovery_reason || task.status || "file_browser_task_failed"));
         }
-        setListing(JSON.parse(task.text_result));
+        if (paw.host.getSelectedAgentId() !== workspaceId) return;
+        setListing(task.result_data || JSON.parse(task.text_result));
       } catch (cause) {
+        if (paw.host.getSelectedAgentId() !== workspaceId) return;
         setError(cause instanceof Error ? cause.message : String(cause));
       } finally {
         setListingBusy(false);
