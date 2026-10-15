@@ -23,8 +23,7 @@ vi.mock("react-i18next", () => ({
       resolvedLanguage: "en",
       changeLanguage: mocks.changeLanguage,
     },
-    t: (key: string) =>
-      key === "sidebar.settings.language" ? "语言" : key,
+    t: (key: string) => (key === "sidebar.settings.language" ? "语言" : key),
   }),
 }));
 
@@ -47,9 +46,7 @@ describe("GeneralSettings language persistence", () => {
   it("names the language selector from its visible heading", () => {
     renderWithProviders(<GeneralSettings />);
 
-    expect(
-      screen.getByRole("combobox", { name: "语言" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "语言" })).toBeInTheDocument();
   });
 
   it("surfaces a rejected remote write to the user", async () => {
