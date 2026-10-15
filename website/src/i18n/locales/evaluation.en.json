@@ -1,7 +1,7 @@
 {
   "evaluation": "Evaluation",
   "board": "Leaderboard",
-  "main": "Overall · Equal-weight Index",
+  "main": "Overall · Direction-weighted Index",
   "domainBoards": "Domain leaderboards",
   "benchmarkBoards": "Benchmark leaderboards",
   "protocol": "Protocol",
@@ -56,7 +56,9 @@
   "domains": {
     "research": "Information research",
     "office": "Office tasks",
-    "coding": "Code repair"
+    "coding": "Code repair",
+    "general": "General agent tasks",
+    "infrastructure": "Pipeline validation"
   },
   "headline": "QwenPaw Index",
   "breakdown": "Benchmark details",
@@ -71,5 +73,7 @@
   "official": "Official evaluations",
   "testing": "Test evaluations",
   "artifactSha": "Distribution SHA256",
-  "exchangeRate": "Fixed display exchange rate"
+  "exchangeRate": "Fixed display exchange rate",
+  "failureRate": "Failure rate",
+  "sourceResults": "Benchmark source results"
 }

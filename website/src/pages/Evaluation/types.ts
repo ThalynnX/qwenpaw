@@ -13,6 +13,8 @@ export interface Benchmark {
   mean_judge_cost_usd: number | null;
   original_judge_cost: { currency: "CNY" | "USD"; mean_amount: number } | null;
   domains: string[];
+  failed: number;
+  failures: Record<string, number>;
   expected: number;
   scored: number;
   score: number | null;
@@ -34,9 +36,28 @@ export interface RecordResult {
   benchmarks: Benchmark[];
 }
 export interface Run {
-  schema_version: 2;
+  schema_version: 3;
   board: { id: string; name: string; group_by: "model" | "model_harness" };
   index_version: string;
+  index_definition: {
+    id: string;
+    order: number;
+    directions: Record<
+      string,
+      {
+        name: string;
+        weight: number;
+        benchmarks: Record<string, number>;
+      }
+    >;
+  };
+  source_results: {
+    id: string;
+    date: string;
+    benchmark: string;
+    protocol_hash: string;
+    parameters: Record<string, number | null>;
+  }[];
   id: string;
   kind: "testing" | "official";
   evaluation_sha: string | null;
@@ -49,7 +70,7 @@ export interface Run {
   complete: boolean;
 }
 export interface History {
-  schema_version: 2;
+  schema_version: 3;
   runs: Run[];
 }
 export interface Row extends RecordResult {
@@ -60,6 +81,7 @@ export interface Row extends RecordResult {
   runtime: number | null;
   upperBound: boolean;
   coverage: string;
+  failureRate: number | null;
 }
 export function harnessLogo(name: string): string | undefined {
   const files: Record<string, string> = {
@@ -73,10 +95,28 @@ export function harnessLogo(name: string): string | undefined {
     ? `${import.meta.env.BASE_URL}evaluation/logos/${file}`
     : undefined;
 }
-export function mean(values: (number | null)[]): number | null {
-  return !values.length || values.some((value) => value === null)
-    ? null
-    : (values as number[]).reduce((a, b) => a + b, 0) / values.length;
+function weighted(
+  run: Run,
+  parts: Benchmark[],
+  metric: string,
+  field: "score" | "mean_model_cost_usd" | "mean_runtime_seconds",
+): number | null {
+  if (!parts.length || parts.some((p) => p[field] === null)) return null;
+  if (metric.startsWith("benchmark:")) return parts[0][field];
+  let result = 0;
+  for (const [id, direction] of Object.entries(
+    run.index_definition.directions,
+  )) {
+    if (metric !== "index" && metric !== `domain:${id}`) continue;
+    let subtotal = 0;
+    for (const [benchmark, weight] of Object.entries(direction.benchmarks)) {
+      const part = parts.find((p) => p.benchmark === benchmark);
+      if (!part || part[field] === null) return null;
+      subtotal += part[field] * weight;
+    }
+    result += subtotal * (metric === "index" ? direction.weight : 1);
+  }
+  return result;
 }
 export function selectRows(runs: Run[], metric: string): Row[] {
   return runs.flatMap((run) =>
@@ -91,9 +131,13 @@ export function selectRows(runs: Run[], metric: string): Row[] {
         ...record,
         run,
         id: `${run.id}-${i}`,
-        score: mean(parts.map((p) => p.score)),
-        cost: mean(parts.map((p) => p.mean_model_cost_usd)),
-        runtime: mean(parts.map((p) => p.mean_runtime_seconds)),
+        score: weighted(run, parts, metric, "score"),
+        cost: weighted(run, parts, metric, "mean_model_cost_usd"),
+        runtime: weighted(run, parts, metric, "mean_runtime_seconds"),
+        failureRate: parts.some((p) => p.scored !== p.expected)
+          ? null
+          : parts.reduce((n, p) => n + p.failed, 0) /
+            parts.reduce((n, p) => n + p.expected, 0),
         upperBound: parts.some((p) => p.cost_bases.upper_bound > 0),
         coverage: `${parts.filter((p) => p.scored === p.expected).length}/${
           parts.length

@@ -51,7 +51,7 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [data, setData] = useState<History>({
-    schema_version: 2,
+    schema_version: 3,
     runs: [],
   });
   const [error, setError] = useState("");
@@ -92,7 +92,7 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
       })
       .then((history: History) => {
         if (
-          history.schema_version !== 2 ||
+          history.schema_version !== 3 ||
           !Array.isArray(history.runs) ||
           history.runs.some(
             (run) =>
@@ -188,7 +188,11 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
     metric === "index"
       ? "Index"
       : metric.startsWith("domain:")
-      ? t(`domains.${metric.slice(7)}`, { defaultValue: metric.slice(7) })
+      ? t(`domains.${metric.slice(7)}`, {
+          defaultValue:
+            activeRuns[0]?.index_definition.directions[metric.slice(7)]?.name ??
+            metric.slice(7),
+        })
       : benchmarks[metric.slice(10)];
   const sortButton = (key: typeof sort.key, label: string) => (
     <button
@@ -241,6 +245,14 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
                 <dd>{detail.artifact_sha256}</dd>
                 <dt>{t("exchangeRate")}</dt>
                 <dd>1 USD = {detail.exchange_rate.cny_per_usd} CNY</dd>
+                <dt>{t("sourceResults")}</dt>
+                <dd>
+                  {detail.source_results.map((source) => (
+                    <div key={source.id}>
+                      {source.benchmark} · {date(source.date)} · {source.id}
+                    </div>
+                  ))}
+                </dd>
                 <dt>ID</dt>
                 <dd>{detail.id}</dd>
               </dl>
@@ -308,7 +320,11 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
                       <optgroup label={t("domainBoards")}>
                         {domainIds.map((key) => (
                           <option key={key} value={`domain:${key}`}>
-                            {t(`domains.${key}`, { defaultValue: key })}
+                            {t(`domains.${key}`, {
+                              defaultValue:
+                                activeRuns[0]?.index_definition.directions[key]
+                                  ?.name ?? key,
+                            })}
                           </option>
                         ))}
                       </optgroup>
@@ -522,6 +538,7 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
                         {sortButton("date", t("date"))}
                       </th>
                       <th>{t("coverage")}</th>
+                      <th>{t("failureRate")}</th>
                       <th>{t("evidence")}</th>
                     </tr>
                   </thead>
@@ -642,6 +659,11 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
                           {date(row.run.date)}
                         </td>
                         <td>{row.coverage}</td>
+                        <td>
+                          {row.failureRate === null
+                            ? "—"
+                            : `${(row.failureRate * 100).toFixed(1)}%`}
+                        </td>
                         <td>
                           <button onClick={() => navigateRow(row)}>
                             {t("record")}

@@ -1,61 +1,70 @@
-# 评测结果格式
+# 评测观察记录与榜单规则
 
-本目录保存网站接受的 v2 成绩契约。评测执行、凭据、镜像、原始轨迹和计费用量证据
-由外部评测系统管理；网站构建不会创建任务或调用模型。
+网站是评分规则的唯一维护方。外部执行库负责执行任务、收集评分器原始输出并提交
+v3 逐题观察 JSON；不预先计算 benchmark 均分、方向分或总分。
 
-## 提交成绩
+## 提交观察记录
 
-1. 复制 `example.json`，测试结果保存为 `results/testing/<id>.json`，正式评测保存为
-   `results/official/<id>.json`。`kind` 必须与目录相同，`id` 必须与文件名相同，且跨目录唯一。
-2. 填写 SDK 版本、来源仓库、分发包 SHA256、UTC 时间、数据版本和模型结果。
-   已知源码提交时填写完整 `source_sha`，未知时为 `null`，不要虚构源码 SHA。
-3. 填写 benchmark 的真实 ID、展示名称、领域标签、期望题数和 judge 元数据。
-   ID 与领域标签不限定固定列表，可直接添加 PawBench 或其他评测集。
-4. 运行 `pnpm --dir website evaluation:build` 校验数据，或运行
-   `pnpm --dir website build` 完成网站构建，再提交 PR。
+每个执行器构建、模型、benchmark 使用独立文件。测试记录放 `results/testing/<id>.json`，
+正式记录放 `results/official/<id>.json`，`kind` 与目录一致，文件名与 `id` 一致。
+参考 `example.json` 和 `schema.json`，运行 `pnpm --dir website evaluation:build` 验证，
+或 `pnpm --dir website build` 完成网站构建后提交 PR。
 
-每个运行、SDK 构建或独立试验使用独立文件，保留历史。一个文件可以包含使用同一 SDK
-构建的多个模型。更正、删除或重命名结果后，CI 校验最终数据，不强制历史文件不可修改。
-不要编辑生成的 `public/evaluation/data/index.json`。
+记录必须包含完整题目清单、重复次数、逐题身份、原始得分和终态分类。`passed` 的原始
+得分为 0–1；其他终态失败的原始得分为 `null`，保留异常类型。构建时检查无缺题、
+无重复、无额外任务；排队、运行中和主动取消的实验不能伪装为完整记录。
 
-## 测试与正式评测
+模型/执行器/SDK 和模型预算等固定条件由 `candidate_hash` 标识；可比运行配置由
+`profile_hash` 标识。单项 `protocol_hash` 用于追溯数据、judge 和模板等完整执行条件。
+这些指纹由执行库生成，不能代替对配置和真实证据的审查。模型别名的供应商漂移也不能
+靠配置哈希证明不存在，应固定模型快照或披露补跑时间差异。
 
-`kind` 为 `testing` 或 `official`。网站默认展示正式评测，测试成绩必须显式切换后查看，
-不会混入正式排名、最佳记录或 Pareto 前沿。两类数据都属于公开成绩，分类不是访问控制。
-`/evaluation/demo/` 是独立的模拟数据页面，不参与真实成绩。
+## 总榜版本与两层评分
 
-每个 JSON 声明 `board: { "id": "acp-agents", "name": "ACP Agents", "group_by":
-"model_harness" }`。同类成绩中的相同 board ID 使用相同名称与分组方式。
-`model` 按模型比较 SDK 版本，`model_harness` 按模型和执行器比较。
+`indexes.json` 定义总榜版本、排序、方向及固定权重，以及各方向内部的 benchmark
+权重。每个 benchmark 恰好属于一个计分方向；方向标签不产生重复计分。
+方向权重为正且总和为 1，每个方向内部权重同样为正且总和为 1。
 
-同一类别、board 与 `index_version` 内，benchmark ID、名称、数据修订、领域、
-judge 元数据和期望题数必须一致；改变评测协议时使用新的 `index_version`。
-领域与 benchmark 选择项均从数据生成，无需为新评测集修改前端枚举。
+第一期研究、办公、编程、综合 Agent 任务各占 25%，分别使用 GAIA、SpreadsheetBench
+Verified、SWE-bench Verified、PawBench。一个方向新增 benchmark，只重新分配方向内部
+权重，不改变其他方向的份额。
 
-## 分数与费用
+计算顺序：
 
-分数为 **0–100**，耗时为每题秒数，模型和 judge 费用分别记录为每题美元均值。
-只有 `scored === expected` 时可以发布该 benchmark 分数；缺失任务或基础设施异常
-不计作零分。模型正常完成但评分为零的任务按零分记录。
-综合成绩和领域子榜按 benchmark 等权计算，不按题目数加权；缺项时不计算完整综合成绩。
+1. 正常任务采用原始得分；最终超时、执行、基础设施、评分或产物异常按 0 计。
+2. benchmark 分 = 全部预定任务最终得分之和 / 预定任务数 × 100。
+3. 方向分 = 方向内各 benchmark 分按方向内权重求和。
+4. 总分 = 各方向分按固定方向权重求和。
 
-`exchange_rate` 明确记录固定展示汇率，例如
-`{ "cny_per_usd": 7.0, "basis": "fixed" }`，不是实时市场汇率。
-`original_model_cost` 与 `original_judge_cost` 保留原始币种和每题均值；
-人民币费用除以固定汇率，美元费用保持原值。构建时校验原金额与美元金额一致。
-网站不调用汇率或价格 API，也不推算原始 token 费用。
+缺少 benchmark 时，该方向与总分为 `null`，不将从未评测的缺项当成失败零分。
+异常率单独展示，避免把评分器或基础设施失败误认为正常模型零分。
+费用、judge 费用及耗时独立展示，不参与能力得分。
 
-未知费用及原金额均为 `null`；模型费用未知时，`cost_source`、`cost_basis` 均为 `unknown`。
-零只表示确认的零费用。按实际用量与价格快照计算的费用标记 `snapshot_estimated`；
-保守上界标记 `upper_bound`，会显示但不进入费用/能力前沿。
+新增 benchmark、修改权重或更新数据/judge 定义时增加总榜版本，不覆写旧版本规则。
+`benchmarks` 中固定数据 revision、预期题数和 judge 元数据；不匹配的观察记录不进入
+该版本。页面默认选择新版本，并允许切换旧版本与历史记录。
 
-judge 元数据记录实际评分方式、模型或程序评分器、官方模型、提示词修订及可比性说明。
-不同 judge、任务包装、工具、依赖和预算可能改变成绩，不能只凭评测集名称宣称官方对齐。
+## 补跑和历史结果
 
-## 公开数据与链接
+同一 candidate/profile 的观察记录可以跨批次组合。网站按实验时间形成历史快照，
+每项选择当时已经产生、符合该总榜定义的最新记录，不选择最高分；并记录所用单项 ID、
+日期、协议指纹和预算。新增 benchmark 只需补跑新增部分；只改权重无需调用模型。
 
-`trajectory_url` 和 `workflow_url` 可选，必须是永久公开 HTTPS 地址，不能带凭据、
-查询参数或 fragment。不要提交签名链接、密钥、原始轨迹、数据附件或内部运行快照。
-Schema 校验结构与一致性，不能替代真实成绩证据的审查。
+模型、执行器构建或公共运行条件变化形成新 candidate/profile，不能跨身份拼接旧成绩。
+预算不同的结果通过 profile 分开。benchmark 修订或 judge 改变时按新的总榜定义纳入，
+其他符合规则的单项仍可保留。逐项来源可在详情和下载 JSON 中查看。
 
-本契约只接受 `schema_version: 2`，不提供旧格式兼容层。
+测试与正式成绩分别构建，默认只展示正式评测，不混排。历史与新结果可以共表，但排名、
+最佳记录和 Pareto 仅在当前总榜版本和 profile 内计算。`public/evaluation/data/index.json`
+由构建生成，不手工编辑。`/evaluation/demo/` 使用明确标注的模拟数据。
+
+## 费用与公开范围
+
+输入 JSON 保存原币种及金额、固定展示汇率。网站按人民币金额除以 `cny_per_usd`
+换算美元；未知金额保持 `null`。无 judge 调用时其费用确认为零；缺失调用账本不能填零。
+成本与耗时按同一套两层权重聚合；任何缺失费用都会让对应聚合费用未知。
+
+只提交经过审查的公开观察记录，不提交凭据、AP 内部标识、原始轨迹或运行快照。
+来源仓库链接只能使用无凭据、无查询参数的 HTTPS 地址。分类不是访问控制。
+
+本契约只接受 `schema_version: 3`，不提供旧输入格式兼容层。

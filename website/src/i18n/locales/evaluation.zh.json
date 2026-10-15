@@ -1,7 +1,7 @@
 {
   "evaluation": "评测榜单",
   "board": "榜单",
-  "main": "综合主榜 · 等权 Index",
+  "main": "综合 · 方向加权总榜",
   "domainBoards": "领域子榜",
   "benchmarkBoards": "Benchmark 子榜",
   "protocol": "协议",
@@ -56,7 +56,9 @@
   "domains": {
     "research": "信息研究",
     "office": "办公任务",
-    "coding": "代码修复"
+    "coding": "代码修复",
+    "general": "综合 Agent 任务",
+    "infrastructure": "基础链路测试"
   },
   "headline": "QwenPaw Index",
   "breakdown": "Benchmark 明细",
@@ -71,5 +73,7 @@
   "official": "正式评测",
   "testing": "测试评测",
   "artifactSha": "分发包 SHA256",
-  "exchangeRate": "固定展示汇率"
+  "exchangeRate": "固定展示汇率",
+  "failureRate": "异常率",
+  "sourceResults": "单项结果来源"
 }
