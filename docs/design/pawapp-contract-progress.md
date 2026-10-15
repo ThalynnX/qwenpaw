@@ -19,7 +19,7 @@ Hosted CI is being rerun after acceptance fixes.
 
 The machine-readable source is
 [`tests/fixtures/pawapp-compatibility.json`](../../tests/fixtures/pawapp-compatibility.json).
-The Engine is fork revision `df044e8d91733982851befbe0e740883b2632a92`,
+The Engine is fork revision `2f9a44461525d04dffc9f719f1745ee741ec06cd`,
 which includes the scoped-session ownership changes. CI checks out and verifies
 that exact revision. No compatibility patch is required. Run
 `scripts/prepare-pawapp-engine.py <checkout>` to verify the pairing locally.
@@ -108,3 +108,15 @@ ordering. The corrected production build passed the browser flow without a new
 render error. The broader Creator UI check also exposed three old whole-film
 fixtures that used `timeline_render`; they now explicitly use `final_video`,
 matching the canonical-film contract. All six tests in that file passed.
+
+Restart acceptance also uncovered repeated rewriting of workspace paths when a
+custom working directory lived below `~/.copaw`. Normalization now preserves
+paths already inside the current root and requires a directory boundary for
+legacy prefixes. All 58 config utility tests pass. After repairing the isolated
+fixture's already-rewritten path, the existing listing was readable again with
+no additional managed task and no browser errors.
+
+The Engine cron test now waits for its terminal event as well as completed chat
+state: those are separate durable writes. The updated exact Engine pin includes
+that deterministic test fix. Hosted Creator and Console/website format checks
+passed; final contract and pre-commit runs are pending.
