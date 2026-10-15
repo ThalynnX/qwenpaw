@@ -85,7 +85,7 @@ export function WebSearchConfigModal({
     };
   }, [visible, tool.name, providerValue, form]);
 
-  const { schedule, flush } = useAutoSave(async () => {
+  const { schedule, requestClose } = useAutoSave(async () => {
     if (loadingConfig) return false;
     const values = form.getFieldsValue(true);
     try {
@@ -109,11 +109,7 @@ export function WebSearchConfigModal({
         tool.name,
       )}`}
       open={visible}
-      onCancel={() => {
-        void flush().then((saved) => {
-          if (saved) onClose();
-        });
-      }}
+      onCancel={() => void requestClose(onClose)}
       footer={null}
     >
       <Spin spinning={loadingConfig}>
