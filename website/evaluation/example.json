@@ -1,29 +1,56 @@
 {
   "$schema": "./schema.json",
-  "schema_version": 1,
+  "schema_version": 2,
   "id": "qwenpaw-v-next-example",
   "date": "2026-10-14T00:00:00Z",
   "index_version": "index-v1",
   "sdk_version": "v-next",
-  "source_sha": "0000000000000000000000000000000000000000",
+  "source_sha": null,
   "benchmarks": [
     {
       "id": "gaia",
       "revision": "replace-with-dataset-revision",
       "domains": ["research"],
-      "expected": 165
+      "expected": 165,
+      "name": "GAIA",
+      "judge": {
+        "kind": "programmatic",
+        "model": null,
+        "scorer": "replace-with-scorer-revision",
+        "official_model": null,
+        "prompt_revision": null,
+        "parity_note": ""
+      }
     },
     {
       "id": "spreadsheetbench-verified",
       "revision": "replace-with-dataset-revision",
       "domains": ["office"],
-      "expected": 400
+      "expected": 400,
+      "name": "SpreadsheetBench Verified",
+      "judge": {
+        "kind": "programmatic",
+        "model": null,
+        "scorer": "replace-with-scorer-revision",
+        "official_model": null,
+        "prompt_revision": null,
+        "parity_note": ""
+      }
     },
     {
       "id": "swebench-verified",
       "revision": "replace-with-dataset-revision",
       "domains": ["coding"],
-      "expected": 500
+      "expected": 500,
+      "name": "SWE-bench Verified",
+      "judge": {
+        "kind": "programmatic",
+        "model": null,
+        "scorer": "replace-with-scorer-revision",
+        "official_model": null,
+        "prompt_revision": null,
+        "parity_note": ""
+      }
     }
   ],
   "records": [
@@ -39,7 +66,10 @@
           "mean_runtime_seconds": null,
           "mean_model_cost_usd": null,
           "cost_source": "unknown",
-          "cost_basis": "unknown"
+          "cost_basis": "unknown",
+          "original_model_cost": null,
+          "mean_judge_cost_usd": null,
+          "original_judge_cost": null
         },
         {
           "benchmark": "spreadsheetbench-verified",
@@ -48,7 +78,10 @@
           "mean_runtime_seconds": null,
           "mean_model_cost_usd": null,
           "cost_source": "unknown",
-          "cost_basis": "unknown"
+          "cost_basis": "unknown",
+          "original_model_cost": null,
+          "mean_judge_cost_usd": null,
+          "original_judge_cost": null
         },
         {
           "benchmark": "swebench-verified",
@@ -57,7 +90,10 @@
           "mean_runtime_seconds": null,
           "mean_model_cost_usd": null,
           "cost_source": "unknown",
-          "cost_basis": "unknown"
+          "cost_basis": "unknown",
+          "original_model_cost": null,
+          "mean_judge_cost_usd": null,
+          "original_judge_cost": null
         }
       ]
     }
@@ -66,5 +102,12 @@
     "id": "qwenpaw",
     "name": "QwenPaw",
     "group_by": "model"
+  },
+  "kind": "testing",
+  "source_repository": "https://github.com/agentscope-ai/QwenPaw",
+  "artifact_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "exchange_rate": {
+    "cny_per_usd": 7.0,
+    "basis": "fixed"
   }
 }

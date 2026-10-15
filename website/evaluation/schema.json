@@ -9,7 +9,7 @@
       "maxLength": 200
     },
     "schema_version": {
-      "const": 1
+      "const": 2
     },
     "id": {
       "type": "string",
@@ -30,8 +30,15 @@
       "maxLength": 200
     },
     "source_sha": {
-      "type": "string",
-      "pattern": "^[a-f0-9]{40}$"
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "workflow_url": {
       "type": "string",
@@ -45,7 +52,8 @@
         "additionalProperties": false,
         "properties": {
           "id": {
-            "enum": ["gaia", "spreadsheetbench-verified", "swebench-verified"]
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,99}$"
           },
           "revision": {
             "type": "string",
@@ -57,15 +65,86 @@
             "minItems": 1,
             "uniqueItems": true,
             "items": {
-              "enum": ["research", "office", "coding"]
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,79}$"
             }
           },
           "expected": {
             "type": "integer",
             "minimum": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "judge": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "enum": ["programmatic", "llm"]
+              },
+              "model": {
+                "type": ["string", "null"]
+              },
+              "scorer": {
+                "type": ["string", "null"]
+              },
+              "official_model": {
+                "type": ["string", "null"]
+              },
+              "prompt_revision": {
+                "type": ["string", "null"]
+              },
+              "parity_note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "model",
+              "scorer",
+              "official_model",
+              "prompt_revision",
+              "parity_note"
+            ],
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "llm"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "model": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "scorer": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "scorer": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "model": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            ]
           }
         },
-        "required": ["id", "revision", "domains", "expected"]
+        "required": ["id", "revision", "domains", "expected", "name", "judge"]
       }
     },
     "records": {
@@ -154,6 +233,59 @@
                 },
                 "cost_basis": {
                   "enum": ["exact", "upper_bound", "unknown"]
+                },
+                "original_model_cost": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["currency", "mean_amount"],
+                      "properties": {
+                        "currency": {
+                          "enum": ["CNY", "USD"]
+                        },
+                        "mean_amount": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "mean_judge_cost_usd": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "original_judge_cost": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["currency", "mean_amount"],
+                      "properties": {
+                        "currency": {
+                          "enum": ["CNY", "USD"]
+                        },
+                        "mean_amount": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -163,7 +295,10 @@
                 "mean_runtime_seconds",
                 "mean_model_cost_usd",
                 "cost_source",
-                "cost_basis"
+                "cost_basis",
+                "original_model_cost",
+                "mean_judge_cost_usd",
+                "original_judge_cost"
               ]
             }
           }
@@ -189,6 +324,31 @@
           "enum": ["model", "model_harness"]
         }
       }
+    },
+    "kind": {
+      "enum": ["testing", "official"]
+    },
+    "source_repository": {
+      "type": "string",
+      "format": "public-https-url"
+    },
+    "artifact_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "exchange_rate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cny_per_usd", "basis"],
+      "properties": {
+        "cny_per_usd": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "basis": {
+          "const": "fixed"
+        }
+      }
     }
   },
   "required": [
@@ -200,6 +360,10 @@
     "source_sha",
     "benchmarks",
     "records",
-    "board"
+    "board",
+    "kind",
+    "source_repository",
+    "artifact_sha256",
+    "exchange_rate"
   ]
 }

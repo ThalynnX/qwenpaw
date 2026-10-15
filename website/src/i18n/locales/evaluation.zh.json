@@ -66,5 +66,10 @@
   "chartUnavailable": "图表暂时无法加载，你仍可查看下方成绩表格。",
   "retry": "重试",
   "trajectory": "运行轨迹",
-  "collection": "榜单集"
+  "collection": "榜单集",
+  "resultKind": "成绩类型",
+  "official": "正式评测",
+  "testing": "测试评测",
+  "artifactSha": "分发包 SHA256",
+  "exchangeRate": "固定展示汇率"
 }

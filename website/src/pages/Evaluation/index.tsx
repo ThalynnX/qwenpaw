@@ -14,7 +14,7 @@ import {
 import Chart from "./ChartPanel";
 import { bestRows, frontier } from "./metrics";
 import {
-  benchmarks as benchmarkNames,
+  harnessLogo,
   logo,
   money as formatMoney,
   safeWorkflow,
@@ -51,7 +51,7 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [data, setData] = useState<History>({
-    schema_version: 1,
+    schema_version: 2,
     runs: [],
   });
   const [error, setError] = useState("");
@@ -62,6 +62,9 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
   const [showTable, setShowTable] = useState(true);
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [onlyFrontier, setOnlyFrontier] = useState(false);
+  const [kind, setKind] = useState<"testing" | "official">(
+    demo ? "testing" : "official",
+  );
   const [boardId, setBoardId] = useState("");
   const [protocol, setProtocol] = useState("");
   const [sort, setSort] = useState<{
@@ -89,10 +92,13 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
       })
       .then((history: History) => {
         if (
-          history.schema_version !== 1 ||
+          history.schema_version !== 2 ||
           !Array.isArray(history.runs) ||
           history.runs.some(
-            (run) => !run.board?.id || !Array.isArray(run.records),
+            (run) =>
+              !run.board?.id ||
+              !Array.isArray(run.records) ||
+              !["testing", "official"].includes(run.kind),
           )
         )
           throw new Error("invalidData");
@@ -112,11 +118,12 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
     };
   }, [demo]);
   const history = data;
+  const scopedRuns = history.runs.filter((run) => run.kind === kind);
   const boards = [
-    ...new Map(history.runs.map((run) => [run.board.id, run.board])).values(),
+    ...new Map(scopedRuns.map((run) => [run.board.id, run.board])).values(),
   ];
   const activeBoard = boards.find((board) => board.id === boardId) ?? boards[0];
-  const boardRuns = history.runs.filter(
+  const boardRuns = scopedRuns.filter(
     (run) => run.board.id === activeBoard?.id,
   );
   const compareHarnesses = activeBoard?.group_by === "model_harness";
@@ -129,10 +136,7 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
     run.records.flatMap((record) => record.benchmarks),
   );
   const benchmarks = Object.fromEntries(
-    [...new Set(parts.map((part) => part.benchmark))].map((key) => [
-      key,
-      benchmarkNames[key] ?? key,
-    ]),
+    parts.map((part) => [part.benchmark, part.name]),
   );
   const domainIds = [...new Set(parts.flatMap((part) => part.domains))];
   const rows = useMemo(
@@ -140,6 +144,7 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
       selectRows(
         history.runs.filter(
           (run) =>
+            run.kind === kind &&
             run.board.id === activeBoard?.id &&
             run.index_version === activeProtocol,
         ),
@@ -149,7 +154,7 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
           .toLowerCase()
           .includes(search.toLowerCase()),
       ),
-    [history, activeBoard?.id, activeProtocol, metric, search],
+    [history, kind, activeBoard?.id, activeProtocol, metric, search],
   );
   const best = useMemo(
     () => bestRows(rows, compareHarnesses),
@@ -183,7 +188,7 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
     metric === "index"
       ? "Index"
       : metric.startsWith("domain:")
-      ? t(`domains.${metric.slice(7)}`)
+      ? t(`domains.${metric.slice(7)}`, { defaultValue: metric.slice(7) })
       : benchmarks[metric.slice(10)];
   const sortButton = (key: typeof sort.key, label: string) => (
     <button
@@ -229,7 +234,13 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
                 <dt>{t("indexProtocol")}</dt>
                 <dd>{detail.index_version}</dd>
                 <dt>{t("sourceSha")}</dt>
-                <dd>{detail.evaluation_sha}</dd>
+                <dd>{detail.evaluation_sha ?? t("unknown")}</dd>
+                <dt>{t("resultKind")}</dt>
+                <dd>{t(detail.kind)}</dd>
+                <dt>{t("artifactSha")}</dt>
+                <dd>{detail.artifact_sha256}</dd>
+                <dt>{t("exchangeRate")}</dt>
+                <dd>1 USD = {detail.exchange_rate.cny_per_usd} CNY</dd>
                 <dt>ID</dt>
                 <dd>{detail.id}</dd>
               </dl>
@@ -268,6 +279,24 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
           <section className="evaluation-chart-surface">
             <div className="evaluation-controls">
               <div className="evaluation-board-controls">
+                <label>
+                  {t("resultKind")}
+                  <span className="evaluation-select">
+                    <select
+                      value={kind}
+                      onChange={(event) => {
+                        setKind(event.target.value as "testing" | "official");
+                        setBoardId("");
+                        setProtocol("");
+                        setMetric("index");
+                      }}
+                    >
+                      <option value="official">{t("official")}</option>
+                      <option value="testing">{t("testing")}</option>
+                    </select>
+                    <ChevronDown size={16} aria-hidden="true" />
+                  </span>
+                </label>
                 <label className="evaluation-board-select">
                   <span>{t("board")}</span>
                   <span className="evaluation-select">
@@ -279,7 +308,7 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
                       <optgroup label={t("domainBoards")}>
                         {domainIds.map((key) => (
                           <option key={key} value={`domain:${key}`}>
-                            {t(`domains.${key}`)}
+                            {t(`domains.${key}`, { defaultValue: key })}
                           </option>
                         ))}
                       </optgroup>
@@ -377,7 +406,7 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
               {t(error)}
             </p>
           )}
-          {!error && !data.runs.length && (
+          {!error && !scopedRuns.length && (
             <p className="evaluation-notice">
               {loading ? t("loading") : t("empty")}
             </p>
@@ -526,23 +555,18 @@ export default function Evaluation({ demo = false }: { demo?: boolean }) {
                         {compareHarnesses && (
                           <td>
                             <div className="evaluation-model">
-                              <img
-                                alt=""
-                                src={`${
-                                  import.meta.env.BASE_URL
-                                }evaluation/logos/${row.harness
-                                  .toLowerCase()
-                                  .replace(/[^a-z]/g, "")}.${
-                                  row.harness === "QwenPaw" ? "png" : "svg"
-                                }`}
-                              />
+                              {harnessLogo(row.harness) && (
+                                <img alt="" src={harnessLogo(row.harness)} />
+                              )}
                               {row.harness}
                             </div>
                           </td>
                         )}
                         <td>
                           {row.sdk_version}
-                          <small>{row.source_sha.slice(0, 8)}</small>
+                          <small>
+                            {row.source_sha?.slice(0, 8) ?? t("unknown")}
+                          </small>
                         </td>
                         <td className="evaluation-score evaluation-numeric">
                           {(row.score === null

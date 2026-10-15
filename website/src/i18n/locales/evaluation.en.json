@@ -66,5 +66,10 @@
   "chartUnavailable": "The chart could not load. You can still explore the results table.",
   "retry": "Retry",
   "trajectory": "Trajectory",
-  "collection": "Collection"
+  "collection": "Collection",
+  "resultKind": "Result type",
+  "official": "Official evaluations",
+  "testing": "Test evaluations",
+  "artifactSha": "Distribution SHA256",
+  "exchangeRate": "Fixed display exchange rate"
 }

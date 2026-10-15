@@ -33,19 +33,43 @@ const requireValue = (condition, message) => {
 const protocols = new Map();
 const boards = new Map();
 const runs = [];
-for (const name of (await readdir(new URL("results/", root)))
-  .filter((n) => n.endsWith(".json"))
-  .sort()) {
-  const input = await read(new URL(`results/${name}`, root));
+const files = [];
+const identitiesAcrossRuns = new Set();
+requireValue(
+  !(await readdir(new URL("results/", root))).some((n) => n.endsWith(".json")),
+  "Put results under results/testing/ or results/official/",
+);
+for (const kind of ["official", "testing"]) {
+  for (const name of (await readdir(new URL(`results/${kind}/`, root)))
+    .filter((n) => n.endsWith(".json"))
+    .sort())
+    files.push({ kind, name });
+}
+for (const { kind, name } of files) {
+  const input = await read(new URL(`results/${kind}/${name}`, root));
   requireValue(validate(input), `${name}: ${ajv.errorsText(validate.errors)}`);
   requireValue(name === `${input.id}.json`, `${name}: filename must match id`);
+  requireValue(
+    input.kind === kind,
+    `${name}: result kind must match directory`,
+  );
+  requireValue(
+    !identitiesAcrossRuns.has(input.id),
+    `${name}: duplicate run ID`,
+  );
+  identitiesAcrossRuns.add(input.id);
+  const boardKey = JSON.stringify([kind, input.board.id]);
   const board = JSON.stringify([input.board.name, input.board.group_by]);
   requireValue(
-    !boards.has(input.board.id) || boards.get(input.board.id) === board,
+    !boards.has(boardKey) || boards.get(boardKey) === board,
     `${name}: inconsistent board metadata`,
   );
-  boards.set(input.board.id, board);
-  const protocolKey = JSON.stringify([input.board.id, input.index_version]);
+  boards.set(boardKey, board);
+  const protocolKey = JSON.stringify([
+    kind,
+    input.board.id,
+    input.index_version,
+  ]);
   const catalog = new Map(input.benchmarks.map((b) => [b.id, b]));
   requireValue(
     catalog.size === input.benchmarks.length,
@@ -56,7 +80,16 @@ for (const name of (await readdir(new URL("results/", root)))
       .sort((a, b) => a.id.localeCompare(b.id))
       .map((b) => ({
         id: b.id,
+        name: b.name,
         revision: b.revision,
+        judge: {
+          kind: b.judge.kind,
+          model: b.judge.model,
+          scorer: b.judge.scorer,
+          official_model: b.judge.official_model,
+          prompt_revision: b.judge.prompt_revision,
+          parity_note: b.judge.parity_note,
+        },
         expected: b.expected,
         domains: [...b.domains].sort(),
       })),
@@ -85,6 +118,9 @@ for (const name of (await readdir(new URL("results/", root)))
         scored: 0,
         score: null,
         mean_model_cost_usd: null,
+        original_model_cost: null,
+        mean_judge_cost_usd: null,
+        original_judge_cost: null,
         mean_runtime_seconds: null,
         cost_source: "unknown",
         cost_basis: "unknown",
@@ -98,14 +134,36 @@ for (const name of (await readdir(new URL("results/", root)))
           (p.mean_model_cost_usd === null) === (p.cost_basis === "unknown"),
         `${name}: cost value and provenance disagree`,
       );
+      for (const role of ["model", "judge"]) {
+        const original = p[`original_${role}_cost`];
+        const usd = p[`mean_${role}_cost_usd`];
+        requireValue(
+          (original === null) === (usd === null),
+          `${name}: original ${role} cost and USD cost disagree`,
+        );
+        if (original !== null) {
+          const converted =
+            original.mean_amount /
+            (original.currency === "CNY" ? input.exchange_rate.cny_per_usd : 1);
+          requireValue(
+            Math.abs(converted - usd) <= Math.max(1, converted) * 1e-10,
+            `${name}: ${role} cost does not match the fixed exchange rate`,
+          );
+        }
+      }
       return {
         benchmark: b.id,
+        name: b.name,
+        judge: b.judge,
         domains: b.domains,
         expected: b.expected,
         scored: p.scored,
         score: p.score,
         mean_runtime_seconds: p.mean_runtime_seconds,
         mean_model_cost_usd: p.mean_model_cost_usd,
+        original_model_cost: p.original_model_cost,
+        mean_judge_cost_usd: p.mean_judge_cost_usd,
+        original_judge_cost: p.original_judge_cost,
         cost_sources: { [p.cost_source]: p.scored },
         cost_bases: { [p.cost_basis]: p.scored },
       };
@@ -117,12 +175,18 @@ for (const name of (await readdir(new URL("results/", root)))
       trajectory_url: r.trajectory_url,
       sdk_version: input.sdk_version,
       source_sha: input.source_sha,
+      source_repository: input.source_repository,
+      artifact_sha256: input.artifact_sha256,
       complete: benchmarks.every((b) => b.score !== null),
       benchmarks,
     };
   });
   runs.push({
-    schema_version: 1,
+    schema_version: 2,
+    kind: input.kind,
+    source_repository: input.source_repository,
+    artifact_sha256: input.artifact_sha256,
+    exchange_rate: input.exchange_rate,
     board: input.board,
     index_version: input.index_version,
     id: input.id,
@@ -139,6 +203,6 @@ const target = new URL("../public/evaluation/data/", import.meta.url);
 await mkdir(target, { recursive: true });
 await writeFile(
   new URL("index.json", target),
-  JSON.stringify({ schema_version: 1, runs }, null, 2) + "\n",
+  JSON.stringify({ schema_version: 2, runs }, null, 2) + "\n",
 );
 console.log(`Evaluation index: ${runs.length} runs → ${fileURLToPath(target)}`);

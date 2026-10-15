@@ -1,5 +1,17 @@
 export interface Benchmark {
   benchmark: string;
+  name: string;
+  judge: {
+    kind: "programmatic" | "llm";
+    model: string | null;
+    scorer: string | null;
+    official_model: string | null;
+    prompt_revision: string | null;
+    parity_note: string;
+  };
+  original_model_cost: { currency: "CNY" | "USD"; mean_amount: number } | null;
+  mean_judge_cost_usd: number | null;
+  original_judge_cost: { currency: "CNY" | "USD"; mean_amount: number } | null;
   domains: string[];
   expected: number;
   scored: number;
@@ -15,23 +27,29 @@ export interface RecordResult {
   model: string;
   harness: string;
   sdk_version: string;
-  source_sha: string;
+  source_sha: string | null;
+  source_repository: string;
+  artifact_sha256: string;
   complete: boolean;
   benchmarks: Benchmark[];
 }
 export interface Run {
-  schema_version: 1;
+  schema_version: 2;
   board: { id: string; name: string; group_by: "model" | "model_harness" };
   index_version: string;
   id: string;
-  evaluation_sha: string;
+  kind: "testing" | "official";
+  evaluation_sha: string | null;
+  source_repository: string;
+  artifact_sha256: string;
+  exchange_rate: { cny_per_usd: number; basis: "fixed" };
   date: string;
   workflow_url: string;
   records: RecordResult[];
   complete: boolean;
 }
 export interface History {
-  schema_version: 1;
+  schema_version: 2;
   runs: Run[];
 }
 export interface Row extends RecordResult {
@@ -43,11 +61,18 @@ export interface Row extends RecordResult {
   upperBound: boolean;
   coverage: string;
 }
-export const benchmarks: Record<string, string> = {
-  gaia: "GAIA",
-  "spreadsheetbench-verified": "SpreadsheetBench Verified",
-  "swebench-verified": "SWE-bench Verified",
-};
+export function harnessLogo(name: string): string | undefined {
+  const files: Record<string, string> = {
+    qwenpaw: "qwenpaw.png",
+    codex: "codex.svg",
+    claudecode: "claudecode.svg",
+    deepseekharness: "deepseekharness.svg",
+  };
+  const file = files[name.toLowerCase().replace(/[^a-z]/g, "")];
+  return file
+    ? `${import.meta.env.BASE_URL}evaluation/logos/${file}`
+    : undefined;
+}
 export function mean(values: (number | null)[]): number | null {
   return !values.length || values.some((value) => value === null)
     ? null
