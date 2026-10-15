@@ -149,6 +149,9 @@ app-local source. The embedded settings page shows the resolved model and
 configuration errors. Provider credentials for inherited/Host overrides are
 resolved server-side; the saved choices contain only references and a revision.
 A stale editor receives HTTP 409 instead of overwriting newer choices.
+The page also shows the main-chat default when Data has an override. Readiness
+refreshes after saving, navigation, and returning to the app; an older probe
+cannot restore a warning after a newer settings check.
 
 New submissions snapshot model connections at acceptance. The Engine uses the
 snapshot for analysis and background summaries; existing agent memory is retained
@@ -173,8 +176,12 @@ permissions. The marketplace package is unchanged; this is a local development
 preview on the paired branches.
 
 Verification: 139 Host adapter/configuration/gateway tests; 11 console provenance
-tests; 130 embedded-console tests; 760 Engine/Context suite tests with three skips,
+tests; 132 embedded-console tests; 760 Engine/Context suite tests with three skips,
 plus concurrent MCP-to-REST and session-memory model-switch regressions. TypeScript and both Data UI builds
 passed. Browser checks cover the inherited settings view, missing-provider message,
 override/reset controls, and saving the supported behavior settings. Live API
-checks confirm saving unchanged choices and rejecting stale revisions with 409. No live model inference or embedding rebuild was performed.
+checks confirm saving unchanged choices and rejecting stale revisions with 409.
+The readiness follow-up passed 16 model-settings/provenance tests and a browser
+save-and-return check: a missing inherited model shows the warning, then saving a
+configured override clears it without a reload. No live model inference or
+embedding rebuild was performed.

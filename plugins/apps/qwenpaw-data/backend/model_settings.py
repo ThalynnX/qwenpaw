@@ -167,6 +167,8 @@ class ModelSettingsService:
     async def describe(self, scope):
         settings = self.load(scope)
         selections, resolved = self.resolve(scope, settings)
+        workspace = self._workspace_choice(scope)
+        workspace_model, workspace_error = self._host_model(workspace)
         roles = {}
         for role, selection in selections.items():
             model, error = resolved[role]
@@ -216,6 +218,12 @@ class ModelSettingsService:
                 )
         return {
             "workspace_id": scope.workspace_id,
+            "workspace_default": {
+                "model_id": workspace.model_id if workspace else None,
+                "provider_id": workspace.provider_id if workspace else None,
+                "configured": workspace_model is not None,
+                "error": workspace_error,
+            },
             "settings": settings.model_dump(),
             "effective": roles,
             "providers": providers,

@@ -113,3 +113,48 @@ async def test_unsupported_provider_fails_explicitly(configured):
     assert not response["effective"]["analysis"]["configured"]
     with pytest.raises(ValueError):
         await service.runtime(scope())
+
+
+@pytest.mark.asyncio
+async def test_main_chat_default_remains_visible_with_data_override(
+    configured,
+):
+    service, _ = configured
+    initial = await service.describe(scope())
+    assert initial["settings"]["analysis"]["source"] == "inherit"
+    assert initial["effective"]["analysis"]["model_id"] == "model-a"
+    response = await service.save(
+        scope(),
+        module.ModelSettings(
+            analysis=module.ModelChoice(
+                source="host", provider_id="provider", model_id="model-b"
+            )
+        ),
+    )
+    assert response["workspace_default"]["model_id"] == "model-a"
+    assert response["workspace_default"]["configured"] is True
+    assert response["effective"]["analysis"]["model_id"] == "model-b"
+    assert "private-test-key" not in json.dumps(response)
+
+
+def test_workspace_selection_matches_main_chat_precedence(
+    tmp_path, monkeypatch
+):
+    from qwenpaw.config import config
+
+    service = module.ModelSettingsService(tmp_path)
+    global_slot = SimpleNamespace(provider_id="global", model="global-model")
+    workspace = SimpleNamespace(
+        active_model=SimpleNamespace(
+            provider_id="workspace", model="workspace-model"
+        )
+    )
+    monkeypatch.setattr(config, "load_agent_config", lambda _: workspace)
+    monkeypatch.setattr(
+        service,
+        "_manager",
+        lambda: SimpleNamespace(get_active_model=lambda: global_slot),
+    )
+    assert service._workspace_choice(scope()).model_id == "workspace-model"
+    workspace.active_model = None
+    assert service._workspace_choice(scope()).model_id == "global-model"

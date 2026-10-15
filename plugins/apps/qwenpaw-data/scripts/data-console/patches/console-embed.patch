@@ -441,10 +441,10 @@ index 85a5e79..5804552 100644
                    <div className={styles.inlineArtifact}>
                      <span className={styles.artifactGroupTitle}>{t('runtime.keyArtifacts')}</span>
 diff --git a/packages/datapaw-host-core/frontend/src/features/console/model/chat/useConsoleChat.ts b/packages/datapaw-host-core/frontend/src/features/console/model/chat/useConsoleChat.ts
-index ac815bd..4218494 100644
+index ac815bd..b19dc1e 100644
 --- a/packages/datapaw-host-core/frontend/src/features/console/model/chat/useConsoleChat.ts
 +++ b/packages/datapaw-host-core/frontend/src/features/console/model/chat/useConsoleChat.ts
-@@ -1,6 +1,6 @@
+@@ -1,11 +1,11 @@
 +import { requestAtUrl } from "@/services/request";
  import { historyCursor, hydrateProjectionTrace, loadHistoryTraces, mergeHistoryPage } from './sessionHistory';
 -import { modelConfigApi } from '../../api/modelConfig';
@@ -453,7 +453,28 @@ index ac815bd..4218494 100644
  import type { IAgentScopeRuntimeWebUISession } from '@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/types';
  import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
  import { ApiRequestError } from '@/services/request';
-@@ -1006,11 +1006,10 @@ export function useConsoleChat(
+ import { getHostAuthContext, subscribeHostAuth } from '@/services/auth';
+-import { createCMModelConfigGate } from '@/services/cmModelConfig';
++import { createCMModelConfigGate, subscribeModelSettingsRefresh } from '@/services/cmModelConfig';
+ import { useAppI18n } from '@/i18n';
+ import { dataConsoleApi } from '../../api/client';
+ import { subscribeChatEvents } from '../../api/events';
+@@ -342,13 +342,7 @@ export function useConsoleChat(
+   useEffect(() => {
+     if (!auth.ready) return undefined;
+     void cmModelGate.check();
+-    const onVisibility = () => {
+-      if (document.visibilityState === 'visible') void cmModelGate.check();
+-    };
+-    document.addEventListener('visibilitychange', onVisibility);
+-    return () => {
+-      document.removeEventListener('visibilitychange', onVisibility);
+-    };
++    return subscribeModelSettingsRefresh(cmModelGate.refresh);
+   }, [auth.ready, cmModelGate]);
+
+   useEffect(() => {
+@@ -1006,11 +1000,10 @@ export function useConsoleChat(
        if (signal?.aborted || epoch !== sessionEpochRef.current) throw new DOMException('Session changed', 'AbortError');
      };
      try {
@@ -1483,12 +1504,13 @@ index 0000000..db49875
 +}
 diff --git a/packages/datapaw-host-core/frontend/src/pages/AgentSettings/WorkspaceModels.tsx b/packages/datapaw-host-core/frontend/src/pages/AgentSettings/WorkspaceModels.tsx
 new file mode 100644
-index 0000000..06e7999
+index 0000000..a909da9
 --- /dev/null
 +++ b/packages/datapaw-host-core/frontend/src/pages/AgentSettings/WorkspaceModels.tsx
-@@ -0,0 +1,117 @@
+@@ -0,0 +1,120 @@
 +import { useEffect, useState, useSyncExternalStore } from 'react';
 +import { Alert, Button, Collapse, Input, InputNumber, Select, Space, Spin, Tag, message } from 'antd';
++import { notifyModelSettingsChanged } from '@/services/cmModelConfig';
 +import { requestAtUrl } from '@/services/request';
 +import { getHostAuthContext, subscribeHostAuth } from '@/services/auth';
 +import { modelConfigApi } from '@/features/console/api/modelConfig';
@@ -1500,12 +1522,13 @@ index 0000000..06e7999
 +type Settings = { revision: number } & Record<Role, Choice>;
 +type Response = {
 +  workspace_id: string; settings: Settings;
++  workspace_default: {model_id: string | null; configured: boolean; error: string | null};
 +  effective: Record<Role, {model_id: string | null; source: string; configured: boolean; error: string | null}>;
 +  providers: {id: string; name: string; models: {id: string; name: string}[]}[];
 +};
 +const endpoint = '/api/qwenpaw-data/model-settings';
 +const roles: {id: Role; name: string; description: string; inherit: string}[] = [
-+  {id: 'analysis', name: 'Analysis', description: 'Answers questions, reasons over data, and uses tools.', inherit: 'Follow workspace default'},
++  {id: 'analysis', name: 'Analysis', description: 'Answers questions, reasons over data, and uses tools.', inherit: 'Use main chat model (default)'},
 +  {id: 'lightweight', name: 'Summaries', description: 'Summarizes business traces and suggests follow-up questions.', inherit: 'Use analysis model'},
 +  {id: 'databridge', name: 'DataBridge', description: 'Interprets semantic definitions and retrieves data context.', inherit: 'Use analysis model'},
 +];
@@ -1537,7 +1560,7 @@ index 0000000..06e7999
 +    try {
 +      const value = await requestAtUrl<Response>(endpoint, {method: 'PUT', body: JSON.stringify(draft)});
 +      if (getHostAuthContext().revision !== revision) return;
-+      setData(value); setDraft(value.settings); message.success('Models saved. Applies to new tasks.');
++      setData(value); setDraft(value.settings); notifyModelSettingsChanged(); message.success('Models saved. Applies to new tasks.');
 +    } catch (e) { if (getHostAuthContext().revision === revision) setError((e as Error).message); }
 +    finally { setSaving(false); }
 +  };
@@ -1563,7 +1586,8 @@ index 0000000..06e7999
 +  return <div className={styles.root}>
 +    <section className={`${styles.hero} datapaw-card-primary`}>
 +      <div><Tag color="blue">Main chat connection</Tag><h2>Models for Data</h2>
-+        <p>Data follows your workspace model. Choose a different model only where it helps.</p>
++        <p>Data uses your main chat model by default. Overrides below apply only to Data.</p>
++        {data && <p>Main chat default: <strong>{data.workspace_default.model_id || 'Not selected'}</strong>{!data.workspace_default.configured && <span className={styles.muted}> · Needs configuration in main chat</span>}</p>}
 +        {data && <span className={styles.muted}>Workspace: {data.workspace_id} · New tasks use the latest settings; running tasks keep their model.</span>}
 +      </div>
 +      <a href={new URL("/models", window.location.origin).href} target="_top" className={styles.link}>Manage main chat models ↗</a>
@@ -1580,7 +1604,7 @@ index 0000000..06e7999
 +            <div><h3>{role.name}</h3><p>{role.description}</p></div>
 +            <div className={styles.controls}>
 +              <Select aria-label={`${role.name} model source`} value={choice.source} disabled={saving} onChange={source => choose(role.id, {source})} options={[
-+                {value:'inherit', label:role.inherit}, {value:'host', label:'Choose a main chat model'}, {value:'local', label:'Use app-specific settings'},
++                {value:'inherit', label:role.inherit}, {value:'host', label:'Use a different main chat model'}, {value:'local', label:'Use app-specific settings'},
 +              ]} />
 +              {choice.source === 'host' && <Select aria-label={`${role.name} model`} showSearch optionFilterProp="label" value={choice.provider_id && choice.model_id ? JSON.stringify([choice.provider_id, choice.model_id]) : undefined} placeholder="Select a model" disabled={saving} onChange={value => {const [provider_id, model_id] = JSON.parse(value); choose(role.id, {source:'host', provider_id, model_id});}} options={data.providers.flatMap(p => p.models.map(m => ({value: JSON.stringify([p.id,m.id]), label:`${p.name} / ${m.name || m.id}`})))} />}
 +              <span className={styles.effective}>{changed || inheritedAnalysis ? 'Pending save' : <>{effective.model_id || 'App-specific model'} <span className={styles.muted}>· {effective.source}</span>{effective.error && <div className={styles.problem}>{effective.error}</div>}</>}</span>
@@ -2936,10 +2960,18 @@ index 0000000..a655dba
 +  );
 +}
 diff --git a/packages/datapaw-host-core/frontend/src/services/__test__/cmModelConfig.test.ts b/packages/datapaw-host-core/frontend/src/services/__test__/cmModelConfig.test.ts
-index 3ad6c95..294cb35 100644
+index 3ad6c95..b4adcd2 100644
 --- a/packages/datapaw-host-core/frontend/src/services/__test__/cmModelConfig.test.ts
 +++ b/packages/datapaw-host-core/frontend/src/services/__test__/cmModelConfig.test.ts
-@@ -81,15 +81,15 @@ test('实际探测携带 Cookie；HTTP 或网络失败按不确定处理', async
+@@ -1,6 +1,6 @@
+ import assert from 'node:assert/strict';
+ import test from 'node:test';
+-import { createCMModelConfigGate, fetchCMModelConfigStatus } from '../cmModelConfig.js';
++import { createCMModelConfigGate, fetchCMModelConfigStatus, notifyModelSettingsChanged, subscribeModelSettingsRefresh } from '../cmModelConfig.js';
+ import type { CMModelConfigStatus } from '../cmModelConfig.js';
+
+ test('未配置时拒绝发送，配置完成后重查可恢复，队列发送前重新检测', async () => {
+@@ -81,18 +81,70 @@ test('实际探测携带 Cookie；HTTP 或网络失败按不确定处理', async
      if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
      else Reflect.deleteProperty(globalThis, 'window');
    });
@@ -2958,6 +2990,61 @@ index 3ad6c95..294cb35 100644
    assert.deepEqual(await fetchCMModelConfigStatus(), { determined: true, configured: true });
    response = new Response(null, { status: 401 });
    assert.deepEqual(await fetchCMModelConfigStatus(), { determined: false, configured: false });
+   mock.mock.mockImplementation(async () => { throw new TypeError('network'); });
+   assert.deepEqual(await fetchCMModelConfigStatus(), { determined: false, configured: false });
+ });
++
++
++test('saving settings refreshes a mounted console without a page reload', async (context) => {
++  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
++  const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
++  Object.defineProperty(globalThis, 'window', {configurable: true, value: new EventTarget()});
++  Object.defineProperty(globalThis, 'document', {configurable: true, value: Object.assign(new EventTarget(), {visibilityState: 'visible'})});
++  context.after(() => {
++    for (const [name, descriptor] of [['window', previousWindow], ['document', previousDocument]] as const) {
++      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
++      else Reflect.deleteProperty(globalThis, name);
++    }
++  });
++  let configured = false;
++  let calls = 0;
++  const gate = createCMModelConfigGate(async () => {calls++; return {determined: true, configured};});
++  const stop = subscribeModelSettingsRefresh(gate.refresh);
++  await gate.check();
++  assert.equal(gate.getSnapshot(), true);
++  configured = true;
++  notifyModelSettingsChanged();
++  await gate.check();
++  assert.equal(gate.getSnapshot(), false);
++  configured = false;
++  window.dispatchEvent(new Event('hashchange'));
++  await gate.check();
++  assert.equal(gate.getSnapshot(), true);
++  configured = true;
++  window.dispatchEvent(new Event('focus'));
++  await gate.check();
++  assert.equal(gate.getSnapshot(), false);
++  stop();
++  const before = calls;
++  notifyModelSettingsChanged();
++  window.dispatchEvent(new Event('hashchange'));
++  window.dispatchEvent(new Event('focus'));
++  assert.equal(calls, before);
++});
++
++test('a pre-save probe cannot restore the warning or clear the new in-flight probe', async () => {
++  const requests: ((status: CMModelConfigStatus) => void)[] = [];
++  const gate = createCMModelConfigGate(() => new Promise(resolve => requests.push(resolve)));
++  const beforeSave = gate.check();
++  const afterSave = gate.refresh();
++  requests[0]({determined: true, configured: false});
++  await beforeSave;
++  assert.equal(gate.getSnapshot(), false);
++  assert.equal(gate.check(), afterSave);
++  requests[1]({determined: true, configured: true});
++  await afterSave;
++  assert.equal(gate.getSnapshot(), false);
++});
 diff --git a/packages/datapaw-host-core/frontend/src/services/auth.ts b/packages/datapaw-host-core/frontend/src/services/auth.ts
 index 1a4d622..4ab69ba 100644
 --- a/packages/datapaw-host-core/frontend/src/services/auth.ts
@@ -3001,13 +3088,14 @@ index 1a4d622..4ab69ba 100644
    if (!status.enabled) {
      publishAuthContext(true);
 diff --git a/packages/datapaw-host-core/frontend/src/services/cmModelConfig.ts b/packages/datapaw-host-core/frontend/src/services/cmModelConfig.ts
-index 1065ea7..58dc523 100644
+index 1065ea7..b29b48c 100644
 --- a/packages/datapaw-host-core/frontend/src/services/cmModelConfig.ts
 +++ b/packages/datapaw-host-core/frontend/src/services/cmModelConfig.ts
 @@ -1,8 +1,7 @@
 -import { getContextFrontendUrl } from './config.js';
  
- // CM 侧 GET /api/system/model-config/ 返回体中的关键字段
+-// CM 侧 GET /api/system/model-config/ 返回体中的关键字段
++// Readiness for the effective Data model selected through main chat settings.
  interface CMModelConfigResponse {
 -  configured?: unknown;
 +  effective?: {analysis?: {configured?: boolean; source?: string}};
@@ -3022,7 +3110,8 @@ index 1065ea7..58dc523 100644
 +const MODEL_CONFIG_PATH = '/api/qwenpaw-data/model-settings';
  const PROBE_TIMEOUT_MS = 5_000;
  
- // 探测 CM 当前用户是否完成了 LLM + Embedding 配置；任意失败一律 fail-open。
+-// 探测 CM 当前用户是否完成了 LLM + Embedding 配置；任意失败一律 fail-open。
++// A failed probe is unknown; request admission still validates configuration.
  export async function fetchCMModelConfigStatus(): Promise<CMModelConfigStatus> {
    if (typeof window === 'undefined') return { determined: false, configured: false };
 -  const url = getContextFrontendUrl(MODEL_CONFIG_PATH);
@@ -3039,6 +3128,67 @@ index 1065ea7..58dc523 100644
    } catch {
      return { determined: false, configured: false };
    } finally {
+@@ -43,7 +42,8 @@ export function createCMModelConfigGate(probe = fetchCMModelConfigStatus) {
+   let required = false;
+   let inFlight: Promise<boolean> | null = null;
+   const listeners = new Set<() => void>();
+-  return {
++  let generation = 0;
++  const gate = {
+     getSnapshot: () => required,
+     subscribe: (listener: () => void) => {
+       listeners.add(listener);
+@@ -51,15 +51,48 @@ export function createCMModelConfigGate(probe = fetchCMModelConfigStatus) {
+     },
+     check: (): Promise<boolean> => {
+       if (!inFlight) {
++        const current = generation;
+         inFlight = probe().then((status) => {
+-          if (status.determined && required !== !status.configured) {
++          if (current === generation && status.determined && required !== !status.configured) {
+             required = !status.configured;
+             listeners.forEach((listener) => listener());
+           }
+           return !status.determined || status.configured;
+-        }).finally(() => { inFlight = null; });
++        }).finally(() => { if (current === generation) inFlight = null; });
+       }
+       return inFlight;
+     },
++    refresh: (): Promise<boolean> => {
++      generation += 1;
++      inFlight = null;
++      return gate.check();
++    },
+   };
++  return gate;
+ }
++
++const MODEL_SETTINGS_CHANGED = 'data-model-settings-changed';
++
++export function notifyModelSettingsChanged() {
++  window.dispatchEvent(new Event(MODEL_SETTINGS_CHANGED));
++}
++
++// The console controller survives settings navigation. Refresh on save and
++// return, including main chat settings changed in another tab.
++export function subscribeModelSettingsRefresh(refresh: () => Promise<boolean>) {
++  const onRefresh = () => { void refresh(); };
++  const onVisibility = () => {
++    if (document.visibilityState === 'visible') onRefresh();
++  };
++  window.addEventListener(MODEL_SETTINGS_CHANGED, onRefresh);
++  window.addEventListener('hashchange', onRefresh);
++  window.addEventListener('focus', onRefresh);
++  document.addEventListener('visibilitychange', onVisibility);
++  return () => {
++    window.removeEventListener(MODEL_SETTINGS_CHANGED, onRefresh);
++    window.removeEventListener('hashchange', onRefresh);
++    window.removeEventListener('focus', onRefresh);
++    document.removeEventListener('visibilitychange', onVisibility);
++  };
++}
++
 diff --git a/packages/datapaw-host-core/frontend/src/services/config.ts b/packages/datapaw-host-core/frontend/src/services/config.ts
 index d3ce27e..6a1bd30 100644
 --- a/packages/datapaw-host-core/frontend/src/services/config.ts
