@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Loopback-only browser acceptance for the Creator create-video PawApp action."""
+# -*- coding: utf-8 -*-
+"""Loopback browser acceptance for Creator create-video."""
 
 from __future__ import annotations
 
@@ -53,11 +54,11 @@ DECORATIVE_IMAGE_STUB_URLS = frozenset(
         "O1CN01822qqr1PVyaK7MYtn_!!6000000001847-2-tps-40-40.png",
         "https://gw.alicdn.com/imgextra/i3/"
         "O1CN01L3azqd1XIi7O2jumZ_!!6000000002901-2-tps-400-400.png",
-    }
+    },
 )
 TRANSPARENT_PNG = bytes.fromhex(
     "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
-    "0000000d49444154789c6360000000020001e221bc330000000049454e44ae426082"
+    "0000000d49444154789c6360000000020001e221bc330000000049454e44ae426082",
 )
 CREDENTIAL_ENV_NAMES = {
     "ALIBABA_CLOUD_ACCESS_KEY_ID",
@@ -105,13 +106,24 @@ def require(condition: Any, message: str) -> None:
 
 
 def compact_json(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
 
 
 def is_loopback_url(url: str, *, browser: bool = False) -> bool:
     parsed = urlsplit(url)
     allowed_schemes = {"http", "https", "ws", "wss"}
-    if browser and parsed.scheme in {"about", "blob", "data", "chrome", "chrome-error"}:
+    if browser and parsed.scheme in {
+        "about",
+        "blob",
+        "data",
+        "chrome",
+        "chrome-error",
+    }:
         return True
     return (
         parsed.scheme in allowed_schemes
@@ -153,7 +165,8 @@ def json_body(response: Any) -> Any:
     except Exception as exc:
         text = response.text[:500].replace("\n", " ")
         raise AcceptanceError(
-            f"expected JSON from {response.request.method} {response.request.url}: {text}"
+            f"expected JSON from {response.request.method} "
+            f"{response.request.url}: {text}",
         ) from exc
 
 
@@ -181,7 +194,7 @@ def api_request(
         text = response.text[:1000].replace("\n", " ")
         raise AcceptanceError(
             f"{method} {url} returned {response.status_code}, expected "
-            f"{sorted(expected_set)}: {text}"
+            f"{sorted(expected_set)}: {text}",
         )
     return response
 
@@ -234,14 +247,20 @@ def ffprobe_duration(ffprobe: Path, path: Path) -> float:
         text=True,
         timeout=30,
     )
-    require(completed.returncode == 0, f"ffprobe failed: {completed.stderr.strip()}")
+    require(
+        completed.returncode == 0,
+        f"ffprobe failed: {completed.stderr.strip()}",
+    )
     try:
         duration = float(completed.stdout.strip())
     except ValueError as exc:
         raise AcceptanceError(
-            f"invalid ffprobe duration: {completed.stdout!r}"
+            f"invalid ffprobe duration: {completed.stdout!r}",
         ) from exc
-    require(abs(duration - 5.0) <= 0.05, f"expected five-second MP4, got {duration}")
+    require(
+        abs(duration - 5.0) <= 0.05,
+        f"expected five-second MP4, got {duration}",
+    )
     return duration
 
 
@@ -306,12 +325,20 @@ def generate_mp4(ffmpeg: Path, output: Path, codec: str) -> None:
     )
     if completed.returncode != 0:
         output.unlink(missing_ok=True)
-        raise AcceptanceError(f"ffmpeg ({codec}) failed: {completed.stderr.strip()}")
-    require(output.is_file() and output.stat().st_size > 0, "ffmpeg produced no MP4")
+        raise AcceptanceError(
+            f"ffmpeg ({codec}) failed: {completed.stderr.strip()}",
+        )
+    require(
+        output.is_file() and output.stat().st_size > 0,
+        "ffmpeg produced no MP4",
+    )
 
 
 def generate_deterministic_video(
-    ffmpeg: Path, ffprobe: Path, first: Path, second: Path
+    ffmpeg: Path,
+    ffprobe: Path,
+    first: Path,
+    second: Path,
 ) -> tuple[str, float]:
     codec = "libx264"
     try:
@@ -322,7 +349,10 @@ def generate_deterministic_video(
     generate_mp4(ffmpeg, second, codec)
     first_hash = sha256_file(first)
     second_hash = sha256_file(second)
-    require(first_hash == second_hash, "the two locally generated MP4 files differ")
+    require(
+        first_hash == second_hash,
+        "the two locally generated MP4 files differ",
+    )
     return first_hash, ffprobe_duration(ffprobe, first)
 
 
@@ -333,7 +363,14 @@ class FakeState:
         self.unknown_requests: list[dict[str, Any]] = []
         self.completion_count = 0
 
-    def record(self, method: str, path: str, body: Any, *, known: bool) -> None:
+    def record(
+        self,
+        method: str,
+        path: str,
+        body: Any,
+        *,
+        known: bool,
+    ) -> None:
         record = {"method": method, "path": path, "body": body}
         with self._lock:
             self.requests.append(record)
@@ -368,7 +405,10 @@ def called_tools(messages: Any) -> list[str]:
             if not isinstance(call, dict):
                 continue
             function = call.get("function")
-            if isinstance(function, dict) and isinstance(function.get("name"), str):
+            if isinstance(function, dict) and isinstance(
+                function.get("name"),
+                str,
+            ):
                 result.append(function["name"])
     return result
 
@@ -379,7 +419,10 @@ def available_tool_name(payload: dict[str, Any], canonical: str) -> str:
         if not isinstance(tool, dict):
             continue
         function = tool.get("function")
-        if isinstance(function, dict) and isinstance(function.get("name"), str):
+        if isinstance(function, dict) and isinstance(
+            function.get("name"),
+            str,
+        ):
             names.append(function["name"])
     if canonical in names:
         return canonical
@@ -387,12 +430,14 @@ def available_tool_name(payload: dict[str, Any], canonical: str) -> str:
         if name.endswith(canonical):
             return name
     raise AcceptanceError(
-        f"Host did not expose expected tool {canonical!r}; got {names}"
+        f"Host did not expose expected tool {canonical!r}; got {names}",
     )
 
 
 def tool_arguments(
-    payload: dict[str, Any], tool_name: str, values: dict[str, Any]
+    payload: dict[str, Any],
+    tool_name: str,
+    values: dict[str, Any],
 ) -> dict[str, Any]:
     for tool in payload.get("tools", []):
         function = tool.get("function") if isinstance(tool, dict) else None
@@ -400,13 +445,20 @@ def tool_arguments(
             continue
         parameters = function.get("parameters")
         properties = (
-            parameters.get("properties") if isinstance(parameters, dict) else None
+            parameters.get("properties")
+            if isinstance(parameters, dict)
+            else None
         )
         if isinstance(properties, dict):
-            return {key: value for key, value in values.items() if key in properties}
+            return {
+                key: value
+                for key, value in values.items()
+                if key in properties
+            }
     return values
 
 
+# pylint: disable-next=R0911
 def fake_completion_answer(
     payload: dict[str, Any],
 ) -> tuple[str, str | None, dict[str, Any] | None]:
@@ -415,15 +467,19 @@ def fake_completion_answer(
     lower = combined.lower()
 
     if (
-        "## pawapp task continuation\nthe host started this turn because an independent pawapp task changed state."
-        in lower
+        "## pawapp task continuation\nthe host started this turn because an "
+        "independent pawapp task changed state." in lower
         and "pawapp task event:\n" in lower
     ):
         task_matches = re.findall(r'"task_id"\s*:\s*"([^"]+)"', combined)
         status_matches = re.findall(r'"status"\s*:\s*"([^"]+)"', combined)
         task_id = task_matches[-1] if task_matches else "missing"
         status = status_matches[-1] if status_matches else "unknown"
-        return (f"PAWAPP_CONTINUATION task_id={task_id} status={status}", None, None)
+        return (
+            f"PAWAPP_CONTINUATION task_id={task_id} status={status}",
+            None,
+            None,
+        )
 
     if (
         "you generate short titles for chat sessions." in lower
@@ -433,7 +489,11 @@ def fake_completion_answer(
 
     prior = called_tools(messages)
     if any(name.endswith("delegate") for name in prior):
-        return ("Creator accepted the deterministic local video task.", None, None)
+        return (
+            "Creator accepted the deterministic local video task.",
+            None,
+            None,
+        )
 
     if any(name.endswith("describe_action") for name in prior):
         name = available_tool_name(payload, "delegate")
@@ -441,7 +501,9 @@ def fake_completion_answer(
             "app_id": APP_ID,
             "action_id": ACTION_ID,
             "inputs": {
-                "brief": "A red paper kite rises slowly above a quiet green field.",
+                "brief": (
+                    "A red paper kite rises slowly above a quiet green field."
+                ),
                 "name": "Fake Video Acceptance",
                 "aspect_ratio": "16:9",
                 "resolution": "720P",
@@ -475,6 +537,7 @@ def fake_completion_answer(
     return ("OK", None, None)
 
 
+# pylint: disable-next=R0915
 def make_fake_handler(state: FakeState) -> type[BaseHTTPRequestHandler]:
     class FakeHandler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -496,12 +559,19 @@ def make_fake_handler(state: FakeState) -> type[BaseHTTPRequestHandler]:
                 size = int(self.headers.get("Content-Length", "0"))
             except ValueError:
                 size = 0
-            require(size <= 4 * 1024 * 1024, "fake server request body exceeded limit")
+            require(
+                size <= 4 * 1024 * 1024,
+                "fake server request body exceeded limit",
+            )
             raw = self.rfile.read(size) if size else b"{}"
             try:
                 return json.loads(raw.decode("utf-8"))
             except Exception:
-                return {"_invalid_json": raw.decode("utf-8", errors="replace")[:500]}
+                return {
+                    "_invalid_json": raw.decode("utf-8", errors="replace")[
+                        :500
+                    ],
+                }
 
         def do_GET(self) -> None:  # noqa: N802
             parsed = urlsplit(self.path)
@@ -518,7 +588,7 @@ def make_fake_handler(state: FakeState) -> type[BaseHTTPRequestHandler]:
                                 "object": "model",
                                 "created": 0,
                                 "owned_by": "loopback-acceptance",
-                            }
+                            },
                         ],
                     },
                 )
@@ -565,36 +635,68 @@ def make_fake_handler(state: FakeState) -> type[BaseHTTPRequestHandler]:
                             "oss_access_key_id": "fake-access-key",
                             "x_oss_object_acl": "private",
                             "x_oss_forbid_overwrite": "true",
-                        }
+                        },
                     },
                 )
                 return
             if path.startswith("/api/v1/tasks/"):
                 state.record("GET", self.path, None, known=True)
-                self._send_json(200, {"output": {
-                    "task_status": "SUCCEEDED",
-                    "results": {"choices": [{"message": {
-                        "content": [{"image": f"http://{self.headers.get('Host', '127.0.0.1')}/fake-image.png"}]
-                    }}]},
-                }})
+                self._send_json(
+                    200,
+                    {
+                        "output": {
+                            "task_status": "SUCCEEDED",
+                            "results": {
+                                "choices": [
+                                    {
+                                        "message": {
+                                            "content": [
+                                                {
+                                                    "image": (
+                                                        "http://"
+                                                        + self.headers.get(
+                                                            "Host",
+                                                            "127.0.0.1",
+                                                        )
+                                                        + "/fake-image.png"
+                                                    ),
+                                                },
+                                            ],
+                                        },
+                                    },
+                                ],
+                            },
+                        },
+                    },
+                )
                 return
             state.record("GET", self.path, None, known=False)
             self._send_json(
-                502, {"error": "unexpected fake-server request", "path": self.path}
+                502,
+                {"error": "unexpected fake-server request", "path": self.path},
             )
 
         def do_POST(self) -> None:  # noqa: N802
             parsed = urlsplit(self.path)
             path = parsed.path.rstrip("/") or "/"
             body = self._read_json()
-            if path.endswith("/services/aigc/multimodal-generation/generation"):
+            if path.endswith(
+                "/services/aigc/multimodal-generation/generation",
+            ):
                 state.record("POST", self.path, body, known=True)
-                self._send_json(200, {"output": {"task_id": "fake-image-task"}})
+                self._send_json(
+                    200,
+                    {"output": {"task_id": "fake-image-task"}},
+                )
                 return
             if path != "/v1/chat/completions":
                 state.record("POST", self.path, body, known=False)
                 self._send_json(
-                    502, {"error": "unexpected fake-server request", "path": self.path}
+                    502,
+                    {
+                        "error": "unexpected fake-server request",
+                        "path": self.path,
+                    },
                 )
                 return
 
@@ -626,7 +728,7 @@ def make_fake_handler(state: FakeState) -> type[BaseHTTPRequestHandler]:
                                 "name": tool_name,
                                 "arguments": compact_json(arguments or {}),
                             },
-                        }
+                        },
                     ]
                     finish_reason = "tool_calls"
                 self._send_json(
@@ -641,7 +743,7 @@ def make_fake_handler(state: FakeState) -> type[BaseHTTPRequestHandler]:
                                 "index": 0,
                                 "message": message,
                                 "finish_reason": finish_reason,
-                            }
+                            },
                         ],
                         "usage": {
                             "prompt_tokens": 1,
@@ -665,7 +767,7 @@ def make_fake_handler(state: FakeState) -> type[BaseHTTPRequestHandler]:
                             "name": tool_name,
                             "arguments": compact_json(arguments or {}),
                         },
-                    }
+                    },
                 ]
                 finish_reason = "tool_calls"
             else:
@@ -676,8 +778,10 @@ def make_fake_handler(state: FakeState) -> type[BaseHTTPRequestHandler]:
                     "object": "chat.completion.chunk",
                     "created": 0,
                     "model": model,
-                    "choices": [{"index": 0, "delta": delta, "finish_reason": None}],
-                }
+                    "choices": [
+                        {"index": 0, "delta": delta, "finish_reason": None},
+                    ],
+                },
             )
             events.append(
                 {
@@ -686,9 +790,13 @@ def make_fake_handler(state: FakeState) -> type[BaseHTTPRequestHandler]:
                     "created": 0,
                     "model": model,
                     "choices": [
-                        {"index": 0, "delta": {}, "finish_reason": finish_reason}
+                        {
+                            "index": 0,
+                            "delta": {},
+                            "finish_reason": finish_reason,
+                        },
                     ],
-                }
+                },
             )
             if isinstance(body.get("stream_options"), dict) and body[
                 "stream_options"
@@ -705,9 +813,11 @@ def make_fake_handler(state: FakeState) -> type[BaseHTTPRequestHandler]:
                             "completion_tokens": 1,
                             "total_tokens": 2,
                         },
-                    }
+                    },
                 )
-            encoded = "".join(f"data: {compact_json(event)}\n\n" for event in events)
+            encoded = "".join(
+                f"data: {compact_json(event)}\n\n" for event in events
+            )
             encoded += "data: [DONE]\n\n"
             raw = encoded.encode("utf-8")
             self.send_response(200)
@@ -773,16 +883,20 @@ class Resources:
                 pass
         diagnostics: dict[str, str] = {}
         if self.fake_state is not None:
-            diagnostics["fake_requests_tail"] = compact_json([
-                {"method": item.get("method"), "path": item.get("path")}
-                for item in self.fake_state.requests[-30:]
-            ])
+            diagnostics["fake_requests_tail"] = compact_json(
+                [
+                    {"method": item.get("method"), "path": item.get("path")}
+                    for item in self.fake_state.requests[-30:]
+                ],
+            )
             path_counts: dict[str, int] = {}
             for item in self.fake_state.requests:
                 key = f"{item.get('method', '?')} {item.get('path', '?')}"
                 path_counts[key] = path_counts.get(key, 0) + 1
             diagnostics["fake_request_counts"] = compact_json(path_counts)
-            diagnostics["fake_unknown_requests"] = compact_json(self.fake_state.unknown_requests)
+            diagnostics["fake_unknown_requests"] = compact_json(
+                self.fake_state.unknown_requests,
+            )
         if self.temp_root is None:
             return diagnostics
         for key, path in (
@@ -799,6 +913,7 @@ class Resources:
                 )[-6000:]
         return diagnostics
 
+    # pylint: disable-next=R0912,R0915
     def cleanup(self) -> None:
         for resource in (self.browser_context, self.browser):
             if resource is not None:
@@ -861,8 +976,13 @@ class Resources:
 
 
 def find_executable(name: str, fixed: str | None = None) -> Path:
-    candidate = fixed if fixed and Path(fixed).is_file() else shutil.which(name)
-    require(candidate is not None, f"required local executable not found: {name}")
+    candidate = (
+        fixed if fixed and Path(fixed).is_file() else shutil.which(name)
+    )
+    require(
+        candidate is not None,
+        f"required local executable not found: {name}",
+    )
     path = Path(candidate).resolve()
     require(path.is_file(), f"required executable is not a file: {path}")
     return path
@@ -958,7 +1078,7 @@ def sandbox_profile(host_port: int, fake_port: int) -> str:
             f'(allow network-outbound (remote ip "localhost:{host_port}"))',
             f'(allow network-outbound (remote ip "localhost:{fake_port}"))',
             "",
-        ]
+        ],
     )
 
 
@@ -973,7 +1093,7 @@ def acceptance_event_names(path: Path) -> list[str]:
             payload = json.loads(line)
         except json.JSONDecodeError as exc:
             raise AcceptanceError(
-                f"invalid acceptance event JSON: {line[:200]}"
+                f"invalid acceptance event JSON: {line[:200]}",
             ) from exc
         matches = [
             item
@@ -981,7 +1101,8 @@ def acceptance_event_names(path: Path) -> list[str]:
             if isinstance(item, str) and item in EXPECTED_EVENTS
         ]
         require(
-            matches, f"acceptance event record has no recognized event: {line[:200]}"
+            matches,
+            f"acceptance event record has no recognized event: {line[:200]}",
         )
         names.append(matches[0])
     return names
@@ -1014,7 +1135,10 @@ def find_model_section(config: dict[str, Any], kind: str) -> dict[str, Any]:
 
 
 def set_model_value(
-    section: dict[str, Any], aliases: Iterable[str], default: str, value: Any
+    section: dict[str, Any],
+    aliases: Iterable[str],
+    default: str,
+    value: Any,
 ) -> None:
     for key in aliases:
         if key in section:
@@ -1040,7 +1164,8 @@ def configure_creator_llm(
     video = find_model_section(config, "video")
     grounding = config.get("grounding")
     require(
-        isinstance(grounding, dict), "Creator model config has no grounding section"
+        isinstance(grounding, dict),
+        "Creator model config has no grounding section",
     )
 
     set_model_value(llm, ("enabled", "is_enabled"), "enabled", True)
@@ -1097,11 +1222,17 @@ def task_ids_from_sse(events: list[Any]) -> set[str]:
         for item in collect_nested_json(event):
             if not isinstance(item, dict):
                 continue
-            if item.get("kind") == "pawapp_task" and isinstance(item.get("task"), dict):
+            if item.get("kind") == "pawapp_task" and isinstance(
+                item.get("task"),
+                dict,
+            ):
                 task_id = item["task"].get("id") or item["task"].get("task_id")
                 if isinstance(task_id, str):
                     found.add(task_id)
-            if item.get("app_id") == APP_ID and item.get("action_id") == ACTION_ID:
+            if (
+                item.get("app_id") == APP_ID
+                and item.get("action_id") == ACTION_ID
+            ):
                 nested = item.get("task")
                 if isinstance(nested, dict):
                     task_id = nested.get("id") or nested.get("task_id")
@@ -1125,13 +1256,15 @@ def drive_console_chat(client: Any, base_url: str) -> str:
                     {
                         "type": "text",
                         "text": (
-                            "Use the public qwenpaw-creator/create-video action for the acceptance request "
-                            f"{SESSION_ID}. Create a five-second video of a red paper kite rising slowly "
+                            "Use the public qwenpaw-creator/create-video "
+                            "action for the acceptance request "
+                            f"{SESSION_ID}. Create a five-second video of a "
+                            "red paper kite rising slowly "
                             "above a quiet green field."
                         ),
-                    }
+                    },
                 ],
-            }
+            },
         ],
     }
     events: list[Any] = []
@@ -1144,12 +1277,14 @@ def drive_console_chat(client: Any, base_url: str) -> str:
         follow_redirects=False,
     ) as response:
         require(
-            response.status_code == 200, f"Console chat returned {response.status_code}"
+            response.status_code == 200,
+            f"Console chat returned {response.status_code}",
         )
         for line in response.iter_lines():
             if time.monotonic() >= deadline:
                 raise AcceptanceError(
-                    "timed out waiting for create-video task ID in Console SSE"
+                    "timed out waiting for create-video task ID in Console "
+                    "SSE",
                 )
             if not line.startswith("data:"):
                 continue
@@ -1160,13 +1295,13 @@ def drive_console_chat(client: Any, base_url: str) -> str:
                 events.append(json.loads(data))
             except json.JSONDecodeError as exc:
                 raise AcceptanceError(
-                    f"invalid Console SSE JSON: {data[:300]}"
+                    f"invalid Console SSE JSON: {data[:300]}",
                 ) from exc
             task_ids = task_ids_from_sse(events)
             if len(task_ids) > 1:
                 raise AcceptanceError(
                     "expected one task ID in actual Console SSE, got "
-                    f"{sorted(task_ids)}"
+                    f"{sorted(task_ids)}",
                 )
             if len(task_ids) == 1:
                 return next(iter(task_ids))
@@ -1228,8 +1363,14 @@ def resolve_chat_uuid(client: Any, base_url: str) -> str:
 def visible_locator(root: Any, name: str, *, timeout: float = 90.0) -> Any:
     def locate() -> Any:
         candidates = [
-            root.get_by_role("button", name=re.compile(rf"^{re.escape(name)}$", re.I)),
-            root.get_by_role("radio", name=re.compile(rf"^{re.escape(name)}$", re.I)),
+            root.get_by_role(
+                "button",
+                name=re.compile(rf"^{re.escape(name)}$", re.I),
+            ),
+            root.get_by_role(
+                "radio",
+                name=re.compile(rf"^{re.escape(name)}$", re.I),
+            ),
             root.get_by_text(name, exact=True),
         ]
         for candidate in candidates:
@@ -1258,7 +1399,9 @@ def visible_locator(root: Any, name: str, *, timeout: float = 90.0) -> Any:
 def wait_task_card(page: Any, task_id: str, *, timeout: float = 90.0) -> None:
     def present() -> bool:
         locator = page.get_by_text(task_id, exact=False)
-        return any(locator.nth(index).is_visible() for index in range(locator.count()))
+        return any(
+            locator.nth(index).is_visible() for index in range(locator.count())
+        )
 
     try:
         wait_until(f"task card {task_id}", present, timeout=timeout)
@@ -1270,18 +1413,24 @@ def wait_task_card(page: Any, task_id: str, *, timeout: float = 90.0) -> None:
         try:
             selected_agent = page.evaluate(
                 """() => {
-                    const raw = sessionStorage.getItem('qwenpaw-agent-storage');
+                    const raw = sessionStorage.getItem(
+                        'qwenpaw-agent-storage');
                     return raw ? JSON.parse(raw)?.state?.selectedAgent : null;
-                }"""
+                }""",
             )
         except Exception:
             selected_agent = "<unavailable>"
         raise AcceptanceError(
-            f"{exc}; url={page.url}; selected_agent={selected_agent!r}; body={body!r}"
+            f"{exc}; url={page.url}; selected_agent={selected_agent!r}; "
+            f"body={body!r}",
         ) from exc
 
 
-def wait_creator_frame(context: Any, *, timeout: float = 60.0) -> tuple[Any, Any]:
+def wait_creator_frame(
+    context: Any,
+    *,
+    timeout: float = 60.0,
+) -> tuple[Any, Any]:
     def locate() -> Any:
         for page in context.pages:
             frames = page.locator('iframe[title="QwenPaw Creator"]')
@@ -1307,6 +1456,7 @@ def first_visible(locators: Iterable[Any]) -> Any:
     return None
 
 
+# pylint: disable-next=R0915
 def configure_model_in_creator(
     context: Any,
     *,
@@ -1329,9 +1479,12 @@ def configure_model_in_creator(
     card = wait_until(f"{card_name} model card", find_card, timeout=60.0)
     reuse = first_visible(
         [
-            card.get_by_role("checkbox", name=re.compile("Reuse LLM API Key", re.I)),
+            card.get_by_role(
+                "checkbox",
+                name=re.compile("Reuse LLM API Key", re.I),
+            ),
             card.get_by_label(re.compile("Reuse LLM API Key", re.I)),
-        ]
+        ],
     )
     if reuse is not None and reuse.is_checked():
         reuse.uncheck(force=True)
@@ -1343,7 +1496,7 @@ def configure_model_in_creator(
     }
     for label, value in fields.items():
         labels = card.locator("label.field-label").filter(
-            has_text=re.compile(rf"^\s*{re.escape(label)}\s*$", re.I)
+            has_text=re.compile(rf"^\s*{re.escape(label)}\s*$", re.I),
         )
         field = None
         for index in range(labels.count()):
@@ -1351,7 +1504,10 @@ def configure_model_in_creator(
             field = first_visible([container.locator("input")])
             if field is not None:
                 break
-        require(field is not None, f"missing {label!r} field in {card_name} card")
+        require(
+            field is not None,
+            f"missing {label!r} field in {card_name} card",
+        )
         field.fill(value)
 
     enabled = first_visible(
@@ -1361,7 +1517,7 @@ def configure_model_in_creator(
                 name=re.compile(rf"^{re.escape(card_name)}$", re.I),
             ),
             card.locator('label.desktop-toggle input[type="checkbox"]'),
-        ]
+        ],
     )
     # The Creator switch uses a visually hidden native input. Playwright's
     # visibility filter therefore excludes the input even though its label is
@@ -1371,13 +1527,22 @@ def configure_model_in_creator(
         toggle_label = first_visible([card.locator("label.desktop-toggle")])
         if toggle_label is not None:
             enabled = toggle_label.locator('input[type="checkbox"]')
-    hidden_toggle = enabled is not None and not enabled.is_visible() if enabled is not None else False
+    hidden_toggle = (
+        enabled is not None and not enabled.is_visible()
+        if enabled is not None
+        else False
+    )
     if enabled is None:
         try:
             card_debug = card.inner_text()[-2000:]
             card_html = card.evaluate("element => element.outerHTML")
-            checkbox_debug = frame.locator('input[type="checkbox"]').evaluate_all(
-                "els => els.map(e => ({aria:e.getAttribute('aria-label'), name:e.getAttribute('name'), checked:e.checked, html:e.outerHTML})).slice(0, 30)"
+            checkbox_debug = frame.locator(
+                'input[type="checkbox"]',
+            ).evaluate_all(
+                "els => els.map(e => "
+                "({aria:e.getAttribute('aria-label'), "
+                "name:e.getAttribute('name'), checked:e.checked, "
+                "html:e.outerHTML})).slice(0, 30)",
             )
             toggle_count = frame.locator("label.desktop-toggle").count()
         except Exception as exc:
@@ -1387,14 +1552,18 @@ def configure_model_in_creator(
             toggle_count = "<unavailable>"
         raise AcceptanceError(
             f"missing enable toggle for {card_name}; "
-            f"card_toggle_count={card.locator('label.desktop-toggle').count()!r}; "
-            f"card_checkbox_count={card.locator('input[type=checkbox]').count()!r}; "
-            f"frame_toggle_count={toggle_count!r}; frame_checkboxes={checkbox_debug!r}; "
-            f"card_text={card_debug!r}; card_html_head={card_html[:1800]!r}"
+            "card_toggle_count="
+            f"{card.locator('label.desktop-toggle').count()!r}; "
+            "card_checkbox_count="
+            f"{card.locator('input[type=checkbox]').count()!r}; "
+            f"frame_toggle_count={toggle_count!r}; "
+            f"frame_checkboxes={checkbox_debug!r}; "
+            f"card_text={card_debug!r}; card_html_head={card_html[:1800]!r}",
         )
     if not enabled.is_checked():
         with owner.expect_response(
-            lambda response: "/api/qwenpaw-creator/models/test" in response.url,
+            lambda response: "/api/qwenpaw-creator/models/test"
+            in response.url,
             timeout=60_000,
         ) as pending_test:
             if hidden_toggle:
@@ -1408,7 +1577,7 @@ def configure_model_in_creator(
         )
         owner.evaluate(
             "() => new Promise(resolve => requestAnimationFrame(() => "
-            "requestAnimationFrame(resolve)))"
+            "requestAnimationFrame(resolve)))",
         )
     require(
         enabled.is_checked(),
@@ -1426,12 +1595,12 @@ def configure_model_in_creator(
     # DashScope preset; that binding would correctly materialize the real
     # DashScope endpoint and bypass the fake server.  Preserve the UI setup
     # flow while removing only that binding from this test submission.
-    config_section = "image" if card_name == "Image Gen" else "video"
 
     def route_local_config(route: Any) -> None:
         request = route.request
         try:
             body = json.loads(request.post_data or "{}")
+
             # ModelConfigData may be wrapped by the frontend under a config
             # object, so walk the payload rather than assuming its root.
             def scrub_binding(value: Any) -> None:
@@ -1462,7 +1631,7 @@ def configure_model_in_creator(
         timeout=60_000,
     ) as pending_request:
         save.evaluate(
-            "element => (element.closest('button') || element).click()"
+            "element => (element.closest('button') || element).click()",
         )
     config_request = pending_request.value
     owner.unroute(
@@ -1470,7 +1639,8 @@ def configure_model_in_creator(
         route_local_config,
     )
     require(
-        config_request.headers.get("x-pawapp-setup-request") == setup_request_id,
+        config_request.headers.get("x-pawapp-setup-request")
+        == setup_request_id,
         "Creator model save omitted the task-linked setup request",
     )
     config_response = config_request.response()
@@ -1505,14 +1675,19 @@ def task_payload(client: Any, base_url: str, task_id: str) -> Any:
     response = api_request(
         client,
         "GET",
-        f"{base_url}/api/pawapps/{APP_ID}/workspaces/{WORKSPACE_ID}/tasks/{quote(task_id, safe='')}",
+        f"{base_url}/api/pawapps/{APP_ID}/workspaces/{WORKSPACE_ID}"
+        f"/tasks/{quote(task_id, safe='')}",
         headers=task_headers(),
     )
     return json_body(response)
 
 
 def assert_task_identity(
-    client: Any, base_url: str, task_id: str, observations: list[str], phase: str
+    client: Any,
+    base_url: str,
+    task_id: str,
+    observations: list[str],
+    phase: str,
 ) -> Any:
     payload = task_payload(client, base_url, task_id)
     encoded = compact_json(payload)
@@ -1525,7 +1700,10 @@ def assert_task_identity(
             value = item.get(key)
             if isinstance(value, str) and value == task_id:
                 explicit_ids.add(value)
-    require(explicit_ids == {task_id}, f"task identity mismatch during {phase}")
+    require(
+        explicit_ids == {task_id},
+        f"task identity mismatch during {phase}",
+    )
     observations.append(task_id)
     return payload
 
@@ -1578,7 +1756,8 @@ def persisted_chat_text(
     response = api_request(
         client,
         "GET",
-        f"{base_url}/api/chats/{quote(chat_id, safe='')}?include_app_owned=false",
+        f"{base_url}/api/chats/{quote(chat_id, safe='')}"
+        "?include_app_owned=false",
         headers={"X-Agent-Id": WORKSPACE_ID},
     )
     return text_content(json_body(response))
@@ -1598,10 +1777,13 @@ def return_to_chat(main_page: Any, context: Any, chat_url: str) -> None:
                 pass
     main_page.bring_to_front()
     main_page.goto(
-        require_loopback_url(chat_url), wait_until="domcontentloaded", timeout=60_000
+        require_loopback_url(chat_url),
+        wait_until="domcontentloaded",
+        timeout=60_000,
     )
 
 
+# pylint: disable-next=R0915
 def browser_acceptance(
     resources: Resources,
     client: Any,
@@ -1623,11 +1805,13 @@ def browser_acceptance(
             "--disable-component-update",
             "--disable-default-apps",
             "--disable-domain-reliability",
-            "--disable-features=MediaRouter,OptimizationHints,AutofillServerCommunication",
+            "--disable-features=MediaRouter,OptimizationHints,"
+            "AutofillServerCommunication",
             "--disable-sync",
             "--metrics-recording-only",
             "--no-first-run",
-            "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1, EXCLUDE localhost, EXCLUDE [::1]",
+            "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1, "
+            "EXCLUDE localhost, EXCLUDE [::1]",
         ],
     )
     resources.browser_context = resources.browser.new_context(
@@ -1637,7 +1821,7 @@ def browser_acceptance(
     )
     context = resources.browser_context
     context.add_init_script(
-        "try { localStorage.setItem('language', 'en'); } catch (_) {}"
+        "try { localStorage.setItem('language', 'en'); } catch (_) {}",
     )
     blocked_requests: list[str] = []
 
@@ -1663,14 +1847,20 @@ def browser_acceptance(
     context.route("**/*", route_request)
     downloads: list[Any] = []
     page = context.new_page()
-    page.on("download", lambda download: downloads.append(download))
+    page.on("download", downloads.append)
     chat_url = f"{base_url}/chat/{chat_id}"
     page.goto(
-        require_loopback_url(chat_url), wait_until="domcontentloaded", timeout=60_000
+        require_loopback_url(chat_url),
+        wait_until="domcontentloaded",
+        timeout=60_000,
     )
     wait_task_card(page, task_id)
     assert_task_identity(
-        client, base_url, task_id, observations, "initial Console render"
+        client,
+        base_url,
+        task_id,
+        observations,
+        "initial Console render",
     )
 
     require(
@@ -1685,7 +1875,8 @@ def browser_acceptance(
         if task_status(latest_image_setup_task) != "waiting_for_setup":
             return None
         if not isinstance(
-            find_value(latest_image_setup_task, ("setup_request_id",)), str
+            find_value(latest_image_setup_task, ("setup_request_id",)),
+            str,
         ):
             return None
         return latest_image_setup_task
@@ -1699,7 +1890,7 @@ def browser_acceptance(
         )
     except AcceptanceError as exc:
         raise AcceptanceError(
-            f"{exc}; task={compact_json(latest_image_setup_task)}"
+            f"{exc}; task={compact_json(latest_image_setup_task)}",
         ) from exc
     require(
         project_id_from_task(image_setup_task) is not None,
@@ -1723,7 +1914,13 @@ def browser_acceptance(
     )
     return_to_chat(page, context, chat_url)
     wait_task_card(page, task_id)
-    assert_task_identity(client, base_url, task_id, observations, "image setup")
+    assert_task_identity(
+        client,
+        base_url,
+        task_id,
+        observations,
+        "image setup",
+    )
 
     approve = visible_locator(page, "Approve once", timeout=120.0)
     image_approval_task = task_payload(client, base_url, task_id)
@@ -1765,7 +1962,13 @@ def browser_acceptance(
         "image approval was replaced before provider dispatch: "
         f"approved={image_approval_request_id} current={current_request_id}",
     )
-    assert_task_identity(client, base_url, task_id, observations, "image approval")
+    assert_task_identity(
+        client,
+        base_url,
+        task_id,
+        observations,
+        "image approval",
+    )
 
     video_setup_task = wait_until(
         "task waiting for video setup",
@@ -1806,7 +2009,13 @@ def browser_acceptance(
     )
     return_to_chat(page, context, chat_url)
     wait_task_card(page, task_id)
-    assert_task_identity(client, base_url, task_id, observations, "video setup")
+    assert_task_identity(
+        client,
+        base_url,
+        task_id,
+        observations,
+        "video setup",
+    )
 
     visible_locator(page, "Approve once", timeout=120.0)
     require(
@@ -1814,7 +2023,11 @@ def browser_acceptance(
         "video submitted before video approval",
     )
     before_handoff = assert_task_identity(
-        client, base_url, task_id, observations, "pre-handoff approval"
+        client,
+        base_url,
+        task_id,
+        observations,
+        "pre-handoff approval",
     )
     video_input_request = find_value(before_handoff, ("input_request",))
     require(
@@ -1833,14 +2046,22 @@ def browser_acceptance(
         return match.group(1) if match else None
 
     opened_project_id = wait_until(
-        "Creator project handoff route", project_route, timeout=60.0
+        "Creator project handoff route",
+        project_route,
+        timeout=60.0,
     )
     if expected_project_id is not None:
         require(
             opened_project_id == expected_project_id,
             "Open App routed to a different project",
         )
-    assert_task_identity(client, base_url, task_id, observations, "Creator handoff")
+    assert_task_identity(
+        client,
+        base_url,
+        task_id,
+        observations,
+        "Creator handoff",
+    )
 
     return_to_chat(page, context, chat_url)
     page.reload(wait_until="domcontentloaded", timeout=60_000)
@@ -1850,7 +2071,13 @@ def browser_acceptance(
         "video.submit" not in acceptance_event_names(event_log),
         "video submitted across approval reload",
     )
-    assert_task_identity(client, base_url, task_id, observations, "approval reload")
+    assert_task_identity(
+        client,
+        base_url,
+        task_id,
+        observations,
+        "approval reload",
+    )
     approve.click()
     visible_locator(page, "Submit answer").click()
 
@@ -1901,7 +2128,7 @@ def browser_acceptance(
         )
     except AcceptanceError as exc:
         raise AcceptanceError(
-            f"{exc}; task={compact_json(latest_final_task)}"
+            f"{exc}; task={compact_json(latest_final_task)}",
         ) from exc
     require(
         task_status(final_task) in SUCCESS_STATUSES,
@@ -1911,7 +2138,8 @@ def browser_acceptance(
     continuation_marker = f"PAWAPP_CONTINUATION task_id={task_id}"
     wait_until(
         "persisted PawApp continuation in originating chat",
-        lambda: continuation_marker in persisted_chat_text(client, base_url, chat_id),
+        lambda: continuation_marker
+        in persisted_chat_text(client, base_url, chat_id),
         timeout=120.0,
         interval=0.5,
     )
@@ -1925,17 +2153,21 @@ def browser_acceptance(
 
     refs = artifact_refs(final_task)
     require(
-        len(refs) == 1, f"expected exactly one published artifact, got {sorted(refs)}"
+        len(refs) == 1,
+        f"expected exactly one published artifact, got {sorted(refs)}",
     )
     download_button = visible_locator(page, "Download", timeout=120.0)
     with page.expect_download(timeout=60_000) as download_info:
         download_button.click()
     download = download_info.value
     wait_until(
-        "exactly one browser download", lambda: len(downloads) == 1, timeout=10.0
+        "exactly one browser download",
+        lambda: len(downloads) == 1,
+        timeout=10.0,
     )
     require(
-        download.failure() is None, f"browser download failed: {download.failure()}"
+        download.failure() is None,
+        f"browser download failed: {download.failure()}",
     )
     download_path = download_dir / "creator-acceptance-download.mp4"
     download.save_as(str(download_path))
@@ -1950,6 +2182,7 @@ def browser_acceptance(
     return download_path, final_task
 
 
+# pylint: disable-next=R0915
 def run_acceptance(resources: Resources) -> dict[str, Any]:
     repo_root = Path(__file__).resolve().parents[5]
     plugin_root = Path(__file__).resolve().parents[2]
@@ -1958,7 +2191,8 @@ def run_acceptance(resources: Resources) -> dict[str, Any]:
         f"invalid repository root: {repo_root}",
     )
     require(
-        (plugin_root / "plugin.json").is_file(), "Creator plugin manifest is missing"
+        (plugin_root / "plugin.json").is_file(),
+        "Creator plugin manifest is missing",
     )
     require(
         (plugin_root / "ui" / "dist" / "index.js").is_file(),
@@ -1971,7 +2205,7 @@ def run_acceptance(resources: Resources) -> dict[str, Any]:
     sandbox_exec = find_executable("sandbox-exec", "/usr/bin/sandbox-exec")
 
     resources.temp_root = Path(
-        tempfile.mkdtemp(prefix="qwenpaw-fake-video-acceptance-")
+        tempfile.mkdtemp(prefix="qwenpaw-fake-video-acceptance-"),
     )
     resources.temp_root.chmod(0o700)
     creator_data = resources.temp_root / "creator-data"
@@ -1983,7 +2217,10 @@ def run_acceptance(resources: Resources) -> dict[str, Any]:
     event_log = creator_data / "acceptance-events.jsonl"
     event_log.touch(mode=0o600)
     source_hash, source_duration = generate_deterministic_video(
-        ffmpeg, ffprobe, source_video, comparison_video
+        ffmpeg,
+        ffprobe,
+        source_video,
+        comparison_video,
     )
 
     data_root_resolved = creator_data.resolve()
@@ -2000,7 +2237,8 @@ def run_acceptance(resources: Resources) -> dict[str, Any]:
     fake_state = FakeState()
     resources.fake_state = fake_state
     resources.fake_server = ThreadingHTTPServer(
-        ("127.0.0.1", 0), make_fake_handler(fake_state)
+        ("127.0.0.1", 0),
+        make_fake_handler(fake_state),
     )
     resources.fake_server.daemon_threads = True
     fake_port = int(resources.fake_server.server_address[1])
@@ -2015,7 +2253,10 @@ def run_acceptance(resources: Resources) -> dict[str, Any]:
     host_port = reserve_loopback_port()
     base_url = require_loopback_url(f"http://127.0.0.1:{host_port}")
     profile_path = resources.temp_root / "host-loopback.sb"
-    profile_path.write_text(sandbox_profile(host_port, fake_port), encoding="utf-8")
+    profile_path.write_text(
+        sandbox_profile(host_port, fake_port),
+        encoding="utf-8",
+    )
     environment = host_environment(
         repo_root,
         resources.temp_root,
@@ -2027,7 +2268,11 @@ def run_acceptance(resources: Resources) -> dict[str, Any]:
         jq,
     )
     host_log_path = resources.temp_root / "host.log"
+    # The resource owner closes this stream after stopping its subprocess.
+    # pylint: disable-next=consider-using-with
     resources.host_log = host_log_path.open("wb")
+    # The resource owner stops and waits for this process during cleanup.
+    # pylint: disable-next=consider-using-with
     resources.host = subprocess.Popen(
         [
             str(sandbox_exec),
@@ -2065,11 +2310,16 @@ def run_acceptance(resources: Resources) -> dict[str, Any]:
         require(resources.host is not None, "Host process was not started")
         if resources.host.poll() is not None:
             resources.host_log.flush()
-            tail = host_log_path.read_text(encoding="utf-8", errors="replace")[-3000:]
+            tail = host_log_path.read_text(encoding="utf-8", errors="replace")[
+                -3000:
+            ]
             raise AcceptanceError(f"Host exited before readiness: {tail}")
         try:
             response = api_request(
-                client, "GET", f"{base_url}/api/healthz", timeout=2.0
+                client,
+                "GET",
+                f"{base_url}/api/healthz",
+                timeout=2.0,
             )
             return response.status_code == 200
         except Exception:
@@ -2126,18 +2376,21 @@ def run_acceptance(resources: Resources) -> dict[str, Any]:
     install_payload = json_body(install_response)
     loaded = find_value(install_payload, ("loaded",))
     activation_required = find_value(install_payload, ("activation_required",))
-    require(loaded is False, f"Creator installation was not inert: loaded={loaded!r}")
+    require(
+        loaded is False,
+        f"Creator installation was not inert: loaded={loaded!r}",
+    )
     require(
         activation_required is True,
         "Creator installation did not require explicit activation",
     )
     require(
-        acceptance_event_names(event_log) == [],
+        not acceptance_event_names(event_log),
         "Creator runtime started during inert installation",
     )
 
     status_payload = json_body(
-        api_request(client, "GET", f"{base_url}/api/plugins/{APP_ID}/status")
+        api_request(client, "GET", f"{base_url}/api/plugins/{APP_ID}/status"),
     )
     pre_active = find_value(status_payload, ("active", "activated", "loaded"))
     require(
@@ -2169,9 +2422,11 @@ def run_acceptance(resources: Resources) -> dict[str, Any]:
         },
     )
 
-    grants_url = f"{base_url}/api/pawapps/workspaces/{WORKSPACE_ID}/task-grants"
+    grants_url = (
+        f"{base_url}/api/pawapps/workspaces/{WORKSPACE_ID}/task-grants"
+    )
     initial_grants = json_body(
-        api_request(client, "GET", grants_url, headers=task_headers())
+        api_request(client, "GET", grants_url, headers=task_headers()),
     )
     serialized_initial = compact_json(initial_grants)
     for private_action in PRIVATE_ACTIONS:
@@ -2189,10 +2444,16 @@ def run_acceptance(resources: Resources) -> dict[str, Any]:
         "PUT",
         f"{grants_url}/actions/{APP_ID}/{ACTION_ID}",
         expected=(200, 201),
-        json_data={"expected_revision": revision, "enabled": True, "input_values": {}},
+        json_data={
+            "expected_revision": revision,
+            "enabled": True,
+            "input_values": {},
+        },
         headers=task_headers(),
     )
-    granted = json_body(api_request(client, "GET", grants_url, headers=task_headers()))
+    granted = json_body(
+        api_request(client, "GET", grants_url, headers=task_headers()),
+    )
     serialized_granted = compact_json(granted)
     for private_action in PRIVATE_ACTIONS:
         require(
@@ -2216,7 +2477,8 @@ def run_acceptance(resources: Resources) -> dict[str, Any]:
         response = api_request(
             client,
             "GET",
-            f"{base_url}/api/pawapps/{APP_ID}/workspaces/{WORKSPACE_ID}/actions/{private_action}",
+            f"{base_url}/api/pawapps/{APP_ID}/workspaces/{WORKSPACE_ID}"
+            f"/actions/{private_action}",
             expected=(404,),
             headers=task_headers(),
         )
@@ -2229,7 +2491,13 @@ def run_acceptance(resources: Resources) -> dict[str, Any]:
     task_id = drive_console_chat(client, base_url)
     chat_id = resolve_chat_uuid(client, base_url)
     observations: list[str] = [task_id]
-    assert_task_identity(client, base_url, task_id, observations, "SSE delegation")
+    assert_task_identity(
+        client,
+        base_url,
+        task_id,
+        observations,
+        "SSE delegation",
+    )
 
     download_path, final_task = browser_acceptance(
         resources,
@@ -2251,9 +2519,10 @@ def run_acceptance(resources: Resources) -> dict[str, Any]:
         api_request(
             client,
             "GET",
-            f"{base_url}/api/pawapps/{APP_ID}/workspaces/{WORKSPACE_ID}/tasks/{quote(task_id, safe='')}/events",
+            f"{base_url}/api/pawapps/{APP_ID}/workspaces/{WORKSPACE_ID}"
+            f"/tasks/{quote(task_id, safe='')}/events",
             headers=task_headers(),
-        )
+        ),
     )
     require(task_events is not None, "task event stream was unavailable")
     final_events = acceptance_event_names(event_log)
@@ -2266,12 +2535,16 @@ def run_acceptance(resources: Resources) -> dict[str, Any]:
         "expected exactly one image generation",
     )
     require(
-        final_events.count("video.submit") == 1, "expected exactly one video submission"
+        final_events.count("video.submit") == 1,
+        "expected exactly one video submission",
     )
     refs = artifact_refs(final_task)
     require(len(refs) == 1, "expected exactly one canonical artifact")
     digests = artifact_digests(final_task)
-    require(set(digests) == refs, "canonical artifact did not expose one valid digest")
+    require(
+        set(digests) == refs,
+        "canonical artifact did not expose one valid digest",
+    )
     artifact_digest = digests[next(iter(refs))]
 
     downloaded_hash = sha256_file(download_path)
@@ -2282,7 +2555,8 @@ def run_acceptance(resources: Resources) -> dict[str, Any]:
     )
     require(
         not fake_state.unknown_requests,
-        f"fake server received unknown requests: {fake_state.unknown_requests}",
+        "fake server received unknown requests: "
+        f"{fake_state.unknown_requests}",
     )
 
     return {

@@ -60,7 +60,9 @@ describe("Creator plugin handoff", () => {
     const view = render(React.createElement(routes[0].component));
     const frame = view.getByTitle("QwenPaw Creator") as HTMLIFrameElement;
     const postMessage = vi.spyOn(frame.contentWindow!, "postMessage");
-    await waitFor(() => expect(resolveHandoff).toHaveBeenCalledWith("handoff-1"));
+    await waitFor(() =>
+      expect(resolveHandoff).toHaveBeenCalledWith("handoff-1"),
+    );
 
     act(() => {
       window.dispatchEvent(

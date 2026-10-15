@@ -558,7 +558,9 @@ def test_completed_storyboard_ignores_video_model_changes() -> None:
     project = _project()
     _add_element(project, _element("elem:one"))
     node_id = "storyboard:elem:one"
-    fingerprint = derive_work_graph(project).by_id[node_id].dispatch_fingerprint
+    fingerprint = (
+        derive_work_graph(project).by_id[node_id].dispatch_fingerprint
+    )
     baseline_scope = dispatch_model_scope(
         "storyboard",
         ("image-a", "video-a"),

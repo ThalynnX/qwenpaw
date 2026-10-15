@@ -22,6 +22,7 @@ from .contracts import (
     TaskScope,
     TaskStoreError,
 )
+from .binding import ActionRegistration
 
 
 class TaskGrant(Contract):
@@ -79,8 +80,7 @@ def _capability_kind(action: ActionDescriptor) -> tuple[str, str]:
     permissions = tuple(item.casefold() for item in action.permissions)
     effects = tuple(item.casefold() for item in action.effects)
     if any(
-        permission.endswith(".generate")
-        or ".generate." in permission
+        permission.endswith(".generate") or ".generate." in permission
         for permission in permissions
     ):
         return "media_generation", "generation"
@@ -116,7 +116,7 @@ def _capability_fields(item):
 
 
 def build_task_capabilities(
-    actions: Iterable[ActionDescriptor],
+    actions: Iterable[ActionDescriptor | ActionRegistration],
 ) -> tuple[TaskCapability, ...]:
     """Build public policy bundles without changing descriptor digests."""
 
@@ -130,9 +130,13 @@ def build_task_capabilities(
 
     capabilities = []
     for (app_id, capability_id), members in sorted(grouped.items()):
-        first_action, _, declared_label, declared_summary, declared_risk = (
-            members[0]
-        )
+        (
+            first_action,
+            _,
+            declared_label,
+            declared_summary,
+            declared_risk,
+        ) = members[0]
         _, inferred_risk = _capability_kind(first_action)
         risk = declared_risk or inferred_risk
         if capability_id in _CAPABILITY_LABELS:
@@ -166,7 +170,7 @@ def build_task_capabilities(
                 label=label,
                 summary=summary,
                 action_ids=tuple(
-                    sorted(action.action_id for action, _, _, _, _ in members)
+                    sorted(action.action_id for action, _, _, _, _ in members),
                 ),
                 permissions=permissions,
                 effects=effects,

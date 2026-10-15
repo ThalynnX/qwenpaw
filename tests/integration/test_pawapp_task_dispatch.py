@@ -42,29 +42,34 @@ host = host_fixture
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("intent", ["finish", "clarify", "pause"])
+# pylint: disable-next=R0915
 async def test_native_console_uses_durable_existing_session(
-    host, engine, intent
+    host,
+    engine,
+    intent,
 ):
     package = ModuleType("native_data_under_test")
     package.__path__ = [
         str(
             Path(__file__).resolve().parents[2]
-            / "plugins/apps/qwenpaw-data/backend"
-        )
+            / "plugins/apps/qwenpaw-data/backend",
+        ),
     ]
     sys.modules[package.__name__] = package
     direct = importlib.import_module(package.__name__ + ".direct_tasks")
     gateway_type = importlib.import_module(
-        package.__name__ + ".engine_gateway"
+        package.__name__ + ".engine_gateway",
     ).EngineGateway
     gateway = gateway_type(
-        SimpleNamespace(is_external=False, base_url=engine.base), TOKEN
+        SimpleNamespace(is_external=False, base_url=engine.base),
+        TOKEN,
     )
     action = BRIDGE.data_session_action_descriptor()
     host.registrations[(action.app_id, action.action_id)] = ActionRegistration(
         action=action,
         factory=lambda: BRIDGE.DataTaskAdapter(
-            engine.endpoint, executor_id="qwenpaw-data.engine"
+            engine.endpoint,
+            executor_id="qwenpaw-data.engine",
         ),
         settings_entry="/apps/qwenpaw-data",
     )
@@ -76,7 +81,7 @@ async def test_native_console_uses_durable_existing_session(
         expected_revision=0,
     )
     workspace = await host.app.state.pawapp_task_origins.manager.get_agent(
-        "sales"
+        "sales",
     )
 
     async def create_chat(chat):
@@ -91,10 +96,17 @@ async def test_native_console_uses_durable_existing_session(
 
     @host.app.post("/api/native-command/{session_id}/{run_id}/{kind}")
     async def command(
-        request: Request, session_id: str, run_id: str, kind: str
+        request: Request,
+        session_id: str,
+        run_id: str,
+        kind: str,
     ):
         return await direct.command_console_chat(
-            request, gateway, session_id, run_id, kind
+            request,
+            gateway,
+            session_id,
+            run_id,
+            kind,
         )
 
     await gateway.start()
@@ -113,7 +125,9 @@ async def test_native_console_uses_durable_existing_session(
         }
         headers = {"X-Agent-Id": "sales", "X-Request-Id": "native-first"}
         legacy = await gateway.json(
-            "POST", "/api/v1/sessions", body={"title": "Legacy"}
+            "POST",
+            "/api/v1/sessions",
+            body={"title": "Legacy"},
         )
         denied = await host.client.post(
             "/api/native-console",
@@ -124,7 +138,9 @@ async def test_native_console_uses_durable_existing_session(
         assert "start a new session" in denied.text
         assert engine.count_runs() == 0
         first = await host.client.post(
-            "/api/native-console", json=body, headers=headers
+            "/api/native-console",
+            json=body,
+            headers=headers,
         )
         assert first.status_code == 200, first.text
         assert first.json()["chat"]["session_id"] == session_id
@@ -149,12 +165,13 @@ async def test_native_console_uses_durable_existing_session(
                         {
                             "question": "Which period?",
                             "selected_options": ["Q1"],
-                        }
+                        },
                     ],
                 },
             }
             response = await host.client.post(
-                f"/api/native-command/{session_id}/{first.json()['chat']['id']}/{kind}",
+                f"/api/native-command/{session_id}/"
+                f"{first.json()['chat']['id']}/{kind}",
                 json=command_body,
                 headers=headers,
             )
@@ -169,7 +186,9 @@ async def test_native_console_uses_durable_existing_session(
         assert task.handle.origin.engagement == "direct"
         assert task.handle.origin.return_session_ref is None
         again = await host.client.post(
-            "/api/native-console", json=body, headers=headers
+            "/api/native-console",
+            json=body,
+            headers=headers,
         )
         assert again.json()["task_id"] == task.handle.task_id
         assert engine.count_runs() == 1
@@ -180,7 +199,9 @@ async def test_native_console_uses_durable_existing_session(
         )
         assert changed.status_code == 409
         invalid = await host.client.post(
-            "/api/native-console", content="{", headers=headers
+            "/api/native-console",
+            content="{",
+            headers=headers,
         )
         assert invalid.status_code == 422
     finally:

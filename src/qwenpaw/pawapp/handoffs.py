@@ -414,6 +414,7 @@ class HandoffStore:
                 )
                 return "corrupt", None, None
             if (
+                # pylint: disable-next=R0916
                 content_digest(request.model_dump(mode="json"))
                 != row["request_digest"]
                 or request.handoff_id != handoff_id

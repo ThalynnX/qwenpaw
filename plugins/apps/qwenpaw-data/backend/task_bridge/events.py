@@ -107,6 +107,7 @@ class TextProjection:
             if message.included and message.blocks
         )
 
+    # pylint: disable-next=R0915
     def apply(  # pylint: disable=too-many-branches
         self,
         frame: dict[str, Any],
@@ -194,6 +195,7 @@ class TextProjection:
             size_bytes = artifact.get("size_bytes")
             digest = artifact.get("digest")
             if (
+                # pylint: disable-next=R0916
                 not isinstance(source_id, str)
                 or not source_id
                 or len(source_id) > 256
@@ -231,12 +233,12 @@ class TextProjection:
             if artifact.get("presentation") is not None:
                 try:
                     presentation = ArtifactPresentation.model_validate(
-                        artifact["presentation"]
+                        artifact["presentation"],
                     )
                 except ValueError:
                     raise _invalid() from None
                 detail["artifact"]["presentation"] = presentation.model_dump(
-                    mode="json"
+                    mode="json",
                 )
         elif kind not in {
             "error",

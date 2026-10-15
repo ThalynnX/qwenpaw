@@ -32,7 +32,7 @@ ACCEPTANCE_EVENT_LOG_ENV = "CREATOR_ACCEPTANCE_EVENT_LOG"
 _PROJECT_PATTERN = re.compile(r"只处理 Project `([^`]+)`")
 _PNG_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwC"
-    "AAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    "AAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
 )
 
 
@@ -190,7 +190,9 @@ def _project_id(messages: Sequence[Mapping[str, Any]]) -> str:
         if message.get("role") != "system":
             continue
         content = message.get("content")
-        if isinstance(content, str) and (match := _PROJECT_PATTERN.search(content)):
+        if isinstance(content, str) and (
+            match := _PROJECT_PATTERN.search(content)
+        ):
             return match.group(1)
     raise RuntimeError("acceptance Creator Agent cannot resolve project id")
 
@@ -215,7 +217,11 @@ def _node_succeeded(
     return False
 
 
-def _tool_turn(call_id: str, name: str, arguments: dict[str, Any]) -> AgentModelTurn:
+def _tool_turn(
+    call_id: str,
+    name: str,
+    arguments: dict[str, Any],
+) -> AgentModelTurn:
     return AgentModelTurn(
         tool_calls=(
             AgentToolCall(
@@ -300,7 +306,8 @@ def _acceptance_agent(recorder: _EventRecorder) -> CallbackAgentChatClient:
                     {
                         "op": "add",
                         "path": (
-                            "/timelines/items/timeline:main/elements_by_id/shot-1"
+                            "/timelines/items/timeline:main/"
+                            "elements_by_id/shot-1"
                         ),
                         "value": {
                             "element_id": "shot-1",
@@ -340,21 +347,31 @@ def _required_local_file(value: str, *, label: str, root: Path) -> Path:
     if not path.is_absolute():
         raise RuntimeError(f"{label} must be absolute")
     path = path.resolve(strict=True)
-    if not path.is_relative_to(root) or path.is_symlink() or not path.is_file():
-        raise RuntimeError(f"{label} must be a regular file inside Creator data")
+    if (
+        not path.is_relative_to(root)
+        or path.is_symlink()
+        or not path.is_file()
+    ):
+        raise RuntimeError(
+            f"{label} must be a regular file inside Creator data",
+        )
     return path
 
 
 def build_acceptance_runtime() -> AcceptanceRuntimeComponents:
     if os.environ.get(ACCEPTANCE_RUNTIME_ENV) != "1":
-        raise RuntimeError("local acceptance runtime was not explicitly enabled")
+        raise RuntimeError(
+            "local acceptance runtime was not explicitly enabled",
+        )
     root = require_creator_data_root().resolve()
     video_path = _required_local_file(
         os.environ.get(ACCEPTANCE_VIDEO_PATH_ENV, ""),
         label=ACCEPTANCE_VIDEO_PATH_ENV,
         root=root,
     )
-    event_path = Path(os.environ.get(ACCEPTANCE_EVENT_LOG_ENV, "")).expanduser()
+    event_path = Path(
+        os.environ.get(ACCEPTANCE_EVENT_LOG_ENV, ""),
+    ).expanduser()
     if not event_path.is_absolute():
         raise RuntimeError(f"{ACCEPTANCE_EVENT_LOG_ENV} must be absolute")
     event_path = event_path.resolve(strict=False)

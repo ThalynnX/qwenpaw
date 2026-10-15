@@ -108,7 +108,8 @@ def test_project_create_replays_concurrent_identical_request(
     run_scenario,
 ):
     payload = _create_payload(
-        "project-create-concurrent-1", "Concurrent replay"
+        "project-create-concurrent-1",
+        "Concurrent replay",
     )
 
     async def scenario(client):

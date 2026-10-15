@@ -314,11 +314,7 @@ export default function HomePage() {
     if (rawView !== null) {
       setView(rawView === "projects" ? "projects" : "create");
     }
-    if (
-      rawSetup === "llm" ||
-      rawSetup === "image" ||
-      rawSetup === "video"
-    ) {
+    if (rawSetup === "llm" || rawSetup === "image" || rawSetup === "video") {
       setModelSetup({
         purpose: rawSetup,
         requestId: searchParams.get("setupRequest") || undefined,

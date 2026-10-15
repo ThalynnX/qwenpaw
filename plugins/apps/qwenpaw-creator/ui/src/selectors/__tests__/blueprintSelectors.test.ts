@@ -19,9 +19,8 @@ function singleTimeline(project: ProjectDocument): ProjectDocument {
 
 function canonicalFilmProject(): ProjectDocument {
   const project = singleTimeline(cloneProject());
-  const slot = project.assets.artifact_slots_by_id[
-    "timeline:timeline:main:render"
-  ];
+  const slot =
+    project.assets.artifact_slots_by_id["timeline:timeline:main:render"];
   slot.kind = "final_video";
   project.assets.artifact_versions_by_id["final-v1"].kind = "final_video";
   return project;
@@ -64,9 +63,9 @@ describe("selectFinalFilmVersionId", () => {
   });
 
   it("ignores history snapshots when counting live timelines", () => {
-    expect(
-      selectFinalFilmVersionId(withSnapshot(canonicalFilmProject())),
-    ).toBe("final-v1");
+    expect(selectFinalFilmVersionId(withSnapshot(canonicalFilmProject()))).toBe(
+      "final-v1",
+    );
   });
 
   it("rejects a missing selected version", () => {

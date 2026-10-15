@@ -244,7 +244,7 @@ class ProjectCreationService:
             or project_snapshot_id != expected_snapshot_id
         ):
             raise StorageIntegrityError(
-                "Project Runtime 创建记录与确定性身份不一致"
+                "Project Runtime 创建记录与确定性身份不一致",
             )
         try:
             response = ProjectCreateResponse.model_validate(stored_response)
@@ -330,6 +330,7 @@ class ProjectCreationService:
             f"initial-goal:{request.client_request_id}"
         )
         if (
+            # pylint: disable-next=R0916
             goal.project_id != response.project_id
             or goal.creator_session_id != response.creator_session_id
             or goal.conversation_id != response.conversation_id
@@ -544,7 +545,7 @@ class ProjectCreationService:
             raise StorageIntegrityError(str(exc)) from exc
         if len(holder) != 1:
             raise StorageIntegrityError(
-                "Project Runtime 未随 Project 原子创建"
+                "Project Runtime 未随 Project 原子创建",
             )
         try:
             self.poller.note_commit(snapshot)

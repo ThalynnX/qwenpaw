@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Pylint all-files aliases isolated plugin/local modules to third-party names.
+# pylint: disable=no-name-in-module
 """QwenPaw-Data PawApp backend entry point."""
 
 from __future__ import annotations
@@ -365,10 +367,12 @@ app.task_action(
         settings_entry="/apps/qwenpaw-data",
         capability_id="data_analysis",
         capability_label="Analyze data",
-        capability_summary="Run governed analysis against an approved data source.",
+        capability_summary=(
+            "Run governed analysis against an approved data source."
+        ),
         capability_risk="analysis",
         experience=data_task_experience("analyze-session"),
-    )
+    ),
 )
 
 _bridge_store = BridgeSessionStore(path=APP_DATA_DIR / "bridge_sessions.json")
@@ -879,6 +883,8 @@ async def context_proxy(path: str, request: Request) -> Any:
 )
 async def engine_proxy(path: str, request: Request) -> Any:
     """Forward session/chat traffic to the analysis engine sidecar."""
+    # This bridge owns the gateway and shares its path normalization.
+    # pylint: disable-next=protected-access
     normalized = _engine_gateway._upstream_path(path).rstrip("/")
     if request.method == "POST" and normalized == "/api/v1/console/chat":
         return await dispatch_console_chat(request, _engine_gateway)
@@ -903,7 +909,8 @@ async def engine_proxy(path: str, request: Request) -> Any:
             "cancel" if command_path[3] == "stop" else "answer",
         )
     if request.method == "POST" and re.fullmatch(
-        r"/api/v1/sessions/[^/]+/chats", normalized
+        r"/api/v1/sessions/[^/]+/chats",
+        normalized,
     ):
         raise HTTPException(409, "Use the governed Console chat endpoint")
     scope = await console_scope(request)

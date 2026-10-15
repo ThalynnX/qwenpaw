@@ -229,7 +229,7 @@ class ArtifactStore:
                 os.fsync(stream.fileno())
             try:
                 os.link(temporary, blob)
-            except FileExistsError:
+            except FileExistsError as exc:
                 try:
                     existing = self._read_blob(blob)
                 except OSError:
@@ -238,7 +238,7 @@ class ArtifactStore:
                     ) from None
                 actual = "sha256:" + hashlib.sha256(existing).hexdigest()
                 if len(existing) != len(content) or actual != digest:
-                    raise TaskStoreError("artifact_blob_conflict")
+                    raise TaskStoreError("artifact_blob_conflict") from exc
         finally:
             try:
                 temporary.unlink()
@@ -469,6 +469,7 @@ class ArtifactStore:
             raw = base64.urlsafe_b64decode(padded.encode())
             value = json.loads(raw.decode())
             if (
+                # pylint: disable-next=R0916
                 not isinstance(value, list)
                 or len(value) != 3
                 or isinstance(value[0], bool)

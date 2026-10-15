@@ -36,9 +36,6 @@ from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from pydantic import Field
 
-if TYPE_CHECKING:
-    from .image_execution import ImageProvider
-
 import httpx
 
 from domain.enums import (
@@ -143,6 +140,9 @@ from .secure_video_stream import (
     PeerAddressMismatchError,
     materialize_r2v_video,
 )
+
+if TYPE_CHECKING:
+    from .image_execution import ImageProvider
 
 _MAX_VIDEO_BYTES = 256 * 1024 * 1024
 _SUBMIT_TIMEOUT_SECONDS = 180.0

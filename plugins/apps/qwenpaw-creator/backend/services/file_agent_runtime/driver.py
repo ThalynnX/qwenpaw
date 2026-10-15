@@ -591,10 +591,7 @@ def _specialist_waiting_review_summary(
             "审阅通过后由主 Agent 修复必要字段，Runtime 会根据 Element 状态"
             "自动继续调度，无需重新委派。"
         )
-    return (
-        f"{target} 的产物已生成，后续步骤尚未开始。请先完成审阅；"
-        "审阅通过后，主线需重新委派同一目标以继续后续步骤。"
-    )
+    return f"{target} 的产物已生成，后续步骤尚未开始。请先完成审阅；" "审阅通过后，主线需重新委派同一目标以继续后续步骤。"
 
 
 def _timelines_have_plan(project: Any, target_refs: list[str]) -> bool:
@@ -1452,7 +1449,8 @@ class _LoopResult:
 class _RunFence(Protocol):
     """Liveness gate asserted at model/tool/commit boundaries."""
 
-    def assert_alive(self) -> None: ...
+    def assert_alive(self) -> None:
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -3926,11 +3924,8 @@ class FileCreatorAgentRuntime:
                     )
                     if pending:
                         self._assert_epoch(project_id, run_id, epoch)
-                        summary = (
-                            "当前制作尚未开始。"
-                            + _agent_waiting_review_summary(
-                                "这项制作请求正在等待相关内容的审阅，请先完成审阅。",
-                            )
+                        summary = "当前制作尚未开始。" + _agent_waiting_review_summary(
+                            "这项制作请求正在等待相关内容的审阅，请先完成审阅。",
                         )
                         assistant_message_id = f"message-{uuid4().hex}"
                         delta_index = 0
@@ -4357,7 +4352,9 @@ class FileCreatorAgentRuntime:
             "status": (
                 "COMPLETED"
                 if completed == len(items) and items
-                else "PARTIAL" if completed else "BLOCKED"
+                else "PARTIAL"
+                if completed
+                else "BLOCKED"
             ),
             "items": items,
             "summary": summarize_workgraph_results(items),
@@ -5848,8 +5845,7 @@ class FileCreatorAgentRuntime:
                 )
             elif execution_mode == "delegated":
                 user_text += (
-                    "委派模式：不要中途询问方向或确认，自主完成 edit_plan "
-                    "与剪辑，决策写进 edit_plan 即可。"
+                    "委派模式：不要中途询问方向或确认，自主完成 edit_plan " "与剪辑，决策写进 edit_plan 即可。"
                 )
             elif execution_mode == "fine_tuning":
                 user_text += (
@@ -6523,8 +6519,7 @@ class FileCreatorAgentRuntime:
                             {
                                 "type": "text",
                                 "text": (
-                                    "视频帧图注入失败，请基于工具返回的"
-                                    f"摘要继续或缩小窗口重试：{exc}"
+                                    "视频帧图注入失败，请基于工具返回的" f"摘要继续或缩小窗口重试：{exc}"
                                 ),
                             },
                         ]
@@ -6572,10 +6567,7 @@ class FileCreatorAgentRuntime:
                         page_content = [
                             {
                                 "type": "text",
-                                "text": (
-                                    "文档页图注入失败，请基于工具返回的"
-                                    f"文本摘要继续：{exc}"
-                                ),
+                                "text": ("文档页图注入失败，请基于工具返回的" f"文本摘要继续：{exc}"),
                             },
                         ]
                     if page_parts:
@@ -8121,9 +8113,7 @@ class FileCreatorAgentRuntime:
                 )
             else:
                 opening = (
-                    "上一回合因瞬态故障中止（如模型空响应或传输抖动）"
-                    if after_failure
-                    else "主线回合已结束"
+                    "上一回合因瞬态故障中止（如模型空响应或传输抖动）" if after_failure else "主线回合已结束"
                 )
                 text = (
                     f"【系统自动消息 · Prompt 合同修复】{opening}，但调度器"
@@ -9009,10 +8999,7 @@ def _artifact_selection_note(
     label = str(selection.get("label") or selection.get("field") or slot_id)
     slot = project.assets.artifact_slots_by_id.get(slot_id)
     if slot is None:
-        return (
-            f"[选区提示] 「{label}」引用的 artifact 槽位 {slot_id} 已不存在，"
-            "请让用户重新选择。"
-        )
+        return f"[选区提示] 「{label}」引用的 artifact 槽位 {slot_id} 已不存在，" "请让用户重新选择。"
     if slot.selected_version_id != version_id:
         return (
             f"[选区提示] 「{label}」选区所在版本已过期："

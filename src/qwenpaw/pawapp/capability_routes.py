@@ -23,7 +23,8 @@ def _broker(request: Request):
     broker = getattr(request.app.state, "pawapp_capabilities", None)
     if broker is None:
         raise HTTPException(
-            status_code=503, detail="capability_broker_unavailable"
+            status_code=503,
+            detail="capability_broker_unavailable",
         )
     return broker
 
@@ -84,7 +85,9 @@ async def invoke(request: Request, capability_id: str, body: InvokeRequest):
     try:
         scope = await _scope(request)
         result = await _broker(request).invoke(
-            scope, capability_id, body.params
+            scope,
+            capability_id,
+            body.params,
         )
         return {"protocol_version": 1, **result}
     except CapabilityError as exc:

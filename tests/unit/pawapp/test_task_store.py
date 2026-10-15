@@ -96,7 +96,8 @@ async def test_native_run_lookup_is_scoped(store, scope, action, origin):
     ):
         with pytest.raises(TaskStoreError, match="task_not_found"):
             await store.find_run(
-                scope.model_copy(update={field: value}), run_ref()
+                scope.model_copy(update={field: value}),
+                run_ref(),
             )
     with pytest.raises(TaskStoreError, match="task_not_found"):
         await store.find_run(scope, run_ref("missing"))

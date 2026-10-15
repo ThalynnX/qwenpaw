@@ -1319,6 +1319,7 @@ class PluginLoader:
                     )
                 raise
 
+    # pylint: disable-next=R0915
     async def _load_plugin_from_path_unlocked(
         self,
         source_path: Path,

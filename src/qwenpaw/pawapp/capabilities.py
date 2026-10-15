@@ -739,7 +739,8 @@ class CapabilityBroker:
         decision = await tool.check_permissions(params, PermissionContext())
         if decision.behavior is not PermissionBehavior.ALLOW:
             raise CapabilityError("tool_permission_denied")
-        return await tool(**params)
+        # PolicyGuardedTool.__new__ supplies the callable runtime class.
+        return await tool(**params)  # pylint: disable=not-callable
 
     @staticmethod
     async def _encode_result(result: Any) -> Any:

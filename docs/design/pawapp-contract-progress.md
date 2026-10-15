@@ -2,7 +2,8 @@
 
 The contract now supports managed small Apps and existing external adapters on
 one Host task model. The compatible Engine revision is published; Host browser acceptance has passed against the exact pairing below.
-Hosted CI is being rerun after acceptance fixes.
+Hosted contract CI passed; the final full-repository lint cleanup is being
+verified separately.
 
 | Area | Implementation |
 | --- | --- |
@@ -62,7 +63,7 @@ Local verification results:
 
 | Check | Result |
 | --- | --- |
-| Host/PawApp/plugin and selected Creator/File Browser tests | 958 passed, 7 skipped; additional CLI/runtime regression suite: 137 passed |
+| Host/PawApp/plugin and selected Creator/File Browser tests | 1,000 passed, 7 skipped (Host/plugins/config/CLI); 192 Creator and 49 Console/boundary tests passed |
 | Engine session stores and affected API suites | 126 passed |
 | Separate-process Host–Engine integration | 16 passed |
 | Console SDK/task API/task card tests | 72 passed (including 6 plugin-loader tests) |
@@ -118,5 +119,23 @@ no additional managed task and no browser errors.
 
 The Engine cron test now waits for its terminal event as well as completed chat
 state: those are separate durable writes. The updated exact Engine pin includes
-that deterministic test fix. Hosted Creator and Console/website format checks
-passed; final contract and pre-commit runs are pending.
+that deterministic test fix. Hosted Creator and Console/website format checks passed.
+[Contract conformance passed](https://github.com/cyruszhang/QwenPaw/actions/runs/38765983418)
+against the updated Engine pin. Full-repository lint cleanup was then applied;
+all changed files pass pre-commit, and the full-repository mypy check passes.
+
+A further restart without repairing any state confirmed both original tasks
+remain accessible with HTTP 200 and `succeeded`, exactly two managed runs, and
+an unchanged workspace path. The acceptance runtime is isolated from the normal
+Host installation; this is local deployment evidence, not a production rollout.
+
+The final cleanup applies repository formatting to the earlier acceptance
+scripts, corrects the capability-builder input annotation and Console queue
+narrowing, and documents Pylint limitations for isolated plugin module names and
+dynamic callable classes. Lifecycle complexity exceptions are scoped to the
+specific state-machine functions/guards. No global lint rule was weakened.
+
+Live-provider acceptance remains the only credential-dependent gate. Restore
+the Creator Wan credential in its settings, then run the bounded acceptance
+recipe in [real-provider acceptance](pawapp-real-provider-acceptance.md).
+The failed preflight made zero provider submissions.

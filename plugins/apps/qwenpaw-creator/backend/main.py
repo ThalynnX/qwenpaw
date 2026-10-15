@@ -226,6 +226,7 @@ app.task_action(
 
 
 @app.hook("startup", priority=90)
+# pylint: disable-next=R0915
 async def _startup() -> None:
     global _file_services
     try:

@@ -505,6 +505,7 @@ async def post_console_chat(
             owner=workspace,
             on_finished=workspace.chat_manager.mark_chat_finished,
         )
+        assert queue is not None  # attach_if_running defaults to True.
         if not is_new_run:
             await tracker.detach_subscriber(chat.id, queue)
             raise HTTPException(
@@ -1032,6 +1033,7 @@ async def post_console_chat_task(
         owner=workspace,
         on_finished=workspace.chat_manager.mark_chat_finished,
     )
+    assert queue is not None  # attach_if_running defaults to True.
     if not is_new_run:
         await tracker.detach_subscriber(chat.id, queue)
         raise HTTPException(

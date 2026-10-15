@@ -2114,7 +2114,6 @@ def test_correlated_cancellation_revokes_only_settled_run(tmp_path) -> None:
         driver.notify(PROJECT_ID)
         await asyncio.wait_for(started.wait(), timeout=2.0)
         run = driver.runs.list(PROJECT_ID)[0]
-        session = services.sessions.get_project_session(PROJECT_ID)
         driver.runs.transition(
             PROJECT_ID,
             run.run_id,
