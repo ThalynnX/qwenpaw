@@ -22,7 +22,9 @@ const mocks = vi.hoisted(() => ({
   routes: [] as unknown[],
   authStatus: { enabled: false, mode: "normal" },
   inboxEvents: [] as unknown[],
-  pushMessages: { pending_approvals: [] as unknown[] },
+  approvals: [] as Array<{ request_id: string }>,
+  getInboxEvents: vi.fn(),
+  getPushMessages: vi.fn(),
   sessionList: [] as unknown[],
   updateProfile: vi.fn().mockResolvedValue({}),
   changePassword: vi.fn().mockResolvedValue({}),
@@ -91,6 +93,13 @@ vi.mock("../hooks/useInboxWobble", () => ({
   useInboxWobble: () => [true, vi.fn()],
 }));
 
+vi.mock("../contexts/ApprovalContext", () => ({
+  useApprovalContext: () => ({
+    approvals: mocks.approvals,
+    setApprovals: vi.fn(),
+  }),
+}));
+
 vi.mock("../hooks/useAppMessage", () => ({
   useAppMessage: () => ({
     message: {
@@ -105,8 +114,8 @@ vi.mock("../hooks/useAppMessage", () => ({
 vi.mock("../api", () => ({
   default: {
     getVersion: () => Promise.resolve({ version: "2.2.0b3" }),
-    getInboxEvents: () => Promise.resolve({ events: mocks.inboxEvents }),
-    getPushMessages: () => Promise.resolve(mocks.pushMessages),
+    getInboxEvents: (...args: unknown[]) => mocks.getInboxEvents(...args),
+    getPushMessages: (...args: unknown[]) => mocks.getPushMessages(...args),
     getUserTimezone: () => Promise.resolve({ timezone: "UTC" }),
   },
 }));
@@ -353,7 +362,13 @@ describe("Sidebar", () => {
     ];
     mocks.authStatus = { enabled: false, mode: "normal" };
     mocks.inboxEvents = [];
-    mocks.pushMessages = { pending_approvals: [] };
+    mocks.approvals = [];
+    mocks.getInboxEvents
+      .mockReset()
+      .mockImplementation(() => Promise.resolve({ events: mocks.inboxEvents }));
+    mocks.getPushMessages.mockReset().mockResolvedValue({
+      pending_approvals: [],
+    });
     mocks.sessionList = [];
     mocks.updateProfile.mockClear().mockResolvedValue({});
     mocks.changePassword.mockClear().mockResolvedValue({});
@@ -801,9 +816,7 @@ describe("Sidebar", () => {
   });
 
   it("lights the inbox badge when there are pending approvals", async () => {
-    mocks.pushMessages = {
-      pending_approvals: [{ request_id: "req-1" }],
-    };
+    mocks.approvals = [{ request_id: "req-1" }];
     renderSidebar();
     await waitFor(() => {
       expect(screen.getByText("Workspace")).toBeTruthy();
@@ -811,6 +824,18 @@ describe("Sidebar", () => {
     // The inbox label is wrapped in a Badge span with a ref callback
     const inboxSpans = screen.getAllByText("Inbox");
     expect(inboxSpans.length).toBeGreaterThan(0);
+  });
+
+  it("polls inbox events without starting a second push-message chain", async () => {
+    renderSidebar();
+
+    await waitFor(() => {
+      expect(mocks.getInboxEvents).toHaveBeenCalledWith({
+        unread_only: true,
+        limit: 1,
+      });
+    });
+    expect(mocks.getPushMessages).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -824,9 +849,7 @@ describe("Sidebar", () => {
       if (collapsed) {
         localStorage.setItem("qwenpaw_sidebar_collapsed", "true");
       }
-      mocks.pushMessages = {
-        pending_approvals: pending ? [{ request_id: "req-1" }] : [],
-      };
+      mocks.approvals = pending ? [{ request_id: "req-1" }] : [];
       await act(async () => {
         renderSidebar();
       });
