@@ -93,6 +93,10 @@ def test_build_agent_chat_request_adds_identity_prefix():
     assert session_id.startswith("bot_a:to:bot_b:")
     assert prefix_added is True
     assert payload["session_id"] == session_id
+    assert payload["request_context"] == {
+        "root_agent_id": "bot_a",
+        "_agent_delegation": True,
+    }
     assert payload["input"][0]["content"][0]["text"].startswith(
         "[Agent bot_a requesting] ",
     )
@@ -120,6 +124,21 @@ def test_build_agent_chat_request_discovers_calling_agent(monkeypatch):
         "[Agent auto_bot requesting] ",
     )
     assert prefix_added is True
+
+
+@pytest.mark.parametrize("target", ["bot_a", "bot_b"])
+def test_agent_chat_payload_marks_both_self_and_peer_delegation(target):
+    _, payload, _ = agent_management.build_agent_chat_request(
+        target,
+        "Need a decision",
+        from_agent="bot_a",
+        root_session_id="root-session",
+    )
+    assert payload["root_session_id"] == "root-session"
+    assert payload["request_context"] == {
+        "root_agent_id": "bot_a",
+        "_agent_delegation": True,
+    }
 
 
 def test_build_agent_chat_request_reuses_session_id_when_provided():
@@ -793,7 +812,31 @@ async def test_spawn_subagent_inherits_root_channel_context(monkeypatch):
     assert context["user_id"] == "u1"
     assert context["channel_meta"] == {"group_openid": "g1"}
     assert context["_spawn_subagent"] is True
+    assert "_agent_delegation" not in context
     assert "done" in response.content[0].text
+
+
+def test_nested_workers_preserve_agent_delegation_origin(monkeypatch):
+    """A worker cannot clear the original inter-agent delivery limitation."""
+    from qwenpaw.app import agent_context
+
+    _, payload, _ = agent_management.build_agent_chat_request(
+        "default",
+        "Need a decision",
+        from_agent="default",
+        root_session_id="root-session",
+    )
+    inherited = payload["request_context"]
+    monkeypatch.setattr(
+        agent_context,
+        "get_current_approval_route",
+        lambda: inherited,
+    )
+    for _ in range(2):
+        inherited = agent_management._build_spawn_request_context("default")
+        assert inherited["_spawn_subagent"] is True
+        assert inherited["_agent_delegation"] is True
+        assert inherited["root_agent_id"] == "default"
 
 
 async def test_spawn_subagent_inherits_approval_level(monkeypatch):

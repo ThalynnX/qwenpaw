@@ -292,6 +292,7 @@ def build_agent_chat_request(
         ],
         "request_context": {
             "root_agent_id": caller_agent_id,
+            "_agent_delegation": True,
         },
     }
 
@@ -983,6 +984,8 @@ def _build_spawn_request_context(current_agent_id: str) -> dict[str, Any]:
         context["approval_level"] = inherited["approval_level"]
     if inherited.get("source"):
         context["source"] = inherited["source"]
+    if inherited.get("_agent_delegation") is True:
+        context["_agent_delegation"] = True
 
     # Subagents do not share the parent's chat, so the parent's resolved
     # project-dir list is handed down explicitly. Fork workers override

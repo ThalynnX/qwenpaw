@@ -59,6 +59,12 @@ def _no_answer_surface(route: dict[str, Any], channel: str) -> str:
     ever showing the question — so all of them must decline up front instead
     of holding the turn until the timeout.
     """
+    if route.get("_agent_delegation") is True:
+        return (
+            "This turn was delegated through another agent chat, which has "
+            "no answer forwarding route. Have the root agent collect the "
+            "user's answer instead."
+        )
     source = str(route.get("source") or "")
     if source in UNATTENDED_SOURCES:
         return (

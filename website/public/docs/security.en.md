@@ -55,6 +55,8 @@ The agent waits for the existing approval timeout (300 seconds by default, confi
 
 Questions from an ephemeral `spawn_subagent` session within the same configured agent are shown in its root conversation. Cross-configuration collaboration, remote agents, ACP, and TUI sessions without an answer channel are not supported. Cron, heartbeat, and email-triggered background runs return without waiting for a person. See [Multi-Agent](./multi-agent) for the distinction between subagents and other configured agents.
 
+Calls delegated via `chat_with_agent` carry an inter-agent marker, even if both agents have the same ID. These calls, and any subagents they create, cannot queue a user question. The calling agent must collect clarification from the user in its own interactive conversation.
+
 Asking for information does not need a separate approval before the question is shown. Answering supplies information only: it does not allow a later command, create an “Always Allow” rule, or bypass Tool Guard, Access Policy, or their resolver identity checks. If the agent continues after a declined or timed-out question, later sensitive actions still require their own approvals.
 
 ---

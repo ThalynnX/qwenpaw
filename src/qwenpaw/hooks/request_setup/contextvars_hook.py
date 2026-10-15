@@ -123,7 +123,7 @@ class ContextVarsSetupHook(LifecycleHook):
         if isinstance(request_context, dict):
             # Preserve unattended origins through child requests. A tool-call
             # ID belongs to execution context, never to this whole turn.
-            for key in ("source", "root_agent_id"):
+            for key in ("source", "root_agent_id", "_agent_delegation"):
                 value = request_context.get(key)
                 if value:
                     approval_route[key] = value

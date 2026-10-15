@@ -867,7 +867,7 @@ No. Subagents are ephemeral by design. If you need multi-turn interaction with a
 
 An ephemeral `spawn_subagent` session within the same configured agent can use `ask_user_question` when its root conversation has an interactive answer channel. Its question is delivered to the root conversation, and the child waits until the user answers, declines, or the request times out. The Console can submit all answers together; an IM channel needs approval notifications and answer commands.
 
-This does not extend to `chat_with_agent` across agent configurations or to remote agents; these paths return without waiting for a user answer. Cron, heartbeat, ACP, and TUI sessions without an answer channel also do not wait. Answering a question supplies information and does not approve a later tool call. See [Answering agent questions](./security#answering-agent-questions) for the supported UI and outcomes.
+Calls delegated via `chat_with_agent`, including calls whose agent IDs match, and any subagents they create return an error before queuing a question. Cross-configuration and remote question forwarding are not provided; the calling agent must collect clarification in its own interactive conversation. Cron, heartbeat, ACP, and TUI sessions without an answer channel also do not wait. Answering a question supplies information and does not approve a later tool call. See [Answering agent questions](./security#answering-agent-questions) for the supported UI and outcomes.
 
 ## Related Pages
 

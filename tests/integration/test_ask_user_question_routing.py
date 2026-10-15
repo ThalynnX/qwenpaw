@@ -18,7 +18,10 @@ from types import SimpleNamespace
 import pytest
 from agentscope.message import ToolResultState
 
-from qwenpaw.agents.tools.agent_management import _build_spawn_request_context
+from qwenpaw.agents.tools.agent_management import (
+    _build_spawn_request_context,
+    build_agent_chat_request,
+)
 from qwenpaw.app.agent_context import (
     get_current_approval_route,
     get_current_channel,
@@ -174,7 +177,8 @@ async def _await_push(channel: _RecordingChannel) -> dict:
     raise AssertionError("the question was never pushed to the channel")
 
 
-async def test_console_turn_waits_and_returns_metadata(service):
+@pytest.mark.parametrize("agent_id", ["agent-c", "default"])
+async def test_console_turn_waits_and_returns_metadata(service, agent_id):
     """A console turn needs no card push: the UI polls the pending record."""
     await _start_turn(
         _hook_context(
@@ -184,9 +188,10 @@ async def test_console_turn_waits_and_returns_metadata(service):
                 channel="console",
             ),
             session_id="root-c",
-            agent_id="agent-c",
+            agent_id=agent_id,
         ),
     )
+    assert not get_current_approval_route().get("_agent_delegation")
     task = asyncio.create_task(mod.ask_user_question(QUESTIONS))
     request_id = await _await_pending(service)
 
@@ -283,6 +288,7 @@ async def test_spawned_child_question_is_answered_from_the_parent(service):
     child_context = _build_spawn_request_context("agent-s")
     assert child_context["_spawn_subagent"] is True
     assert child_context["root_session_id"] == "root-s"
+    assert "_agent_delegation" not in child_context
 
     await _start_turn(
         _hook_context(
@@ -300,6 +306,7 @@ async def test_spawned_child_question_is_answered_from_the_parent(service):
     route = get_current_approval_route() or {}
     assert route.get("_spawn_subagent") is True
     assert route.get("root_agent_id") == "agent-s"
+    assert "_agent_delegation" not in route
 
     manager = _RecordingChannelManager(parent_channel)
     service.set_channel_manager(manager, "agent-s")
@@ -442,6 +449,58 @@ async def test_cross_configured_agent_exits_before_waiting(
         )
     chunk = await asyncio.wait_for(mod.ask_user_question(QUESTIONS), 1)
     assert chunk.state == ToolResultState.ERROR
+    assert not service._pending
+
+
+@pytest.mark.parametrize("spawn_depth", [0, 1, 2])
+async def test_same_id_delegation_and_its_workers_exit_before_waiting(
+    service,
+    spawn_depth,
+):
+    """Matching IDs do not turn a delegated request into a human chat."""
+    session_id, payload, _ = build_agent_chat_request(
+        "default",
+        "Ask for a scope decision",
+        from_agent="default",
+        root_session_id="caller-root",
+    )
+    assert payload["request_context"] == {
+        "root_agent_id": "default",
+        "_agent_delegation": True,
+    }
+    await _start_turn(
+        _hook_context(
+            AgentRequest(**payload, channel="console"),
+            session_id=session_id,
+            agent_id="default",
+            root_session_id="caller-root",
+            root_agent_id="default",
+        ),
+    )
+    for depth in range(spawn_depth):
+        child_context = _build_spawn_request_context("default")
+        assert child_context["_agent_delegation"] is True
+        child_session = f"delegated-worker-{depth}"
+        await _start_turn(
+            _hook_context(
+                AgentRequest(
+                    session_id=child_session,
+                    user_id="default",
+                    channel="console",
+                    request_context=child_context,
+                ),
+                session_id=child_session,
+                agent_id="default",
+                root_session_id="caller-root",
+                root_agent_id="default",
+            ),
+        )
+    route = get_current_approval_route()
+    assert route["root_agent_id"] == route["agent_id"] == "default"
+    assert route["_agent_delegation"] is True
+    chunk = await asyncio.wait_for(mod.ask_user_question(QUESTIONS), 1)
+    assert chunk.state == ToolResultState.ERROR
+    assert chunk.metadata == {}
     assert not service._pending
 
 
