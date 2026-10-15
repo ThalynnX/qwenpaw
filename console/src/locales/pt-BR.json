@@ -4569,6 +4569,12 @@
     "runtimeRestartFailed": "Falha ao reiniciar o ambiente"
   },
   "approval": {
+    "queue": {
+      "title": "Aprovações pendentes",
+      "position": "{{current}} / {{total}}",
+      "previous": "Aprovação anterior",
+      "next": "Próxima aprovação"
+    },
     "title": "Seguranca Approval Obrigatorio",
     "tool": "Tool",
     "severity": "Severity",

@@ -5160,6 +5160,12 @@
   },
   "approval": {
     "title": "Security Approval Required",
+    "queue": {
+      "title": "Pending approvals",
+      "position": "{{current}} / {{total}}",
+      "previous": "Previous approval",
+      "next": "Next approval"
+    },
     "agent": "Agent",
     "ownerAgent": "Owner Agent",
     "executingAgent": "Executing Agent",

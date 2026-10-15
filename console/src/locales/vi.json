@@ -2234,6 +2234,12 @@
     "byModel": "Theo mô hình"
   },
   "approval": {
+    "queue": {
+      "title": "Phê duyệt đang chờ",
+      "position": "{{current}} / {{total}}",
+      "previous": "Phê duyệt trước",
+      "next": "Phê duyệt tiếp theo"
+    },
     "title": "Yêu cầu phê duyệt bảo mật",
     "description": "Agent đang yêu cầu phê duyệt để thực thi hành động sau:",
     "approve": "Phê duyệt",

@@ -256,6 +256,7 @@ import {
 import { useUploadLimitStore } from "../../stores/uploadLimitStore";
 import ChatSenderTabsPanel from "./components/ChatSenderTabsPanel";
 import ComposerAccessibilityLabels from "./components/ComposerAccessibilityLabels";
+import ApprovalQueueOverlay from "./components/ApprovalQueueOverlay";
 import {
   selectTasksForSession,
   useBackgroundTasksStore,
@@ -4654,102 +4655,89 @@ export default function ChatPage() {
             </div>
           )}
 
-          {/* Render approval cards as overlays */}
-          {Array.from(
-            chatId && !isAgentTransition ? approvalRequests.values() : [],
-          ).map((request) => {
-            const renderer = approvalRenderers.get(request.sourceType);
-            const CustomApprovalCard = renderer?.item.render;
-            const defaultApprovalCard = (
-              <ApprovalCard
-                requestId={request.requestId}
-                agentId={request.agentId}
-                toolName={request.toolName}
-                toolSource={request.toolSource}
-                severity={request.severity}
-                findingsCount={request.findingsCount}
-                findingsSummary={request.findingsSummary}
-                toolParams={request.toolParams}
-                reasoning={request.reasoning}
-                createdAt={request.createdAt}
-                timeoutSeconds={request.timeoutSeconds}
-                sessionId={request.sessionId}
-                rootSessionId={request.rootSessionId}
-                isGeneralized={request.isGeneralized}
-                exactTarget={request.exactTarget}
-                similarTarget={request.similarTarget}
-                onApprove={(reqId, scope) => handleApprove(reqId, scope)}
-                onDeny={handleDeny}
-                onCancel={() => {
-                  const routeChatId = chatIdRef.current;
-                  const routeIdentity =
-                    sessionApi.getSessionIdentity(routeChatId);
-                  const rootSessionId =
-                    request.rootSessionId || request.sessionId;
-                  const resolvedChatId = resolveBackendChatId(routeChatId);
+          <ApprovalQueueOverlay
+            items={Array.from(
+              chatId && !isAgentTransition ? approvalRequests.values() : [],
+            )}
+            renderItem={(request) => {
+              const renderer = approvalRenderers.get(request.sourceType);
+              const CustomApprovalCard = renderer?.item.render;
+              const defaultApprovalCard = (
+                <ApprovalCard
+                  requestId={request.requestId}
+                  agentId={request.agentId}
+                  toolName={request.toolName}
+                  toolSource={request.toolSource}
+                  severity={request.severity}
+                  findingsCount={request.findingsCount}
+                  findingsSummary={request.findingsSummary}
+                  toolParams={request.toolParams}
+                  reasoning={request.reasoning}
+                  createdAt={request.createdAt}
+                  timeoutSeconds={request.timeoutSeconds}
+                  sessionId={request.sessionId}
+                  rootSessionId={request.rootSessionId}
+                  isGeneralized={request.isGeneralized}
+                  exactTarget={request.exactTarget}
+                  similarTarget={request.similarTarget}
+                  onApprove={(reqId, scope) => handleApprove(reqId, scope)}
+                  onDeny={handleDeny}
+                  onCancel={() => {
+                    const routeChatId = chatIdRef.current;
+                    const routeIdentity =
+                      sessionApi.getSessionIdentity(routeChatId);
+                    const rootSessionId =
+                      request.rootSessionId || request.sessionId;
+                    const resolvedChatId = resolveBackendChatId(routeChatId);
 
-                  if (
-                    !isAgentTransitionRef.current &&
-                    rootSessionId &&
-                    routeIdentity.sessionId === rootSessionId &&
-                    resolvedChatId
-                  ) {
-                    console.log(
-                      "[Chat] Calling stopChat with:",
-                      resolvedChatId,
-                    );
-                    chatApi
-                      .stopChat(resolvedChatId)
-                      .then(() => {
-                        console.log("[Chat] stopChat succeeded");
-                        setApprovals((prev) =>
-                          prev.filter(
-                            (item) => item.root_session_id !== rootSessionId,
-                          ),
-                        );
-                      })
-                      .catch((err) => {
-                        console.error("[Chat] stopChat failed:", err);
-                      });
-                  } else {
-                    console.warn(
-                      "[Chat] Ignoring stale approval cancel target",
-                    );
-                  }
-                }}
-              />
-            );
+                    if (
+                      !isAgentTransitionRef.current &&
+                      rootSessionId &&
+                      routeIdentity.sessionId === rootSessionId &&
+                      resolvedChatId
+                    ) {
+                      console.log(
+                        "[Chat] Calling stopChat with:",
+                        resolvedChatId,
+                      );
+                      chatApi
+                        .stopChat(resolvedChatId)
+                        .then(() => {
+                          console.log("[Chat] stopChat succeeded");
+                          setApprovals((prev) =>
+                            prev.filter(
+                              (item) => item.root_session_id !== rootSessionId,
+                            ),
+                          );
+                        })
+                        .catch((err) => {
+                          console.error("[Chat] stopChat failed:", err);
+                        });
+                    } else {
+                      console.warn(
+                        "[Chat] Ignoring stale approval cancel target",
+                      );
+                    }
+                  }}
+                />
+              );
 
-            return (
-              <div
-                key={request.requestId}
-                data-approval-id={request.requestId}
-                style={{
-                  position: "fixed",
-                  bottom: 80,
-                  right: 24,
-                  zIndex: 1000,
-                  maxWidth: 480,
-                  width: "calc(100vw - 48px)",
-                }}
-              >
-                {CustomApprovalCard ? (
-                  <PluginSlotBoundary
-                    slot={`approval:${request.sourceType}`}
-                    pluginId={renderer.pluginId}
-                    fallback={defaultApprovalCard}
-                  >
-                    <CustomApprovalCard
-                      approval={request}
-                      onResolved={() => dismissApproval(request.requestId)}
-                    />
-                  </PluginSlotBoundary>
-                ) : (
-                  defaultApprovalCard
-                )}
-              </div>
-            );
-          })}
+              return CustomApprovalCard ? (
+                <PluginSlotBoundary
+                  slot={`approval:${request.sourceType}`}
+                  pluginId={renderer.pluginId}
+                  fallback={defaultApprovalCard}
+                >
+                  <CustomApprovalCard
+                    approval={request}
+                    onResolved={() => dismissApproval(request.requestId)}
+                  />
+                </PluginSlotBoundary>
+              ) : (
+                defaultApprovalCard
+              );
+            }}
+          />
 
           <Modal
             open={usesQwenPawBackend && showModelPrompt}

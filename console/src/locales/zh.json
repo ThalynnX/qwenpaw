@@ -5180,6 +5180,12 @@
   },
   "approval": {
     "title": "安全审批",
+    "queue": {
+      "title": "待审批队列",
+      "position": "{{current}} / {{total}}",
+      "previous": "上一条审批",
+      "next": "下一条审批"
+    },
     "agent": "Agent",
     "ownerAgent": "归属Agent",
     "executingAgent": "执行Agent",
