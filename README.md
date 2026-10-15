@@ -60,7 +60,7 @@ Your personal AI assistant — deploy locally or in the cloud, extend with Skill
 
 ## News
 
-- [2026-10-14] **v2.2.2** | Console updates, new QwenPaw-Flash models covering 9B/27B/35B-A3B, PawPort for importing Codex/Qoder data, Creator 2.0.1, and Data 0.3.0. [v2.2.2 Release Notes →](https://qwenpaw.agentscope.io/release-notes#v2.2.2)
+- [2026-10-15] **v2.2.2** | Console updates, new QwenPaw-Flash models covering 9B/27B/35B-A3B, PawPort for importing Codex/Qoder data, Creator 2.0.1, and Data 0.3.0. [v2.2.2 Release Notes →](https://qwenpaw.agentscope.io/release-notes#v2.2.2)
 
 - [2026-09-10] **v2.2.1** | Creator 1.2 blueprint workbench, per-Agent model routing, and unified environment management. [v2.2.1 Release Notes →](https://qwenpaw.agentscope.io/release-notes#v2.2.1)
 

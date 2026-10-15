@@ -60,7 +60,7 @@ Trợ lý AI cá nhân của bạn — triển khai cục bộ hoặc trên đá
 
 ## Tin Tức
 
-- [2026-10-14] **v2.2.2** | Cập nhật Console, các mẫu QwenPaw-Flash mới gồm 9B/27B/35B-A3B, PawPort để chuyển dữ liệu từ Codex/Qoder, Creator 2.0.1 và Data 0.3.0. [Ghi chú phát hành v2.2.2 →](https://qwenpaw.agentscope.io/release-notes#v2.2.2)
+- [2026-10-15] **v2.2.2** | Cập nhật Console, các mẫu QwenPaw-Flash mới gồm 9B/27B/35B-A3B, PawPort để chuyển dữ liệu từ Codex/Qoder, Creator 2.0.1 và Data 0.3.0. [Ghi chú phát hành v2.2.2 →](https://qwenpaw.agentscope.io/release-notes#v2.2.2)
 
 - [2026-09-10] **v2.2.1** | Bàn làm việc Blueprint của Creator 1.2, định tuyến mô hình theo từng Agent và quản lý môi trường hợp nhất. [Ghi chú phát hành v2.2.1 →](https://qwenpaw.agentscope.io/release-notes#v2.2.1)
 
