@@ -54,13 +54,25 @@ export default function MainLayout({ hubMode = false }: { hubMode?: boolean }) {
     <HubModeContext.Provider value={hubMode}>
       <Layout className={styles.mainLayout}>
         <RouteDocumentTitle title={pageTitle} />
+        <a
+          className={styles.skipLink}
+          href="#main-content"
+          onClick={() => document.getElementById("main-content")?.focus()}
+        >
+          {t("accessibility.skipToContent", "Skip to content")}
+        </a>
         <AmbientLight />
         {!settingsCenterActive && (
           <Sidebar selectedKey={selectedKey} hubMode={hubMode} />
         )}
         <Layout className={styles.mainContentLayout}>
           <Header showBrand={settingsCenterActive} />
-          <Content className="page-container">
+          <Content
+            id="main-content"
+            role="main"
+            tabIndex={-1}
+            className="page-container"
+          >
             <ConsolePollService />
             <AgentStatusPollingController />
             <Slot name="content.statusBar" kind="fill" />

@@ -6,6 +6,25 @@
   overflow: hidden;
 }
 
+.skipLink {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 1000;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--app-surface-raised);
+  color: var(--app-text);
+  box-shadow: var(--app-shadow-md);
+  transform: translateY(calc(-100% - 16px));
+
+  &:focus-visible {
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 2px;
+    transform: translateY(0);
+  }
+}
+
 .mainContentLayout {
   height: 100%;
   min-width: 0;
