@@ -57,6 +57,16 @@ function renderToolsHook() {
   return renderHook(() => useTools());
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 describe("useTools", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -67,6 +77,7 @@ describe("useTools", () => {
     messageMock.success.mockReset();
     messageMock.error.mockReset();
     messageMock.info.mockReset();
+    hoisted.selectedAgent = "agent-1";
 
     apiMocks.listTools.mockResolvedValue([]);
   });
@@ -85,6 +96,64 @@ describe("useTools", () => {
       expect(result.current.loading).toBe(false);
     });
     expect(result.current.tools).toEqual(tools);
+  });
+
+  it("keeps the latest agent tools when an older request finishes last", async () => {
+    const agentARequest = deferred<ToolInfo[]>();
+    const agentBRequest = deferred<ToolInfo[]>();
+    apiMocks.listTools
+      .mockReturnValueOnce(agentARequest.promise)
+      .mockReturnValueOnce(agentBRequest.promise);
+
+    const { result, rerender } = renderToolsHook();
+    expect(result.current.loading).toBe(true);
+
+    hoisted.selectedAgent = "agent-2";
+    rerender();
+    expect(result.current.loading).toBe(true);
+
+    const agentBTools = [makeTool({ name: "agent-b-tool" })];
+    await act(async () => {
+      agentBRequest.resolve(agentBTools);
+      await agentBRequest.promise;
+    });
+    expect(result.current.tools).toEqual(agentBTools);
+    expect(result.current.loading).toBe(false);
+
+    await act(async () => {
+      agentARequest.resolve([makeTool({ name: "agent-a-tool" })]);
+      await agentARequest.promise;
+    });
+    expect(result.current.tools).toEqual(agentBTools);
+    expect(result.current.loading).toBe(false);
+    expect(apiMocks.listTools).toHaveBeenNthCalledWith(1, "agent-1");
+    expect(apiMocks.listTools).toHaveBeenNthCalledWith(2, "agent-2");
+  });
+
+  it("keeps loading for the latest request and ignores work after unmount", async () => {
+    const agentARequest = deferred<ToolInfo[]>();
+    const agentBRequest = deferred<ToolInfo[]>();
+    apiMocks.listTools
+      .mockReturnValueOnce(agentARequest.promise)
+      .mockReturnValueOnce(agentBRequest.promise);
+
+    const { result, rerender, unmount } = renderToolsHook();
+    hoisted.selectedAgent = "agent-2";
+    rerender();
+
+    await act(async () => {
+      agentARequest.resolve([makeTool({ name: "agent-a-tool" })]);
+      await agentARequest.promise;
+    });
+    expect(result.current.loading).toBe(true);
+    expect(result.current.tools).toEqual([]);
+
+    unmount();
+    await act(async () => {
+      agentBRequest.reject(new Error("settled after unmount"));
+      await agentBRequest.promise.catch(() => undefined);
+    });
+    expect(messageMock.error).not.toHaveBeenCalled();
   });
 
   it("loadTools failure shows message.error('tools.loadError')", async () => {

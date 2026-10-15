@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppMessage } from "../../../hooks/useAppMessage";
 import api from "../../../api";
 import type { ToolInfo } from "../../../api/modules/tools";
@@ -12,23 +12,33 @@ export function useTools() {
   const [loading, setLoading] = useState(false);
   const [batchLoading, setBatchLoading] = useState(false);
   const { message } = useAppMessage();
+  const requestGeneration = useRef(0);
 
   const loadTools = useCallback(async () => {
+    const generation = ++requestGeneration.current;
+    const agentId = selectedAgent || "default";
     setLoading(true);
     try {
-      const data = await api.listTools();
+      const data = await api.listTools(agentId);
+      if (generation !== requestGeneration.current) return;
       setTools(data);
     } catch (error) {
+      if (generation !== requestGeneration.current) return;
       console.error("Failed to load tools:", error);
       message.error(t("tools.loadError"));
     } finally {
-      setLoading(false);
+      if (generation === requestGeneration.current) {
+        setLoading(false);
+      }
     }
-  }, [message, t]);
+  }, [message, selectedAgent, t]);
 
   useEffect(() => {
     loadTools();
-  }, [loadTools, selectedAgent]);
+    return () => {
+      requestGeneration.current += 1;
+    };
+  }, [loadTools]);
 
   const toggleEnabled = useCallback(
     async (tool: ToolInfo) => {
