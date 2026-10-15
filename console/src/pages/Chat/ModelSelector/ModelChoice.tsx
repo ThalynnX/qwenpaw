@@ -1,7 +1,7 @@
 import { ModelPickerPopover } from "./ModelPickerPopover";
 import { ProviderIcon } from "../../Settings/Models/components/ProviderIconComponent";
 import { lazy, Suspense, useState } from "react";
-import { Spin } from "antd";
+import { Button, Spin } from "antd";
 import { ChevronRight } from "lucide-react";
 import type { ModelSlotConfig, ModelType } from "@/api/types";
 import styles from "./index.module.less";
@@ -11,7 +11,6 @@ export function ModelChoice({
   modelType = "chat",
   ariaLabel,
   label,
-  description,
   resetOption,
   onChange,
   disabled,
@@ -22,7 +21,6 @@ export function ModelChoice({
   ariaLabel?: string;
   value?: ModelSlotConfig | null;
   label: string;
-  description?: string;
   resetOption?: { label: string; onReset: () => void };
   onChange: (value: ModelSlotConfig) => void;
   disabled?: boolean;
@@ -42,16 +40,17 @@ export function ModelChoice({
       content={
         <>
           {open && resetOption && (
-            <button
-              type="button"
-              className={styles.modelChoiceReset}
+            <Button
+              type="text"
+              block
+              style={{ textAlign: "left" }}
               onClick={() => {
                 resetOption.onReset();
                 setOpen(false);
               }}
             >
               {resetOption.label}
-            </button>
+            </Button>
           )}
           {open && (
             <Suspense fallback={<Spin />}>
@@ -72,17 +71,12 @@ export function ModelChoice({
       <button
         aria-label={ariaLabel}
         type="button"
-        className={`${styles.modelChoiceButton} ${
-          description ? styles.modelChoiceDetailed : ""
-        }`}
+        className={styles.modelChoiceButton}
         disabled={disabled}
         aria-expanded={open}
       >
         {value && <ProviderIcon providerId={value.provider_id} size={16} />}
-        <span className={description ? styles.modelChoiceText : undefined}>
-          <span title={label}>{label}</span>
-          {description && <small>{description}</small>}
-        </span>
+        <span title={label}>{label}</span>
         <ChevronRight size={15} />
       </button>
     </ModelPickerPopover>

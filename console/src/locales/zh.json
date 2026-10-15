@@ -2416,7 +2416,6 @@
     "defaultModels": "默认模型",
     "defaultChatModel": "对话模型",
     "defaultDecisionModel": "决策模型",
-    "noDefaultModel": "未设置",
     "defaultLlm": "默认LLM",
     "notConfiguredYet": "尚未配置",
     "llmDescription": "在这里设置全局默认的 LLM 模型。你也可以在聊天页面为具体 Agent 单独选择使用的模型。",

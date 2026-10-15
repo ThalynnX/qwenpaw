@@ -315,6 +315,8 @@ export function ProviderConfigModal({
   );
   const selectedChatModel = Form.useWatch("chat_model", form);
   const canEditBaseUrl = !provider.freeze_url;
+  const defaultChatModel =
+    provider.chat_model || (provider.is_custom ? "OpenAIChatModel" : undefined);
 
   const baseUrlOptions = useMemo<BaseUrlOption[]>(() => {
     const raw = provider.meta?.base_url_options;
@@ -471,9 +473,7 @@ export function ProviderConfigModal({
         api_key: undefined,
         name: provider.name,
         base_url: provider.base_url || undefined,
-        chat_model:
-          provider.chat_model ||
-          (provider.is_custom ? "OpenAIChatModel" : undefined),
+        chat_model: defaultChatModel,
         generate_kwargs_text:
           provider.generate_kwargs &&
           Object.keys(provider.generate_kwargs).length > 0
@@ -497,9 +497,6 @@ export function ProviderConfigModal({
       const values = await form.validateFields();
       setSaving(true);
       const generateConfig = parseGenerateConfig(values.generate_kwargs_text);
-      const hasGenerateConfigInput = Boolean(
-        values.generate_kwargs_text?.trim(),
-      );
 
       // Validate connection before saving
       // For local providers, we might skip this or just check if models exist (which the backend does)
@@ -538,11 +535,7 @@ export function ProviderConfigModal({
         name: provider.is_custom ? values.name?.trim() : undefined,
         base_url: values.base_url,
         chat_model: values.chat_model,
-        generate_kwargs: provider.chat_model
-          ? hasGenerateConfigInput
-            ? generateConfig
-            : {}
-          : undefined,
+        generate_kwargs: provider.chat_model ? generateConfig ?? {} : undefined,
         custom_headers: headersObj,
         auth_mode: isAnthropicProvider ? authMode : undefined,
       });
@@ -690,9 +683,7 @@ export function ProviderConfigModal({
           enabled: provider.enabled !== false,
           name: provider.name,
           base_url: provider.base_url || undefined,
-          chat_model:
-            provider.chat_model ||
-            (provider.is_custom ? "OpenAIChatModel" : undefined),
+          chat_model: defaultChatModel,
           generate_kwargs_text:
             provider.generate_kwargs &&
             Object.keys(provider.generate_kwargs).length > 0

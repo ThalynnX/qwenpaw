@@ -174,8 +174,9 @@ export interface GetActiveModelsRequest {
 }
 
 export interface ModelSlotRequest {
-  provider_id: string;
-  model: string;
+  provider_id: string | null;
+  model: string | null;
+  model_type?: ModelType;
   scope: Exclude<ActiveModelScope, "effective">;
   agent_id?: string;
 }

@@ -7,8 +7,6 @@ import type {
   ActiveModelsInfo,
   GetActiveModelsRequest,
   ModelSlotRequest,
-  ModelSlotConfig,
-  ModelType,
   CreateCustomProviderRequest,
   AddModelRequest,
   ModelConfigRequest,
@@ -116,15 +114,6 @@ export const providerApi = {
     request<ActiveModelsInfo>("/models/active", {
       method: "PUT",
       body: JSON.stringify(body),
-    }).then((result) => {
-      activeModelPromises.clear();
-      return result;
-    }),
-
-  setDefaultModel: (modelType: ModelType, slot: ModelSlotConfig | null) =>
-    request<ActiveModelsInfo>("/models/defaults/" + modelType, {
-      method: "PUT",
-      body: JSON.stringify(slot),
     }).then((result) => {
       activeModelPromises.clear();
       return result;

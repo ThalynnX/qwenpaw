@@ -185,8 +185,9 @@ def _should_auto_discover(
 
 
 class ModelSlotRequest(BaseModel):
-    provider_id: str = Field(..., description="Provider to use")
-    model: str = Field(..., description="Model identifier")
+    provider_id: str | None = Field(..., description="Provider to use")
+    model: str | None = Field(..., description="Model identifier")
+    model_type: ModelType = "chat"
     scope: ActiveModelWriteScope = Field(
         ...,
         description="Whether to update the global model or a specific agent",
@@ -902,26 +903,6 @@ async def configure_model(
     return provider_info
 
 
-@router.put("/defaults/{model_type}", response_model=ActiveModelsInfo)
-async def set_default_model(
-    model_type: ModelType,
-    body: ModelSlotConfig | None = Body(default=None),
-    manager: ProviderManager = Depends(get_provider_manager),
-) -> ActiveModelsInfo:
-    """Set or clear a global default without changing agent overrides."""
-    try:
-        if body and hub_mode() and body.provider_id == PROVIDER_ID:
-            await run_sync_io(managed_slot, body, explicit=True)
-        await manager.set_default_model(model_type, body)
-    except (ValueError, AppBaseException) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return await run_sync_io(
-        _active_models_info,
-        manager,
-        await run_sync_io(manager.get_active_model),
-    )
-
-
 @router.get(
     "/active",
     response_model=ActiveModelsInfo,
@@ -1012,23 +993,33 @@ async def get_active_models(
 @router.put(
     "/active",
     response_model=ActiveModelsInfo,
-    summary="Set active LLM",
+    summary="Set or clear a model selection",
 )
 async def set_active_model(
     request: Request,
     manager: ProviderManager = Depends(get_provider_manager),
     body: ModelSlotRequest = Body(...),
 ) -> ActiveModelsInfo:
-    """Set active model by scope."""
-    if hub_mode() and body.provider_id == PROVIDER_ID:
+    """Set typed global defaults or an agent's chat model."""
+    if (body.provider_id is None) != (body.model is None):
+        raise HTTPException(
+            status_code=400,
+            detail="provider_id and model must be set or cleared together",
+        )
+    slot = (
+        ModelSlotConfig(provider_id=body.provider_id, model=body.model)
+        if body.provider_id is not None
+        else None
+    )
+    if slot and hub_mode() and slot.provider_id == PROVIDER_ID:
         await run_sync_io(
             managed_slot,
-            ModelSlotConfig(provider_id=body.provider_id, model=body.model),
+            slot,
             explicit=True,
         )
     if body.scope == "global":
         try:
-            await manager.activate_model(body.provider_id, body.model)
+            await manager.set_default_model(body.model_type, slot)
         except (
             FileNotFoundError,
             RuntimeError,
@@ -1052,6 +1043,11 @@ async def set_active_model(
             status_code=400,
             detail="agent_id is required when scope is 'agent'",
         )
+    if body.model_type != "chat" or slot is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Use agent model settings to clear or select decision models",
+        )
 
     await run_sync_io(
         _validate_model_slot,
@@ -1067,10 +1063,7 @@ async def set_active_model(
         )
 
         def apply_active_model(agent_config: AgentProfileConfig) -> None:
-            agent_config.active_model = ModelSlotConfig(
-                provider_id=body.provider_id,
-                model=body.model,
-            )
+            agent_config.active_model = slot
 
         await update_agent_config_async(
             workspace.agent_id,
@@ -1102,10 +1095,7 @@ async def set_active_model(
     return await run_sync_io(
         _active_models_info,
         manager,
-        ModelSlotConfig(
-            provider_id=body.provider_id,
-            model=body.model,
-        ),
+        slot,
     )
 
 

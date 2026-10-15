@@ -714,62 +714,26 @@ async def clear_chat_project_dirs(
     return await _project_dirs_response(updated, workspace)
 
 
-async def _decision_settings(workspace, override: bool | None) -> dict:
-    """Keep the agent's default separate from available decision models."""
-    from ...config.config import load_agent_config
-    from ...providers.provider_manager import ProviderManager
-
-    config = await asyncio.to_thread(load_agent_config, workspace.agent_id)
-    model = config.decision_model
-    if model is None and config.backend == "qwenpaw":
-        model = await asyncio.to_thread(
-            ProviderManager.get_instance().get_default_model, "decision"
-        )
-    configured = config.backend == "qwenpaw" and model is not None
-    return {
-        "configured": configured,
-        "override": override,
-        "enabled": configured
-        and (
-            override
-            if override is not None
-            else config.decision_model is not None
-        ),
-    }
-
-
-@router.get("/decision-settings")
-async def get_decision_settings(
-    chat_id: str | None = None,
-    mgr: ChatManager = Depends(get_chat_manager),
-    workspace=Depends(get_workspace),
-):
-    """Read session preferences, falling back to the agent's default."""
-    chat = await mgr.get_chat(chat_id) if chat_id else None
-    if chat_id and chat is None:
-        raise HTTPException(404, "Chat not found")
-
-    runtime = (chat.meta.get("runtime_context") or {}) if chat else {}
-    return await _decision_settings(workspace, runtime.get("decision_enabled"))
-
-
-@router.put("/decision-settings")
 @router.put("/{chat_id}/decision-settings")
 async def set_decision_settings(
-    chat_id: str | None = None,
+    chat_id: str,
     enabled: bool = Body(..., strict=True),
     mgr: ChatManager = Depends(get_chat_manager),
     workspace=Depends(get_workspace),
 ):
-    """Save a session preference or validate a new session draft."""
-    if chat_id and await mgr.get_chat(chat_id) is None:
+    """Save a decision preference for an existing session."""
+    from ...config.config import load_agent_config
+    from ...services.session_thinking import decision_settings
+
+    if await mgr.get_chat(chat_id) is None:
         raise HTTPException(404, "Chat not found")
-    settings = await _decision_settings(workspace, enabled)
+    config = await asyncio.to_thread(load_agent_config, workspace.agent_id)
+    settings = await asyncio.to_thread(decision_settings, config, enabled)
     if enabled and not settings["configured"]:
         raise HTTPException(
             422, "No agent or global decision model configured"
         )
-    if chat_id and await mgr.set_session_decision(chat_id, enabled) is None:
+    if await mgr.set_session_decision(chat_id, enabled) is None:
         raise HTTPException(404, "Chat not found")
     return settings
 

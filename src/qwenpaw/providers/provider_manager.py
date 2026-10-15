@@ -276,17 +276,6 @@ class ProviderManager(
     def active_model(self, value: ModelSlotConfig | None) -> None:
         self.default_models["chat"] = value
 
-    def get_default_model(
-        self,
-        model_type: ModelType,
-    ) -> ModelSlotConfig | None:
-        """Return the global default for a model type."""
-        return (
-            self.get_active_model()
-            if model_type == "chat"
-            else self.default_models[model_type]
-        )
-
     async def set_default_model(
         self, model_type: ModelType, slot: ModelSlotConfig | None
     ) -> None:
@@ -324,8 +313,12 @@ class ProviderManager(
                     provider_id, model_type=model_type
                 )
 
-    def get_active_model(self) -> ModelSlotConfig | None:
+    def get_active_model(
+        self, model_type: ModelType = "chat"
+    ) -> ModelSlotConfig | None:
         """Resolve the active model; Hub resolution refreshes its catalog."""
+        if model_type != "chat":
+            return self.default_models[model_type]
         if (
             hub_mode()
             and self.active_model
@@ -685,30 +678,7 @@ class ProviderManager(
             )
         if not provider.enabled:
             raise ProviderError(message=f"Provider is disabled")
-        model_info = provider.get_model_info(model_id)
-        if model_info is None:
-            raise ModelNotFoundException(
-                model_name=f"{provider_id}/{model_id}",
-                details={"provider_id": provider_id, "model_id": model_id},
-            )
-        if model_info.model_type != model_type:
-            raise ProviderError(
-                message=f"Model '{model_id}' is not a {model_type} model"
-            )
-        if model_info.availability_status in {
-            "permission_denied",
-            "model_not_found",
-            "incompatible_api",
-        }:
-            reason = (
-                model_info.availability_message
-                or model_info.availability_status
-            )
-            raise ProviderError(
-                message=(
-                    f"Model '{model_id}' cannot be activated: " f"{reason}"
-                ),
-            )
+        provider.validate_model_selection(model_id, model_type)
         provider_id = provider.id
         active_model = ModelSlotConfig(
             provider_id=provider_id,

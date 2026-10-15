@@ -2828,15 +2828,28 @@
   box-shadow: 0 1px 4px rgb(0 0 0 / 6%);
 }
 
-.globalDefaults {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
-  gap: 8px 24px;
-  padding: 12px 24px;
+.globalModelRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: var(--app-font-secondary);
+}
 
+.headerRight .globalModelRow {
+  width: auto;
+  margin: 0;
+  padding: 0 8px;
+  gap: 8px;
+  min-width: 0;
+  background: transparent;
+  border: 0;
   > span {
-    grid-column: 1 / -1;
-    color: var(--app-text-secondary);
+    white-space: nowrap;
+    font-size: var(--app-font-caption);
+    color: var(--app-text-tertiary);
+  }
+  button {
+    max-width: 240px;
   }
 }
 @media (max-width: 900px) {
@@ -3064,38 +3077,5 @@
   .modalFooterLeft,
   .modalFooterRight {
     flex-wrap: wrap;
-  }
-}
-
-.defaultModelRow {
-  display: grid;
-  grid-template-columns: var(--model-label-width, max-content) minmax(0, 1fr);
-  align-items: center;
-  gap: 16px;
-  min-width: 0;
-
-  > span:first-child {
-    color: var(--app-text-secondary);
-    font-size: var(--app-font-secondary);
-  }
-
-  > span:last-child {
-    width: 100%;
-
-    button {
-      width: 100%;
-      justify-content: flex-start;
-
-      > svg:last-child {
-        margin-left: auto;
-      }
-    }
-  }
-}
-
-@media (max-width: 600px) {
-  .defaultModelRow {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
   }
 }

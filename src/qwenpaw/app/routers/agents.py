@@ -34,7 +34,6 @@ from ..mail.driver_config import (
 )
 from ..utils import safe_join, schedule_agent_reload
 from .model_validation import validate_model_slot
-from ...providers.hub_managed import PROVIDER_ID, hub_mode, managed_slot
 from ...config.config import (
     AgentMailConfig,
     AgentProfileConfig,
@@ -1343,10 +1342,6 @@ async def update_agent_model_settings(
                         model_type,
                     )
 
-    active_model = values.get("active_model")
-    if active_model and active_model.provider_id == PROVIDER_ID and hub_mode():
-        await run_sync_io(managed_slot, active_model, explicit=True)
-
     await run_sync_io(validate_selections)
 
     def apply_settings(existing_config: AgentProfileConfig) -> None:
@@ -1369,11 +1364,6 @@ async def update_agent_model_settings(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except AppBaseException as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    active_model = values.get("active_model")
-    if active_model and active_model.provider_id != PROVIDER_ID:
-        request.app.state.provider_manager.maybe_probe_multimodal(
-            active_model.provider_id, active_model.model
-        )
     schedule_agent_reload(request, agentId)
     return updated
 

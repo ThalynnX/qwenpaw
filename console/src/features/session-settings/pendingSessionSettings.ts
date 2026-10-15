@@ -1,5 +1,4 @@
 import { migratePendingModel, withPendingModel } from "./sessionModel";
-import { migratePendingDecision, withPendingDecision } from "./sessionDecision";
 import {
   migratePendingProjectDirectory,
   withPendingProjectDirectory,
@@ -17,7 +16,6 @@ export function migratePendingSessionSettings(
   migratePendingProjectDirectory(agentId, from, to);
   migratePendingThinking(agentId, from, to);
   migratePendingModel(agentId, from, to);
-  migratePendingDecision(agentId, from, to);
 }
 
 export function withPendingSessionSettings(
@@ -28,12 +26,8 @@ export function withPendingSessionSettings(
   const project = withPendingProjectDirectory(body, agentId, sessionId);
   return {
     ...project,
-    requestBody: withPendingDecision(
-      withPendingModel(
-        withPendingThinking(project.requestBody, agentId, sessionId),
-        agentId,
-        sessionId,
-      ),
+    requestBody: withPendingModel(
+      withPendingThinking(project.requestBody, agentId, sessionId),
       agentId,
       sessionId,
     ),

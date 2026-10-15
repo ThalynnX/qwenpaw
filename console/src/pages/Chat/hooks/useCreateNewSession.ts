@@ -6,7 +6,6 @@ import { useAgentStore } from "../../../stores/agentStore";
 import sessionApi from "../sessionApi";
 import { clearPendingModel } from "../../../features/session-settings/sessionModel";
 import { clearPendingThinking } from "../../../features/thinking/sessionThinkingApi";
-import { clearPendingDecision } from "../../../features/session-settings/sessionDecision";
 
 /**
  * Open the blank composer. The SDK allocates a backend session on first send;
@@ -23,7 +22,6 @@ export function useCreateNewSession(): () => Promise<void> {
     const agents = useAgentStore.getState();
     clearPendingModel(agents.selectedAgent, "new");
     clearPendingThinking(agents.selectedAgent, "new");
-    clearPendingDecision(agents.selectedAgent, "new");
     agents.removeLastChatId(agents.selectedAgent);
     setCurrentSessionId(undefined);
     navigate(CHAT_BASE_PATH, { replace: true });

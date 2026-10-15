@@ -14,8 +14,9 @@ from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Literal, Type
 from agentscope.model import ChatModelBase
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
-from qwenpaw.exceptions import ProviderError
+from qwenpaw.exceptions import ModelNotFoundException, ProviderError
 
+from ..config.config import ModelType
 from ..utils.io_utils import run_sync_io
 from .context_windows import DEFAULT_CONTEXT_WINDOW
 from .thinking import ThinkingControl, ThinkingPreference, resolve_thinking
@@ -360,6 +361,30 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
 
     async def close(self) -> None:
         """Release resources owned by this runtime provider instance."""
+
+    def validate_model_selection(
+        self, model_id: str, model_type: ModelType = "chat"
+    ) -> None:
+        """Check a configured model before assigning it to a model slot."""
+        model = self.get_model_info(model_id)
+        if model is None:
+            raise ModelNotFoundException(
+                model_name=f"{self.id}/{model_id}",
+                details={"provider_id": self.id, "model_id": model_id},
+            )
+        if model.model_type != model_type:
+            raise ProviderError(
+                message=f"Model '{model_id}' is not a {model_type} model"
+            )
+        if model.availability_status in {
+            "permission_denied",
+            "model_not_found",
+            "incompatible_api",
+        }:
+            reason = model.availability_message or model.availability_status
+            raise ProviderError(
+                message=f"Model '{model_id}' cannot be activated: {reason}"
+            )
 
     def validate_chat_model(self, model_id: str) -> None:
         """Reject decision models before sending a chat request."""

@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { Descriptions } from "antd";
 import { useTranslation } from "react-i18next";
 import { ModelChoice } from "../../Chat/ModelSelector/ModelChoice";
+import { modelSlotLabel } from "../../Chat/ModelSelector/modelSelectorModels";
 import { providerApi } from "@/api/modules/provider";
 import type {
   ActiveModelsInfo,
@@ -9,7 +11,6 @@ import type {
   ProviderInfo,
 } from "@/api/types";
 import { useAppMessage } from "@/hooks/useAppMessage";
-import styles from "./index.module.less";
 
 export function GlobalModelDefaults({
   activeModels,
@@ -26,7 +27,12 @@ export function GlobalModelDefaults({
   const save = async (type: ModelType, slot: ModelSlotConfig | null) => {
     setSaving(true);
     try {
-      await providerApi.setDefaultModel(type, slot);
+      await providerApi.setActiveLlm({
+        scope: "global",
+        model_type: type,
+        provider_id: slot?.provider_id ?? null,
+        model: slot?.model ?? null,
+      });
       await onSaved();
     } catch (error) {
       message.error(String(error));
@@ -35,40 +41,30 @@ export function GlobalModelDefaults({
     }
   };
   return (
-    <div
-      className={styles.globalDefaults}
+    <Descriptions
+      size="small"
+      colon={false}
+      column={{ xs: 1, sm: 1, md: 1, lg: 2, xl: 2, xxl: 2 }}
+      styles={{ label: { alignItems: "center" } }}
+      style={{ padding: "12px 24px" }}
       aria-label={t("models.defaultModels")}
-    >
-      <span>{t("models.defaultModels")}</span>
-      {(["chat", "decision"] as const).map((type) => {
-        const slot =
-          activeModels?.default_models?.[type] ??
-          (type === "chat" ? activeModels?.active_llm : null);
-        const provider = providers.find(
-          (item) => item.id === slot?.provider_id,
-        );
-        const model = [
-          ...(provider?.models ?? []),
-          ...(provider?.extra_models ?? []),
-        ].find((item) => item.id === slot?.model);
+      title={t("models.defaultModels")}
+      items={(["chat", "decision"] as const).map((type) => {
+        const slot = activeModels?.default_models?.[type];
         const label = t(
           type === "chat"
             ? "models.defaultChatModel"
             : "models.defaultDecisionModel",
         );
-        return (
-          <div className={styles.defaultModelRow} key={type}>
-            <span>{label}</span>
+        return {
+          key: type,
+          label,
+          children: (
             <ModelChoice
               ariaLabel={label}
               modelType={type}
               value={slot}
-              label={model?.name || slot?.model || t("models.noDefaultModel")}
-              description={
-                provider?.name ||
-                slot?.provider_id ||
-                t("models.noDefaultModel")
-              }
+              label={modelSlotLabel(providers, slot) ?? t("models.notSet")}
               disabled={saving || !activeModels}
               onChange={(value) => void save(type, value)}
               resetOption={
@@ -80,9 +76,9 @@ export function GlobalModelDefaults({
                   : undefined
               }
             />
-          </div>
-        );
+          ),
+        };
       })}
-    </div>
+    />
   );
 }

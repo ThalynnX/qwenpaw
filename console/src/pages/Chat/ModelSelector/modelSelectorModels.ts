@@ -1,4 +1,5 @@
 import type { ModelInfo, ModelType, ProviderInfo } from "../../../api/types";
+import type { ModelSlotConfig } from "../../../api/types";
 
 export interface EligibleProvider {
   id: string;
@@ -47,40 +48,60 @@ export function modelKey(providerId: string, modelId: string): string {
   return `${providerId}:${modelId}`;
 }
 
+export function modelSlotLabel(
+  providers: (EligibleProvider & { extra_models?: ModelInfo[] })[],
+  slot?: ModelSlotConfig | null,
+): string | undefined {
+  if (!slot) return undefined;
+  const provider = providers.find((item) => item.id === slot.provider_id);
+  const model = [
+    ...(provider?.models ?? []),
+    ...(provider?.extra_models ?? []),
+  ].find((item) => item.id === slot.model);
+  return `${provider?.name ?? slot.provider_id} / ${model?.name ?? slot.model}`;
+}
+
 export function buildEligibleProviders(
   providers: ProviderInfo[],
   modelType: ModelType = "chat",
 ): EligibleProvider[] {
-  return providers.flatMap((provider) => {
-    if (provider.enabled === false) return [];
-    const models = [
-      ...(provider.models ?? []),
-      ...(provider.extra_models ?? []),
-    ].filter((model) => (model.model_type ?? "chat") === modelType);
-    const managedOrFreeChat =
-      modelType === "chat" &&
-      (provider.id === "hub-managed" || provider.is_free_tier);
-    const configured =
-      provider.is_custom || provider.require_api_key === false
-        ? Boolean(provider.base_url)
-        : Boolean(provider.api_key);
-    if (!models.length && provider.chat_model === "") return [];
-    if (!managedOrFreeChat && (!models.length || !configured)) return [];
-    return [
-      {
-        id: provider.id,
-        name: provider.name,
-        models,
-        is_free_tier: provider.is_free_tier,
-        is_custom: provider.is_custom,
-        is_local: provider.is_local,
-        supports_oauth: provider.supports_oauth,
-        oauth_connected: provider.oauth_connected,
-        has_api_key: Boolean(provider.api_key),
-        require_api_key: provider.require_api_key,
-      },
-    ];
-  });
+  return providers
+    .map((provider) => ({
+      provider,
+      models: [
+        ...(provider.models ?? []),
+        ...(provider.extra_models ?? []),
+      ].filter((model) => (model.model_type ?? "chat") === modelType),
+    }))
+    .filter(({ provider, models }) => {
+      if (provider.enabled === false) return false;
+      if (!models.length && provider.chat_model === "") return false;
+      if (
+        modelType === "chat" &&
+        (provider.id === "hub-managed" || provider.is_free_tier)
+      )
+        return true;
+      return (
+        models.length > 0 &&
+        Boolean(
+          provider.require_api_key === false || provider.is_custom
+            ? provider.base_url
+            : provider.api_key,
+        )
+      );
+    })
+    .map(({ provider, models }) => ({
+      id: provider.id,
+      name: provider.name,
+      models,
+      is_free_tier: provider.is_free_tier,
+      is_custom: provider.is_custom,
+      is_local: provider.is_local,
+      supports_oauth: provider.supports_oauth,
+      oauth_connected: provider.oauth_connected,
+      has_api_key: Boolean(provider.api_key),
+      require_api_key: provider.require_api_key,
+    }));
 }
 
 export function buildDiscoveryCandidates(

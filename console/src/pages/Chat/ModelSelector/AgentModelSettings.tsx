@@ -1,4 +1,5 @@
 import { ModelChoice } from "./ModelChoice";
+import { modelSlotLabel } from "./modelSelectorModels";
 import { ThinkingControl } from "@/features/thinking/ThinkingControl";
 import type {
   ThinkingPreference,
@@ -343,12 +344,6 @@ export function AgentModelSettings({
     }
   };
 
-  const decisionProvider = decisionProviders?.find(
-    (provider) => provider.id === decisionModel?.provider_id,
-  );
-  const decisionInfo = decisionProvider?.models.find(
-    (model) => model.id === decisionModel?.model,
-  );
   return (
     <section className={styles.agentModelSettings} data-surface={surface}>
       {!expanded && (
@@ -485,11 +480,8 @@ export function AgentModelSettings({
                     modelType="decision"
                     value={decisionModel}
                     label={
-                      decisionModel
-                        ? `${
-                            decisionProvider?.name ?? decisionModel.provider_id
-                          } / ${decisionInfo?.name ?? decisionModel.model}`
-                        : t("modelSelector.noFallback")
+                      modelSlotLabel(decisionProviders, decisionModel) ??
+                      t("modelSelector.noFallback")
                     }
                     disabled={saving}
                     resetOption={{

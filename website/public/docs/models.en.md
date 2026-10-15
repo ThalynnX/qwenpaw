@@ -20,20 +20,6 @@ QwenPaw Local (llama.cpp) is built into QwenPaw and does not require additional 
 
 QwenPaw also provides the QwenPaw-Flash series for local deployment. It includes 2B, 4B, and 9B variants, with original, 4-bit, and 8-bit versions for different VRAM and performance requirements. These models are open-sourced on [ModelScope](https://www.modelscope.cn/organization/AgentScope?tab=model) and [Hugging Face](https://huggingface.co/agentscope-ai/models). The following sections explain how to use QwenPaw-Flash with each local provider.
 
-## Decision Models
-
-Models have a **Chat** or **Decision** type. Set the type when adding a model or change it in the model's configuration if its discovered type is incorrect. The same provider can contain both types, including DashScope. Image, audio, video, and tool-call support remain separate model capabilities.
-
-Configure **TypeSafe** with its API key and provider URL (default: `https://api.typesafe.ai/v1`), then discover and add JEV models. Provider connection tests use the model list; model connection tests send a minimal native decision request.
-
-In **Settings → Models**, choose separate global defaults for chat and decision models. **Current Agent** keeps the chat model, thinking, subagent model, and fallback settings; an unset chat model inherits the global default. **Decision model** uses the same picker as fallback models and defaults to **None**. Choose a specific decision model for this agent. The picker lists only decision models and does not change the chat model. Changes save immediately.
-
-The chat composer's model picker lists only chat models and retains the existing thinking controls. Selections affect only the current conversation, taking precedence over agent and global defaults. Use **Restore default model** to remove a conversation override. Decision models are configured in Settings, with no conversation-level selection; leaving them unset does not affect normal chat.
-
-**Advanced options** at the bottom of the model menu is collapsed by default. Expand it to find **Use decision model**. Conversations inherit the current agent's setting: on when a decision model is selected, otherwise off by default. A conversation can enable it using the agent's selected model or, if none is selected, the global default decision model. The switch is unavailable only when neither is configured, without affecting normal chat. Changes save immediately for this conversation only. Conversations without an override follow subsequent agent configuration changes. **The switch currently only stores a conversation preference; decision execution is not connected**. Configure the model itself in Settings.
-
-Decision models share the provider's endpoint and credentials and have no chat generation settings. For decision models in OpenAI-compatible providers, connection tests currently verify only provider connectivity. Configuring a model or enabling the switch does not enable automatic tool selection or decision execution; that runtime integration is follow-up work.
-
 ## QwenPaw Local (llama.cpp) Configuration
 
 > QwenPaw Local is currently still in the testing phase, and there may be issues with stability and GPU compatibility. If you are looking for a more stable local model experience or need GPU acceleration, it is recommended to use Ollama or LM Studio as your local model provider in the short term.

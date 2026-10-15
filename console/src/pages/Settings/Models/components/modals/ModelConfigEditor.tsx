@@ -7,7 +7,7 @@ import { ThinkingCapabilityFields } from "./ThinkingCapabilityFields";
 import type { ThinkingControlSpec } from "@/features/thinking/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Switch } from "@agentscope-ai/design";
-import { Select } from "antd";
+import { Select, Space } from "antd";
 import type { ModelInfo, ProviderInfo } from "../../../../../api/types";
 import api from "../../../../../api";
 import { useTranslation } from "react-i18next";
@@ -164,7 +164,7 @@ export function ModelConfigEditor({
     setSaving(true);
     try {
       const updated = await api.configureModel(providerId, model.id, {
-        ...(modelType !== undefined ? { model_type: modelType } : {}),
+        model_type: modelType,
         ...(!isDecision
           ? {
               ...capabilities,
@@ -199,50 +199,8 @@ export function ModelConfigEditor({
     }
   };
 
-  const modelTypeField = (
-    <div className={styles.typeField}>
-      <span>{t("models.modelType")}</span>
-      <Select
-        size="small"
-        style={{ width: 128 }}
-        aria-label={t("models.modelType")}
-        value={modelType ?? model.model_type ?? "chat"}
-        options={[
-          { value: "chat", label: t("models.modelTypeChat") },
-          { value: "decision", label: t("models.modelTypeDecision") },
-        ]}
-        onChange={(value) => {
-          setModelType(value);
-          setDirty(true);
-        }}
-      />
-    </div>
-  );
-  const saveButton = (
-    <div className={styles.actions}>
-      <Button
-        type="primary"
-        size="small"
-        loading={saving}
-        disabled={!dirty}
-        onClick={handleSave}
-      >
-        {t("models.save")}
-      </Button>
-    </div>
-  );
-  if (isDecision) {
-    return (
-      <div className={styles.editor}>
-        {modelTypeField}
-        {saveButton}
-      </div>
-    );
-  }
-
-  return (
-    <div className={styles.editor}>
-      {modelTypeField}
+  const chatFields = !isDecision && (
+    <>
       <InteractiveCard as="section" tilt={0} className={styles.capabilities}>
         <ModelCapabilitiesFields
           model={model}
@@ -368,7 +326,40 @@ export function ModelConfigEditor({
           />
         </details>
       </InteractiveCard>
-      {saveButton}
+    </>
+  );
+
+  return (
+    <div className={styles.editor}>
+      <Space>
+        <span>{t("models.modelType")}</span>
+        <Select
+          size="small"
+          style={{ width: 128 }}
+          aria-label={t("models.modelType")}
+          value={modelType ?? model.model_type ?? "chat"}
+          options={[
+            { value: "chat", label: t("models.modelTypeChat") },
+            { value: "decision", label: t("models.modelTypeDecision") },
+          ]}
+          onChange={(value) => {
+            setModelType(value);
+            setDirty(true);
+          }}
+        />
+      </Space>
+      {chatFields}
+      <div className={styles.actions}>
+        <Button
+          type="primary"
+          size="small"
+          loading={saving}
+          disabled={!dirty}
+          onClick={handleSave}
+        >
+          {t("models.save")}
+        </Button>
+      </div>
     </div>
   );
 }
