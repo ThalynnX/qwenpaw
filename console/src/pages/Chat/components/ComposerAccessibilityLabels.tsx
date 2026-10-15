@@ -7,6 +7,7 @@ const SENDER_ACTION_CLASS_SUFFIX = "-sender-actions-btn";
 const SENDER_PREFIX_CLASS_SUFFIX = "-sender-prefix";
 const SENDER_ACTIONS_CLASS_SUFFIX = "-sender-actions-list";
 const RECORDING_ICON_CLASS_SUFFIX = "-sender-actions-btn-recording-icon";
+const COMPOSER_SUBMIT_ATTRIBUTE = "data-qwenpaw-composer-submit";
 
 function hasClassToken(element: Element, suffix: string): boolean {
   return Array.from(element.classList).some((token) => token.endsWith(suffix));
@@ -69,6 +70,7 @@ function labelSdkComposerActions(
 
   for (const button of actionButtons) {
     if (findAncestorByClassToken(button, SENDER_PREFIX_CLASS_SUFFIX)) {
+      button.removeAttribute(COMPOSER_SUBMIT_ATTRIBUTE);
       const recording = Array.from(button.querySelectorAll("*")).some(
         (element) => hasClassToken(element, RECORDING_ICON_CLASS_SUFFIX),
       );
@@ -80,6 +82,7 @@ function labelSdkComposerActions(
     }
 
     if (findAncestorByClassToken(button, SENDER_ACTIONS_CLASS_SUFFIX)) {
+      button.setAttribute(COMPOSER_SUBMIT_ATTRIBUTE, "true");
       button.setAttribute("aria-label", loading ? labels.stop : labels.send);
     }
   }

@@ -40,6 +40,9 @@ function Harness({ showMarker = true }: { showMarker?: boolean }) {
               </button>
             </div>
             <div className="qwenpaw-sender-actions-list actions-extra">
+              <button type="button" className="attachment-action">
+                Attach file
+              </button>
               <button
                 type="button"
                 className="qwenpaw-sender-actions-btn spark-button"
@@ -61,19 +64,24 @@ describe("ComposerAccessibilityLabels", () => {
 
   it("labels SDK microphone and send actions in the real multi-class layout", () => {
     const view = render(<Harness />);
-    expect(
-      screen.getByRole("button", { name: "Start voice recording" }),
-    ).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Send message" })).toBeTruthy();
+    const microphone = screen.getByRole("button", {
+      name: "Start voice recording",
+    });
+    const attachment = screen.getByRole("button", { name: "Attach file" });
+    const send = screen.getByRole("button", { name: "Send message" });
+    expect(microphone).not.toHaveAttribute("data-qwenpaw-composer-submit");
+    expect(attachment).not.toHaveAttribute("data-qwenpaw-composer-submit");
+    expect(send).toHaveAttribute("data-qwenpaw-composer-submit", "true");
 
     inputState.loading = true;
     view.rerender(<Harness />);
     expect(
       screen.getByRole("button", { name: "Start voice recording" }),
     ).toBeTruthy();
-    expect(
-      screen.getByRole("button", { name: "Stop generating" }),
-    ).toBeTruthy();
+    const stop = screen.getByRole("button", { name: "Stop generating" });
+    expect(stop).toHaveAttribute("data-qwenpaw-composer-submit", "true");
+    expect(microphone).not.toHaveAttribute("data-qwenpaw-composer-submit");
+    expect(attachment).not.toHaveAttribute("data-qwenpaw-composer-submit");
   });
 
   it("labels replaced SDK actions and disconnects its local observer", async () => {
