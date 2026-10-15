@@ -961,6 +961,7 @@ class TestListPluginsRoute:
                 "loaded": False,
                 "plugin_type": "general",
                 "frontend_entry": None,
+                "market_id": None,
             },
         ]
 
@@ -981,6 +982,7 @@ class TestListPluginsRoute:
                 "loaded": True,
                 "plugin_type": "general",
                 "frontend_entry": "ui/index.js",
+                "market_id": None,
             },
         ]
 

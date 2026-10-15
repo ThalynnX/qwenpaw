@@ -41,4 +41,39 @@ describe("marketPluginMatches", () => {
   it("matches exact scoped IDs without requiring author metadata", () => {
     expect(marketPluginMatches({ id: "@owner/example" }, entry())).toBe(true);
   });
+
+  it("matches via recorded market id even when the author differs", () => {
+    expect(
+      marketPluginMatches(
+        {
+          id: "example",
+          author: "completely-different-name",
+          market_id: "@owner/example",
+        },
+        entry(),
+      ),
+    ).toBe(true);
+  });
+
+  it("treats a recorded market id as authoritative over author matches", () => {
+    expect(
+      marketPluginMatches(
+        {
+          id: "example",
+          author: "owner",
+          market_id: "@someone-else/example",
+        },
+        entry(),
+      ),
+    ).toBe(false);
+  });
+
+  it("ignores a blank recorded market id and falls back to author matching", () => {
+    expect(
+      marketPluginMatches(
+        { id: "example", author: "owner", market_id: "  " },
+        entry(),
+      ),
+    ).toBe(true);
+  });
 });
