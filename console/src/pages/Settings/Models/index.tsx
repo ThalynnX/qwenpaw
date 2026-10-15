@@ -463,17 +463,12 @@ function ModelsPage() {
               {/* ---- Tab Content ---- */}
               {hasSearchQuery && !activeTabHasSearchResults ? (
                 <div className={styles.searchEmpty} role="status">
-                  <span className={styles.searchEmptyIcon} aria-hidden="true">
-                    <SearchX size={22} strokeWidth={1.6} />
+                  <SearchX size={18} strokeWidth={1.6} aria-hidden="true" />
+                  <span>
+                    {t("models.noSearchResults", {
+                      query: deferredSearchQuery.trim(),
+                    })}
                   </span>
-                  <div>
-                    <h3>{t("models.noSearchResultsTitle")}</h3>
-                    <p>
-                      {t("models.noSearchResults", {
-                        query: deferredSearchQuery.trim(),
-                      })}
-                    </p>
-                  </div>
                 </div>
               ) : activeTab === "cloud" ? (
                 <>

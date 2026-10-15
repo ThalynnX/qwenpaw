@@ -84,6 +84,27 @@
   color: var(--app-text-secondary);
 }
 
+.loadError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  margin-bottom: 8px;
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-secondary);
+
+  > button {
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--app-border-strong);
+    border-radius: 8px;
+    color: var(--app-accent);
+    background: transparent;
+    cursor: pointer;
+  }
+}
+
 .spin {
   animation: spin 1s linear infinite;
 }
@@ -106,6 +127,10 @@
 
   .choiceControl {
     width: 100%;
+  }
+
+  .loadError > button {
+    min-height: 44px;
   }
 }
 

@@ -396,41 +396,15 @@
 .settingsPage .searchEmpty {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
   margin: 0 24px 24px;
-  padding: 28px 20px;
-  border: 1px solid var(--model-hairline);
-  border-radius: 16px;
-  background: var(--models-surface-muted);
-}
-
-.settingsPage .searchEmpty h3,
-.settingsPage .searchEmpty p {
-  margin: 0;
-}
-
-.settingsPage .searchEmpty h3 {
-  color: var(--models-text);
-  font-size: calc(15px * var(--app-font-scale));
-  font-weight: 600;
-}
-
-.settingsPage .searchEmpty p {
-  margin-top: 4px;
+  padding: 16px 0;
   color: var(--models-text-muted);
   font-size: var(--app-font-secondary);
 }
 
-.settingsPage .searchEmptyIcon {
-  display: grid;
-  width: 44px;
-  height: 44px;
-  flex: 0 0 44px;
-  place-items: center;
-  border: 1px solid var(--model-hairline);
-  border-radius: 12px;
-  color: var(--models-text-muted);
-  background: var(--models-surface);
+.settingsPage .searchEmpty > svg {
+  flex: 0 0 auto;
 }
 
 .settingsPage .emptyConfigured h3 {

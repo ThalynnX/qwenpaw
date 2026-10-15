@@ -277,9 +277,7 @@ describe("ModelsPage", () => {
     await user.type(search, "missing");
 
     await waitFor(() =>
-      expect(
-        screen.getByText("models.noSearchResultsTitle"),
-      ).toBeInTheDocument(),
+      expect(screen.getByText(/^models\.noSearchResults/)).toBeInTheDocument(),
     );
     expect(screen.queryByText("models.noConfigured")).not.toBeInTheDocument();
   });

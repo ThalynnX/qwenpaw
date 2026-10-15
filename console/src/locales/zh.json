@@ -2543,7 +2543,6 @@
     "configuredGroup": "已配置",
     "configuredOnline": "个提供商在线",
     "noConfigured": "尚未配置任何提供商，请在下方选择一个开始使用",
-    "noSearchResultsTitle": "未找到匹配的提供商",
     "noSearchResults": "没有与“{{query}}”匹配的提供商，请尝试其他关键词。",
     "goConfigureBtn": "去配置",
     "availableGroup": "可用提供商",
@@ -2846,6 +2845,7 @@
     "agentDefaults": "智能体默认模型",
     "primaryModel": "主模型",
     "agentRuntimeHint": "为当前智能体设置主模型、思考强度、子智能体模型和备用模型。更改会自动保存；思考强度同时作用于这些模型，并按各模型能力适配。",
+    "agentRuntimeLoadFailed": "模型数据加载失败，请重试。",
     "scope": {
       "global": "全局模型",
       "agent": "当前智能体"
