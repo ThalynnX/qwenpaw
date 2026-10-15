@@ -272,3 +272,28 @@ async def test_local_model_metadata_uses_scoped_preferences(
     )
     assert calls == [backend.DataTaskAdapter.identity_namespace(scope)] * 2
     assert "never-forward-this" not in str(result)
+
+
+@pytest.mark.asyncio
+async def test_gateway_start_restores_datasource_without_console_poll(
+    backend,
+    monkeypatch,
+):
+    calls = []
+    monkeypatch.setattr(
+        backend._gateway,
+        "start",
+        AsyncMock(side_effect=lambda: calls.append("context")),
+    )
+    monkeypatch.setattr(
+        backend._engine_gateway,
+        "start",
+        AsyncMock(side_effect=lambda: calls.append("engine")),
+    )
+    monkeypatch.setattr(
+        backend,
+        "_restore_active_datasource",
+        AsyncMock(side_effect=lambda: calls.append("restore")),
+    )
+    await backend._start_gateway()
+    assert calls == ["context", "engine", "restore"]

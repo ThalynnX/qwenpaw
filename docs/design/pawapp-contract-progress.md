@@ -20,7 +20,7 @@ verified separately.
 
 The machine-readable source is
 [`tests/fixtures/pawapp-compatibility.json`](../../tests/fixtures/pawapp-compatibility.json).
-The Engine is fork revision `ccf11e9aafab745f13cfc5ce4d8cffa11770c904`,
+The Engine is fork revision `66eba6f16a56af0f552969542e91a06693f1548a`,
 which includes scoped-session ownership and per-run Host model bindings. CI checks out and verifies
 that exact revision. No compatibility patch is required. Run
 `scripts/prepare-pawapp-engine.py <checkout>` to verify the pairing locally.
@@ -207,3 +207,26 @@ execution exposed stopped local Colima; after starting the existing runtime,
 a second turn completed with `Connection OK`, and the Host task reached
 `succeeded`. The already enabled unrestricted Direct grant was re-saved for the
 new descriptor with the same constraints; other grants were preserved.
+
+
+## DataBridge discovery in native sessions — 2026-10-15
+
+Session-scoped AgentScope MCP clients no longer lose workspace-wide legacy
+registrations. The Engine supplies those declarations through `default_mcps`,
+so each session gets its own client and transient model headers. Explicit
+per-session entries, including an empty list, still take precedence. Docker
+defaults receive the same host-alias and authentication handling as legacy
+clients; the saved host MCP file is unchanged.
+
+The Host restores the persisted active datasource after starting its gateways,
+without waiting for someone to open the Context console. Local acceptance also
+required configuring the existing Neo4j connection and selecting the GAAP demo
+datasource; those instance credentials are not part of the source changes.
+
+Validation: 736 Engine tests passed with three skips; 30 Host datasource and
+service-lifecycle tests passed. A real Docker workspace discovered all 20
+DataBridge MCP tools with session-scoped clients.
+
+Live native-chat acceptance with no explicit datasource selection found
+`DemoProduct → dws_gaap_di` and executed `SELECT 1 AS connection_ok`, returning
+`[[1]]` with successful SQL execution. The Host task reached `succeeded`.

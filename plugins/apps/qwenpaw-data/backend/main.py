@@ -598,6 +598,9 @@ async def _initialize_config() -> None:
 async def _start_gateway() -> None:
     await _gateway.start()
     await _engine_gateway.start()
+    # Native chat can run without a Context-console poll. Both the sidecar
+    # and gateway must be ready before restoring its persisted datasource.
+    await _restore_active_datasource()
 
 
 @app.hook("shutdown", priority=120)
