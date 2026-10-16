@@ -51,6 +51,17 @@ function state(overrides = {}) {
   };
 }
 
+function jobSnapshot(jobState: string) {
+  return {
+    job_id: "job",
+    agent_id: "agent",
+    state: jobState,
+    seq: 2,
+    logs: [],
+    providers: [],
+  };
+}
+
 function renderPage() {
   return render(
     <MemoryRouter>
@@ -126,6 +137,44 @@ describe("ImportPage", () => {
     expect(actions.start).not.toHaveBeenCalled();
   });
 
+  it("keeps scanning in the inventory stage without import progress", () => {
+    vi.mocked(useImportJob).mockReturnValue(
+      state({ job: jobSnapshot("scanning") }) as never,
+    );
+    renderPage();
+
+    expect(screen.getByText("portabilityImport.scanning")).toBeVisible();
+    expect(screen.queryByText("portabilityImport.importing")).toBeNull();
+    expect(screen.queryByText("portabilityImport.keepOpen")).toBeNull();
+    expect(screen.queryByRole("progressbar")).toBeNull();
+    expect(
+      screen
+        .getByText("portabilityImport.steps.inventory")
+        .closest(".ant-steps-item"),
+    ).toHaveClass("ant-steps-item-process");
+  });
+
+  it.each([
+    ["running", "portabilityImport.importing", "portabilityImport.keepOpen"],
+    [
+      "cancelling",
+      "portabilityImport.cancelling",
+      "portabilityImport.cancellingHint",
+    ],
+    ["completed", "portabilityImport.finished", "portabilityImport.keepOpen"],
+    ["failed", "portabilityImport.finished", "portabilityImport.keepOpen"],
+  ])("shows %s progress with its matching copy", (jobState, title, hint) => {
+    vi.mocked(useImportJob).mockReturnValue(
+      state({ job: jobSnapshot(jobState) }) as never,
+    );
+    renderPage();
+
+    expect(screen.queryByText("portabilityImport.scanning")).toBeNull();
+    expect(screen.getByRole("heading", { name: title })).toBeVisible();
+    expect(screen.getByText(hint)).toBeVisible();
+    expect(screen.getByRole("progressbar")).toBeVisible();
+  });
+
   it("shows default-selected conversations and grouped assets", () => {
     vi.mocked(useImportJob).mockReturnValue(
       state({
@@ -177,6 +226,10 @@ describe("ImportPage", () => {
     );
     renderPage();
 
+    expect(screen.queryByText("portabilityImport.scanning")).toBeNull();
+    expect(screen.queryByText("portabilityImport.importing")).toBeNull();
+    expect(screen.queryByText("portabilityImport.keepOpen")).toBeNull();
+    expect(screen.queryByRole("progressbar")).toBeNull();
     expect(
       screen.getByText("portabilityImport.conversations"),
     ).toBeInTheDocument();
