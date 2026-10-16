@@ -103,7 +103,8 @@ class ProviderManager(
         self.custom_providers: Dict[str, Provider] = {}
         self.plugin_providers: Dict[str, Dict] = {}  # Plugin providers
         self.default_models: dict[
-            ModelType, ModelSlotConfig | None
+            ModelType,
+            ModelSlotConfig | None,
         ] = dict.fromkeys(get_args(ModelType))
         self._provider_save_locks: dict[str, asyncio.Lock] = {}
         self._discovery_generations: dict[str, int] = {}
@@ -277,20 +278,25 @@ class ProviderManager(
         self.default_models["chat"] = value
 
     async def set_default_model(
-        self, model_type: ModelType, slot: ModelSlotConfig | None
+        self,
+        model_type: ModelType,
+        slot: ModelSlotConfig | None,
     ) -> None:
         if slot is None:
             await self.clear_active_model_async(model_type=model_type)
         else:
             provider_id = self._normalize_provider_id(slot.provider_id)
             lock = self._provider_save_locks.setdefault(
-                provider_id, asyncio.Lock()
+                provider_id,
+                asyncio.Lock(),
             )
             async with lock:
                 await run_async_to_completion(
                     self.activate_model(
-                        provider_id, slot.model, model_type=model_type
-                    )
+                        provider_id,
+                        slot.model,
+                        model_type=model_type,
+                    ),
                 )
 
     def get_active_model(self) -> ModelSlotConfig | None:
@@ -968,7 +974,8 @@ class ProviderManager(
         if not selected:
             for model_type in self.default_models:
                 await self.clear_active_model_async(
-                    provider_id, model_type=model_type
+                    provider_id,
+                    model_type=model_type,
                 )
         provider = await run_sync_io(self.get_provider, provider_id)
         if provider is None:

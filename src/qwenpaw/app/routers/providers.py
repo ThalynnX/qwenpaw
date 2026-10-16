@@ -1046,14 +1046,16 @@ async def set_active_model(
     if body.model_type != "chat" or slot is None:
         raise HTTPException(
             status_code=400,
-            detail="Use agent model settings to clear or select decision models",
+            detail=(
+                "Use agent model settings to clear or select decision models"
+            ),
         )
 
     await run_sync_io(
         _validate_model_slot,
         manager,
-        body.provider_id,
-        body.model,
+        slot.provider_id,
+        slot.model,
     )
 
     try:
@@ -1089,8 +1091,8 @@ async def set_active_model(
             detail="Failed to save active model to agent config",
         ) from exc
 
-    if body.provider_id != PROVIDER_ID:
-        manager.maybe_probe_multimodal(body.provider_id, body.model)
+    if slot.provider_id != PROVIDER_ID:
+        manager.maybe_probe_multimodal(slot.provider_id, slot.model)
 
     return await run_sync_io(
         _active_models_info,

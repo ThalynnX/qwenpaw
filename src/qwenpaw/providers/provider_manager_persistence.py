@@ -882,7 +882,9 @@ class ProviderManagerPersistenceMixin(
         return provider
 
     async def clear_invalid_default_models(
-        self, provider_id: str, provider: Provider | None
+        self,
+        provider_id: str,
+        provider: Provider | None,
     ) -> None:
         for model_type, slot in self.default_models.items():
             if (
@@ -898,7 +900,8 @@ class ProviderManagerPersistenceMixin(
                 or model.model_type != model_type
             ):
                 await self.clear_active_model_async(
-                    provider_id, model_type=model_type
+                    provider_id,
+                    model_type=model_type,
                 )
 
     def _default_model_path(self, model_type: ModelType) -> Path:
@@ -910,7 +913,9 @@ class ProviderManagerPersistenceMixin(
         return self.root_path / filename
 
     def save_active_model(
-        self, active_model: ModelSlotConfig, model_type: ModelType = "chat"
+        self,
+        active_model: ModelSlotConfig,
+        model_type: ModelType = "chat",
     ):
         """Atomically save the active provider/model configuration."""
         active_path = self._default_model_path(model_type)
@@ -1002,7 +1007,8 @@ class ProviderManagerPersistenceMixin(
         return await run_async_to_completion(clear_model())
 
     def load_active_model(
-        self, model_type: ModelType = "chat"
+        self,
+        model_type: ModelType = "chat",
     ) -> ModelSlotConfig | None:
         """Load the active provider/model configuration from disk."""
         active_path = self._default_model_path(model_type)
@@ -1203,7 +1209,7 @@ class ProviderManagerPersistenceMixin(
         # Load active model config
         for model_type in self.default_models:
             self.default_models[model_type] = self.load_active_model(
-                model_type
+                model_type,
             )
 
         # Migrate copaw-local to qwenpaw-local for backwards compatibility

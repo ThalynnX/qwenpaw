@@ -363,7 +363,9 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
         """Release resources owned by this runtime provider instance."""
 
     def validate_model_selection(
-        self, model_id: str, model_type: ModelType = "chat"
+        self,
+        model_id: str,
+        model_type: ModelType = "chat",
     ) -> None:
         """Check a configured model before assigning it to a model slot."""
         model = self.get_model_info(model_id)
@@ -374,7 +376,7 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
             )
         if model.model_type != model_type:
             raise ProviderError(
-                message=f"Model '{model_id}' is not a {model_type} model"
+                message=f"Model '{model_id}' is not a {model_type} model",
             )
         if model.availability_status in {
             "permission_denied",
@@ -383,7 +385,7 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
         }:
             reason = model.availability_message or model.availability_status
             raise ProviderError(
-                message=f"Model '{model_id}' cannot be activated: {reason}"
+                message=f"Model '{model_id}' cannot be activated: {reason}",
             )
 
     def validate_chat_model(self, model_id: str) -> None:
@@ -393,7 +395,7 @@ class Provider(ProviderInfo, ABC):  # pylint: disable=too-many-public-methods
             model = self.get_discovered_model_info(model_id)
         if model is not None and model.model_type != "chat":
             raise ProviderError(
-                message=f"Model '{model_id}' is not a chat model"
+                message=f"Model '{model_id}' is not a chat model",
             )
 
     def model_protocol(self, model_id: str) -> str:

@@ -142,7 +142,9 @@ async def _persist_pending_model_settings(workspace, chat, request_context):
         if not isinstance(pending_decision, bool):
             raise HTTPException(422, "Invalid decision preference")
         chat = await workspace.chat_manager.set_session_decision(
-            chat.id, pending_decision, only_if_unset=True
+            chat.id,
+            pending_decision,
+            only_if_unset=True,
         )
         if chat is None:
             raise HTTPException(409, "Session disappeared before saving")

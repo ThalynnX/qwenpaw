@@ -731,7 +731,8 @@ async def set_decision_settings(
     settings = await asyncio.to_thread(decision_settings, config, enabled)
     if enabled and not settings["configured"]:
         raise HTTPException(
-            422, "No agent or global decision model configured"
+            422,
+            "No agent or global decision model configured",
         )
     if await mgr.set_session_decision(chat_id, enabled) is None:
         raise HTTPException(404, "Chat not found")

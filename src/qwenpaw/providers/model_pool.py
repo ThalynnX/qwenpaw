@@ -108,9 +108,11 @@ def model_pool_page(
                 for field in (f"image", f"audio", f"video", f"tool_calling")
             ):
                 return False
-        elif query.capability != f"all":
-            if getattr(card, f"supports_{query.capability}") is not True:
-                return False
+        elif (
+            query.capability != f"all"
+            and getattr(card, f"supports_{query.capability}") is not True
+        ):
+            return False
         if query.availability not in {f"all", card.availability_status}:
             return False
         return query.family in {f"all", card.id.split(f"/", 1)[0]}

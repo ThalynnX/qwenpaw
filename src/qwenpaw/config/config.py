@@ -212,7 +212,7 @@ class ActiveModelsInfo(BaseModel):
 
     active_llm: ModelSlotConfig | None
     default_models: Dict[ModelType, ModelSlotConfig | None] = Field(
-        default_factory=dict
+        default_factory=dict,
     )
     effective_max_input_length: int | None = None
 
@@ -2376,7 +2376,9 @@ class AgentProfileConfig(BaseModel):
     )
     decision_model: Optional["ModelSlotConfig"] = Field(
         default=None,
-        description="Decision model for this agent; None disables it by default",
+        description=(
+            "Decision model for this agent; None disables it by default"
+        ),
     )
     fallback_models: List["ModelSlotConfig"] = Field(
         default_factory=list,

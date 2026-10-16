@@ -72,7 +72,9 @@ class TypeSafeProvider(Provider):
                 success=False,
                 message=self.connection_error_message(exc),
                 http_status=getattr(
-                    getattr(exc, "response", None), "status_code", None
+                    getattr(exc, "response", None),
+                    "status_code",
+                    None,
                 ),
             )
         return ModelConnectionResult(success=True)

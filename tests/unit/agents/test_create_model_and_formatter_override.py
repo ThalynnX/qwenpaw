@@ -552,7 +552,8 @@ def test_preloaded_agent_config_preserves_model_settings(monkeypatch):
         "fallback-provider": _FakeProvider(
             enabled=True,
             get_model_info=lambda _model_name: SimpleNamespace(
-                is_free=False, model_type="chat"
+                is_free=False,
+                model_type="chat",
             ),
             get_chat_model_instance=lambda model_name: (
                 _FakeChatModel(f"fallback-provider/{model_name}")
@@ -648,7 +649,8 @@ def test_each_fallback_model_gets_its_own_formatter(monkeypatch):
         "fallback-provider": _FakeProvider(
             enabled=True,
             get_model_info=lambda _model_name: SimpleNamespace(
-                is_free=False, model_type="chat"
+                is_free=False,
+                model_type="chat",
             ),
             get_chat_model_instance=lambda model_name: (
                 _FakeChatModel(f"fallback-provider/{model_name}")
@@ -722,7 +724,8 @@ def test_model_override_disables_persisted_fallback_chain(monkeypatch):
         "fallback-provider": _FakeProvider(
             enabled=True,
             get_model_info=lambda _model_name: SimpleNamespace(
-                is_free=False, model_type="chat"
+                is_free=False,
+                model_type="chat",
             ),
             get_chat_model_instance=lambda model_name: (
                 _FakeChatModel(f"fallback-provider/{model_name}")

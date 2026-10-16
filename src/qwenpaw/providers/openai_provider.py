@@ -333,25 +333,25 @@ class OpenAIProvider(Provider):
             return ModelConnectionResult(success=True)
         except APIError as exc:
             detail = self.connection_error_message(exc)
-            if any(
+            dedicated_api = any(
                 marker in detail.lower()
                 for marker in _API_TYPE_MISMATCH_MARKERS
-            ):
-                return ModelConnectionResult(
-                    success=True,
-                    message=(
-                        f"Model '{model_id}' requires a dedicated non-chat "
-                        "API; endpoint and credentials verified"
-                    ),
-                )
+            )
             status = getattr(exc, "status_code", "unknown")
             return ModelConnectionResult(
-                success=False,
+                success=dedicated_api,
                 message=(
-                    f"API error when connecting to model '{model_id}' "
+                    f"Model '{model_id}' requires a dedicated non-chat "
+                    "API; endpoint and credentials verified"
+                    if dedicated_api
+                    else f"API error when connecting to model '{model_id}' "
                     f"(status={status}): {detail}"
                 ),
-                http_status=status if isinstance(status, int) else None,
+                http_status=(
+                    status
+                    if not dedicated_api and isinstance(status, int)
+                    else None
+                ),
             )
         except Exception as exc:
             return ModelConnectionResult(

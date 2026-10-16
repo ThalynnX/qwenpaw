@@ -91,7 +91,7 @@ class TestValidateModelSlot:
                 name="M",
                 availability_status="permission_denied",
                 availability_message="no access",
-            )
+            ),
         ]
         manager.get_provider.return_value = provider
         with pytest.raises(HTTPException) as exc_info:
@@ -108,7 +108,7 @@ class TestValidateModelSlot:
                 name="M",
                 availability_status="model_not_found",
                 availability_message=None,
-            )
+            ),
         ]
         manager.get_provider.return_value = provider
         with pytest.raises(HTTPException) as exc_info:
@@ -124,7 +124,7 @@ class TestValidateModelSlot:
                 name="M",
                 availability_status="available",
                 availability_message=None,
-            )
+            ),
         ]
         manager.get_provider.return_value = provider
         providers_mod._validate_model_slot(manager, "p", "m")

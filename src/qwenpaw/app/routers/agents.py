@@ -1331,11 +1331,11 @@ async def update_agent_model_settings(
                 **values,
             },
         )
-        for field, model_type in (
-            ("active_model", "chat"),
-            ("decision_model", "decision"),
-            ("subagent_model", "chat"),
-            ("fallback_models", "chat"),
+        for field in (
+            "active_model",
+            "decision_model",
+            "subagent_model",
+            "fallback_models",
         ):
             value = values.get(field)
             if field == "fallback_models":
@@ -1350,7 +1350,7 @@ async def update_agent_model_settings(
                         request.app.state.provider_manager,
                         slot.provider_id,
                         slot.model,
-                        model_type,
+                        "decision" if field == "decision_model" else "chat",
                     )
 
         for key, value in values.items():

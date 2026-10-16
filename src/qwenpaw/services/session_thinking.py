@@ -205,7 +205,7 @@ def decision_settings(config, override: bool | None) -> dict:
     """Resolve the session toggle against agent and global configuration."""
     configured = config.backend == "qwenpaw" and bool(
         config.decision_model
-        or ProviderManager.get_instance().default_models["decision"]
+        or ProviderManager.get_instance().default_models["decision"],
     )
     return {
         "configured": configured,
@@ -296,7 +296,7 @@ async def thinking_view(
             decision_settings,
             config,
             ((meta or {}).get("runtime_context") or {}).get(
-                "decision_enabled"
+                "decision_enabled",
             ),
         ),
         f"model_source": model_source,
