@@ -33,24 +33,41 @@ function DurationColumn({
 
   useLayoutEffect(() => {
     const wheel = root.current!;
-    const current = Math.round(wheel.scrollTop / ROW_HEIGHT);
-    const cycle = Math.max(
-      0,
-      Math.min(2, Math.round((current - value) / count)),
-    );
-    const target = initialized.current ? cycle * count + value : count + value;
-    externalScroll.current = true;
-    wheel.scrollTo({
-      top: target * ROW_HEIGHT,
-      behavior: initialized.current && !reduced ? "smooth" : "instant",
+    const sync = () => {
+      // Modal portals and inactive tabs can mount before they have layout.
+      if (!wheel.isConnected || wheel.clientHeight === 0) {
+        initialized.current = false;
+        return;
+      }
+      const current = Math.round(wheel.scrollTop / ROW_HEIGHT);
+      const cycle = Math.max(
+        0,
+        Math.min(2, Math.round((current - value) / count)),
+      );
+      const target = initialized.current
+        ? cycle * count + value
+        : count + value;
+      externalScroll.current = true;
+      wheel.scrollTo({
+        top: target * ROW_HEIGHT,
+        behavior: initialized.current && !reduced ? "smooth" : "instant",
+      });
+      initialized.current = true;
+    };
+    sync();
+    const observer = new ResizeObserver(() => {
+      if (wheel.clientHeight === 0) initialized.current = false;
+      else if (!initialized.current) sync();
     });
-    initialized.current = true;
+    observer.observe(wheel);
+    return () => observer.disconnect();
   }, [value, count, reduced]);
 
   useLayoutEffect(() => {
     const wheel = root.current!;
     const settle = () => {
-      if (drag.current) return;
+      if (drag.current || !wheel.isConnected || wheel.clientHeight === 0)
+        return;
       const next = wrap(Math.round(wheel.scrollTop / ROW_HEIGHT));
       const userEdit = !externalScroll.current;
       externalScroll.current = true;

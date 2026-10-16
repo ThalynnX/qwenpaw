@@ -657,6 +657,8 @@ describe("CronJobsPage drawer submit", () => {
     expect(submitted.schedule.repeat_end_type).toBe("count");
     expect(submitted.schedule.repeat_count).toBe(3);
     expect(submitted.schedule.repeat_until).toBeUndefined();
+    expect(updateJob.mock.calls[0]).toHaveLength(2);
+    expect(capturedDrawer.props!.open).toBe(false);
   });
 
   it("builds an until-bounded repeat and leaves a missing run_at empty", async () => {
@@ -787,6 +789,34 @@ describe("CronJobsPage drawer submit", () => {
     ).toBeUndefined();
     expect(createJob.mock.calls[1][0].request.request_context).toEqual({
       custom: true,
+    });
+  });
+
+  it("builds an agent payload without mutating the editor's request or model override", async () => {
+    const createJob = vi.fn().mockResolvedValue(false);
+    const drawer = await renderPage({ createJob });
+    const input = JSON.stringify([
+      { role: "user", content: [{ type: "text", text: "Original request" }] },
+    ]);
+    const requestContext = Object.freeze({
+      model_slot_override: "old:model",
+      custom: true,
+    });
+    const request = Object.freeze({
+      input,
+      model_slot_override: null,
+      request_context: requestContext,
+    });
+    const values = { name: "Agent", task_type: "agent", schedule: {}, request };
+    await act(async () => {
+      await drawer.onSubmit(values);
+    });
+    expect(values.request.input).toBe(input);
+    expect(values.request.model_slot_override).toBeNull();
+    expect(values.request.request_context).toBe(requestContext);
+    expect(createJob.mock.calls[0][0].request).toEqual({
+      input: JSON.parse(input),
+      request_context: { custom: true },
     });
   });
 

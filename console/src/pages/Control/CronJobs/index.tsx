@@ -257,6 +257,7 @@ function CronJobsPage() {
 
   const handleEdit = (job: CronJob) => {
     setEditingJob(job);
+    form.resetFields();
 
     const formValues: JobFormValues = {
       ...job,
@@ -437,6 +438,8 @@ function CronJobsPage() {
     const processedValues = {
       ...values,
       schedule,
+      // Payload normalization must not change the live editor's JSON string.
+      request: values.request ? { ...values.request } : undefined,
     };
     delete processedValues.scheduleType;
     delete processedValues.onceRunAt;
@@ -490,16 +493,14 @@ function CronJobsPage() {
     setSaving(true);
     try {
       if (editingJob) {
-        success = await updateJob(editingJob.id, processedValues, true);
+        success = await updateJob(editingJob.id, processedValues);
       } else {
         success = await createJob(processedValues);
       }
     } finally {
       setSaving(false);
     }
-    if (success && !editingJob) {
-      setDrawerOpen(false);
-    }
+    if (success) handleDrawerClose();
     return success;
   };
 
