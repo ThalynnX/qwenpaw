@@ -224,6 +224,7 @@ async def ai_optimize_skill_stream(request: AIOptimizeSkillRequest):
 
             response = await model(messages)
             accumulated = ""
+            started = False
 
             if hasattr(response, "__aiter__"):
                 async for chunk in response:
@@ -242,14 +243,20 @@ async def ai_optimize_skill_stream(request: AIOptimizeSkillRequest):
                         raise ValueError(
                             "Inconsistent skill optimization stream"
                         )
+                    # A skill's YAML header must start on its first line.
+                    # Keep raw accumulation for snapshot matching and strip
+                    # only the leading whitespace of the emitted document.
+                    if not started:
+                        delta = delta.lstrip()
                     if delta:
+                        started = True
                         data = json.dumps(
                             {"text": delta},
                             ensure_ascii=False,
                         )
                         yield f"data: {data}\n\n"
             else:
-                text = _extract_text_from_response(response)
+                text = _extract_text_from_response(response).lstrip()
                 if text:
                     accumulated = text
                     data = json.dumps(

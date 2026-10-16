@@ -105,6 +105,34 @@ class SkillStreamTextTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(events[-1], {"done": True})
 
+    async def test_leading_whitespace_does_not_hide_skill_frontmatter(self):
+        raw = "\n  ---\nname: synthetic\ndescription: test\n---\n\n  body"
+
+        async def chunks():
+            for text, last in [("\n ", False), (raw[2:], False), (raw, True)]:
+                yield ChatResponse(
+                    content=[TextBlock(text=text)], is_last=last
+                )
+
+        async def model(_messages):
+            return chunks()
+
+        async def get_model():
+            return model
+
+        with patch.object(skills_stream, "get_model", get_model):
+            response = await skills_stream.ai_optimize_skill_stream(
+                skills_stream.AIOptimizeSkillRequest(content="synthetic draft")
+            )
+            events = [
+                json.loads(chunk.removeprefix("data: ").strip())
+                async for chunk in response.body_iterator
+            ]
+        self.assertEqual(
+            "".join(event.get("text", "") for event in events), raw.lstrip()
+        )
+        self.assertEqual(events[-1], {"done": True})
+
 
 if __name__ == "__main__":
     unittest.main()
