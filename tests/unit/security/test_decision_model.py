@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Jev's additive approval contract and response validation."""
+"""Decision-model approval contract and response validation."""
 
 # pylint: disable=protected-access
 
 import pytest
 import httpx
 
-from qwenpaw.security.jev import (
+from qwenpaw.security.decision_model import (
     _interpret,
     _is_read_only_shell_listing,
     _sips_output_exists,
@@ -45,7 +45,7 @@ def _response(*, choice="routine", confidence=0.95, risk=0.01):
     }
 
 
-def test_jev_is_smart_baseline():
+def test_decision_model_is_smart_baseline():
     level = ToolExecutionLevel.from_config("JEV")
     assert level is ToolExecutionLevel.JEV
     assert level.is_smart_mode()
@@ -87,11 +87,13 @@ def test_narrow_read_only_shell_listing():
 
 
 @pytest.mark.asyncio
-async def test_read_only_shell_listing_skips_jev_but_not_existing_ask(
+async def test_read_only_listing_skips_model_but_not_existing_ask(
     monkeypatch,
 ):
     async def unexpected(*args):
-        raise AssertionError("verified read-only listing should not call Jev")
+        raise AssertionError(
+            "verified read-only listing should not call decision model",
+        )
 
     monkeypatch.setattr("qwenpaw.services.jev.JevClient.evaluate", unexpected)
     command = "ls -la ~/Desktop/ | grep -i '\\.pdf$'"
@@ -112,13 +114,19 @@ async def test_read_only_shell_listing_skips_jev_but_not_existing_ask(
 
 
 @pytest.mark.asyncio
-async def test_declared_local_media_read_skips_jev(monkeypatch, tmp_path):
+async def test_declared_local_media_read_skips_decision_model(
+    monkeypatch,
+    tmp_path,
+):
     from qwenpaw.agents.tools.view_media import view_image
 
-    assert view_image._tool_descriptor.metadata["jev_local_read"] is True
+    assert (
+        view_image._tool_descriptor.metadata["decision_model_local_read"]
+        is True
+    )
 
     async def unexpected(*args):
-        raise AssertionError("local media read should not call Jev")
+        raise AssertionError("local media read should not call decision model")
 
     monkeypatch.setattr("qwenpaw.services.jev.JevClient.evaluate", unexpected)
     target = str(tmp_path / "desktop_screenshot_small.jpg")
@@ -129,11 +137,14 @@ async def test_declared_local_media_read_skips_jev(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_remote_media_read_still_reaches_jev(monkeypatch):
+async def test_remote_media_read_still_reaches_decision_model(monkeypatch):
     from qwenpaw.agents.tools.view_media import view_image
     from qwenpaw.services.jev import JevResponse
 
-    assert view_image._tool_descriptor.metadata["jev_local_read"] is True
+    assert (
+        view_image._tool_descriptor.metadata["decision_model_local_read"]
+        is True
+    )
     seen = []
 
     async def evaluate(_client, request):
@@ -146,7 +157,7 @@ async def test_remote_media_read_still_reaches_jev(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_sips_existing_output_requires_approval_without_jev(
+async def test_sips_existing_output_requires_approval_without_decision_model(
     monkeypatch,
     tmp_path,
 ):
@@ -157,7 +168,9 @@ async def test_sips_existing_output_requires_approval_without_jev(
     )
 
     async def unexpected(*args):
-        raise AssertionError("verified overwrite should not call Jev")
+        raise AssertionError(
+            "verified overwrite should not call decision model",
+        )
 
     monkeypatch.setattr("qwenpaw.services.jev.JevClient.evaluate", unexpected)
     result = await assess_tool_call(
@@ -213,7 +226,7 @@ def test_sips_preflight_rejects_shell_expansion_and_compound_commands(
 
 
 @pytest.mark.asyncio
-async def test_shell_syntax_reaches_jev_instead_of_immediate_approval(
+async def test_shell_syntax_reaches_model_instead_of_immediate_approval(
     monkeypatch,
 ):
     seen = []
@@ -244,7 +257,7 @@ async def test_shell_syntax_reaches_jev_instead_of_immediate_approval(
 
 
 @pytest.mark.asyncio
-async def test_literal_secret_is_not_sent_to_jev(monkeypatch):
+async def test_literal_secret_is_not_sent_to_decision_model(monkeypatch):
     async def unexpected(*args):
         raise AssertionError("secret must not reach service")
 

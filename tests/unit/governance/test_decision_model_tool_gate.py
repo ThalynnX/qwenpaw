@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Jev is additive to governance decisions and preserves sandboxing."""
+"""Decision-model review preserves governance and sandboxing."""
 
 # pylint: disable=protected-access
 
@@ -14,7 +14,7 @@ from qwenpaw.governance.policy import (
     ToolCallSpec,
 )
 from qwenpaw.governance import tool_adapter
-from qwenpaw.security.jev import JevAssessment
+from qwenpaw.security.decision_model import DecisionModelAssessment
 
 
 def _fake_tool(action, *, approval_origin="unknown", tool_name="Write"):
@@ -50,44 +50,53 @@ def _fake_tool(action, *, approval_origin="unknown", tool_name="Write"):
 
 
 @pytest.mark.asyncio
-async def test_deterministic_deny_never_calls_jev(monkeypatch):
+async def test_deterministic_deny_never_calls_decision_model(monkeypatch):
     tool, audits = _fake_tool(GovernanceAction.DENY)
 
     async def unexpected(*_args, **_kwargs):
-        raise AssertionError("Jev must not be called after deny")
+        raise AssertionError("Decision model must not be called after deny")
 
-    monkeypatch.setattr("qwenpaw.security.jev.assess_tool_call", unexpected)
+    monkeypatch.setattr(
+        "qwenpaw.security.decision_model.assess_tool_call",
+        unexpected,
+    )
     result = await tool_adapter._policy_tool_check_permissions(tool, {})
     assert result.behavior.value == "deny"
     assert audits[0].action is GovernanceAction.DENY
 
 
 @pytest.mark.asyncio
-async def test_jev_escalates_sandbox_fallback_without_dropping_sandbox(
+async def test_model_escalates_sandbox_fallback_without_dropping_sandbox(
     monkeypatch,
 ):
     tool, audits = _fake_tool(GovernanceAction.SANDBOX_FALLBACK)
 
     async def risky(*_args, **kwargs):
         assert kwargs["sandboxed"] is True
-        return JevAssessment(True, "Jev: confirmation required")
+        return DecisionModelAssessment(
+            True,
+            "Decision model: confirmation required",
+        )
 
     async def approve(**kwargs):
-        assert kwargs["source"] == "jev"
+        assert kwargs["source"] == "decision_model"
         return "approved"
 
-    monkeypatch.setattr("qwenpaw.security.jev.assess_tool_call", risky)
+    monkeypatch.setattr(
+        "qwenpaw.security.decision_model.assess_tool_call",
+        risky,
+    )
     monkeypatch.setattr(tool_adapter, "_ask_user_approval", approve)
     result = await tool_adapter._policy_tool_check_permissions(tool, {})
     assert result == "approved"
     assert audits[0].action is GovernanceAction.ASK
     assert tool._qp_sandbox_mode is True
     assert tool._qp_sandbox_config == "sandbox"
-    assert tool._qp_jev_sandbox_required is True
+    assert tool._qp_decision_model_sandbox_required is True
 
 
 @pytest.mark.asyncio
-async def test_jev_can_relax_only_proven_soft_ask(monkeypatch):
+async def test_decision_model_can_relax_only_proven_soft_ask(monkeypatch):
     tool, audits = _fake_tool(
         GovernanceAction.ASK,
         approval_origin="soft_risk",
@@ -95,17 +104,23 @@ async def test_jev_can_relax_only_proven_soft_ask(monkeypatch):
 
     async def safe(*_args, **kwargs):
         assert kwargs["baseline_ask"] is True
-        return JevAssessment(False, "Jev: low-risk assessment")
+        return DecisionModelAssessment(
+            False,
+            "Decision model: low-risk assessment",
+        )
 
-    monkeypatch.setattr("qwenpaw.security.jev.assess_tool_call", safe)
+    monkeypatch.setattr(
+        "qwenpaw.security.decision_model.assess_tool_call",
+        safe,
+    )
     result = await tool_adapter._policy_tool_check_permissions(tool, {})
     assert result.behavior.value == "allow"
     assert audits[0].action is GovernanceAction.ALLOW
-    assert audits[0].source == "jev"
+    assert audits[0].source == "decision_model"
 
 
 @pytest.mark.asyncio
-async def test_explicit_ask_does_not_call_jev(monkeypatch):
+async def test_explicit_ask_does_not_call_decision_model(monkeypatch):
     tool, audits = _fake_tool(
         GovernanceAction.ASK,
         approval_origin="mandatory",
@@ -117,7 +132,10 @@ async def test_explicit_ask_does_not_call_jev(monkeypatch):
     async def approve(**_kwargs):
         return "approved"
 
-    monkeypatch.setattr("qwenpaw.security.jev.assess_tool_call", unexpected)
+    monkeypatch.setattr(
+        "qwenpaw.security.decision_model.assess_tool_call",
+        unexpected,
+    )
     monkeypatch.setattr(tool_adapter, "_ask_user_approval", approve)
     result = await tool_adapter._policy_tool_check_permissions(tool, {})
     assert result == "approved"
@@ -169,15 +187,21 @@ async def test_soft_shell_ask_never_becomes_unsandboxed_allow(monkeypatch):
 
     async def safe(*_args, **kwargs):
         assert kwargs["sandboxed"] is True
-        return JevAssessment(False, "Jev: low-risk assessment")
+        return DecisionModelAssessment(
+            False,
+            "Decision model: low-risk assessment",
+        )
 
-    monkeypatch.setattr("qwenpaw.security.jev.assess_tool_call", safe)
+    monkeypatch.setattr(
+        "qwenpaw.security.decision_model.assess_tool_call",
+        safe,
+    )
     result = await tool_adapter._policy_tool_check_permissions(tool, {})
     assert result.behavior.value == "allow"
     assert audits[0].action is GovernanceAction.ALLOW
     assert tool._qp_sandbox_mode is True
     assert tool._qp_sandbox_config == "compiled sandbox"
-    assert tool._qp_jev_sandbox_required is True
+    assert tool._qp_decision_model_sandbox_required is True
 
 
 @pytest.mark.asyncio
@@ -190,12 +214,17 @@ async def test_soft_shell_ask_stays_ask_without_sandbox(monkeypatch):
     tool._qp_governor.sandbox_usable = False
 
     async def unexpected(*_args, **_kwargs):
-        raise AssertionError("Jev must not relax a shell ASK without sandbox")
+        raise AssertionError(
+            "Decision model must not relax a shell ASK without sandbox",
+        )
 
     async def approve(**_kwargs):
         return "approved"
 
-    monkeypatch.setattr("qwenpaw.security.jev.assess_tool_call", unexpected)
+    monkeypatch.setattr(
+        "qwenpaw.security.decision_model.assess_tool_call",
+        unexpected,
+    )
     monkeypatch.setattr(tool_adapter, "_ask_user_approval", approve)
     assert (
         await tool_adapter._policy_tool_check_permissions(tool, {})

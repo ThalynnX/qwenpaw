@@ -32,10 +32,17 @@ export function ToolExecutionLevelCard({
   const [configured, setConfigured] = useState(false);
 
   useEffect(() => {
-    void providerApi.listProviders()
+    void providerApi
+      .listProviders()
       .then((providers) => {
-        const typeSafe = providers.find((provider) => provider.id === "typesafe");
-        setConfigured(Boolean(typeSafe?.enabled && typeSafe.api_key));
+        const decisionModelProvider = providers.find(
+          (provider) => provider.id === "typesafe",
+        );
+        setConfigured(
+          Boolean(
+            decisionModelProvider?.enabled && decisionModelProvider.api_key,
+          ),
+        );
       })
       .catch(() => setConfigured(false));
   }, []);
@@ -104,12 +111,16 @@ export function ToolExecutionLevelCard({
       />
       {level === "JEV" && (
         <Space direction="vertical" style={{ width: "100%", marginTop: 16 }}>
-          <span>{t("agentConfig.toolExecutionLevel.jevPrivacy")}</span>
-          <span>{configured
-            ? t("agentConfig.toolExecutionLevel.jevConnected")
-            : t("agentConfig.toolExecutionLevel.jevNotConnected")}</span>
+          <span>
+            {t("agentConfig.toolExecutionLevel.decisionModelPrivacy")}
+          </span>
+          <span>
+            {configured
+              ? t("agentConfig.toolExecutionLevel.decisionModelConnected")
+              : t("agentConfig.toolExecutionLevel.decisionModelNotConnected")}
+          </span>
           <Link to="/settings/models">
-            {t("agentConfig.toolExecutionLevel.jevConfigure")}
+            {t("agentConfig.toolExecutionLevel.decisionModelConfigure")}
           </Link>
         </Space>
       )}

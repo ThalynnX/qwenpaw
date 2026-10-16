@@ -62,8 +62,8 @@ class GovernanceDecision:
     #   "No rule hit"           — Phase 3 fallback (no rule/finding matched)
     source: str = "No rule hit"
     # Only a SMART/JEV severity threshold from unmodified bundled detection
-    # rules is eligible for Jev to replace an ASK. Explicit rules and unknown
-    # origins remain mandatory approval.
+    # rules may have ASK replaced by the decision model. Explicit rules and
+    # unknown origins still require approval.
     approval_origin: str = "unknown"
 
 
@@ -1073,7 +1073,7 @@ class GovernancePolicy:
         )
 
     def _is_bundled_risk_only(self, findings: list[Any]) -> bool:
-        """Do not let Jev override custom or modified detection rules."""
+        """Preserve custom and modified detection rules over model advice."""
         if not findings:
             return False
         defaults = {rule.id: rule for rule in _get_default_detection_rules()}

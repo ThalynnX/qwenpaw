@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Jev-backed assessment for potentially effectful tool calls.
+"""Decision-model assessment for potentially effectful tool calls.
 
 The deterministic guard always runs first. Only a provenance-marked soft
 approval may be relaxed. No conversation or file contents are sent.
@@ -15,7 +15,11 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from ..services.jev import JevClient, JevRequest, JevServiceError
+from ..services.jev import (
+    JevClient as DecisionModelClient,
+    JevRequest as DecisionModelRequest,
+    JevServiceError as DecisionModelServiceError,
+)
 
 logger = logging.getLogger(__name__)
 _QUESTION_VERSION = "tool-risk-v4"
@@ -86,7 +90,7 @@ _QUESTIONS: dict[str, dict[str, Any]] = {
 
 
 @dataclass(frozen=True)
-class JevAssessment:
+class DecisionModelAssessment:
     needs_approval: bool
     reason: str
     error_type: str | None = None
@@ -114,7 +118,10 @@ def _is_declared_local_read(tool_name: str, target: str) -> bool:
         if (
             descriptor is not None
             and descriptor.governance.policy_name == tool_name
-            and descriptor.metadata.get("jev_local_read") is True
+            and (
+                descriptor.metadata.get("decision_model_local_read") is True
+                or descriptor.metadata.get("jev_local_read") is True
+            )
         ):
             return True
     return False
@@ -154,7 +161,7 @@ def _is_read_only_shell_listing(tool_name: str, command: str) -> bool:
     """Recognize a narrow, side-effect-free ``ls`` / ``ls | grep`` form.
 
     This is deliberately not a general shell safety parser. Unknown syntax
-    falls back to the normal Jev/approval path rather than being trusted.
+    falls back to the normal model/approval path rather than being trusted.
     """
     if tool_name.lower() != "bash" or not command or len(command) > 600:
         return False
@@ -199,7 +206,11 @@ def _is_read_only_shell_listing(tool_name: str, command: str) -> bool:
     return True
 
 
-def _interpret(payload: Any, *, baseline_ask: bool = False) -> JevAssessment:
+def _interpret(
+    payload: Any,
+    *,
+    baseline_ask: bool = False,
+) -> DecisionModelAssessment:
     if not isinstance(payload, dict) or not isinstance(
         payload.get("answers"),
         dict,
@@ -259,16 +270,16 @@ def _interpret(payload: Any, *, baseline_ask: bool = False) -> JevAssessment:
         and selected_probability >= minimum
         and not risks
     )
-    return JevAssessment(
+    return DecisionModelAssessment(
         not safe,
-        "Jev: "
+        "Decision model: "
         + (
             ", ".join(risks)
             if risks
             else "risk or uncertainty requires confirmation"
         )
         if not safe
-        else "Jev: low-risk assessment",
+        else "Decision model: low-risk assessment",
     )
 
 
@@ -282,7 +293,7 @@ async def assess_tool_call(
     sandboxed: bool = False,
     baseline_ask: bool = False,
     risk_signals: list[dict[str, str]] | None = None,
-) -> JevAssessment:
+) -> DecisionModelAssessment:
     """Evaluate metadata for an effectful call; fail to approval on errors."""
     if (
         _is_read_only(tool_name, operation)
@@ -294,19 +305,20 @@ async def assess_tool_call(
             )
         )
     ):
-        return JevAssessment(
+        return DecisionModelAssessment(
             baseline_ask,
-            "Jev: verified read-only operation skipped"
+            "Decision model: verified read-only operation skipped"
             if not baseline_ask
-            else "Jev: existing approval requirement retained",
+            else "Decision model: existing approval requirement retained",
         )
     started = time.monotonic()
     try:
         # A secret-looking target cannot be safely projected to the service.
         if not target.strip() or target.strip() == "*":
-            return JevAssessment(
+            return DecisionModelAssessment(
                 True,
-                "Jev: target is too broad to assess; approval required",
+                "Decision model: target is too broad to assess; "
+                "approval required",
             )
         if (
             len(target) > 600
@@ -315,20 +327,23 @@ async def assess_tool_call(
             or _SENSITIVE_PATH.search(target)
             or _LITERAL_SECRET.search(target)
         ):
-            return JevAssessment(
+            return DecisionModelAssessment(
                 True,
-                "Jev: target cannot be safely shared; approval required",
+                "Decision model: target cannot be safely shared; "
+                "approval required",
             )
         if any(_SENSITIVE.search(str(name)) for name in (params or {})):
-            return JevAssessment(
+            return DecisionModelAssessment(
                 True,
-                "Jev: sensitive parameter name requires confirmation",
+                "Decision model: sensitive parameter name requires "
+                "confirmation",
             )
         output_exists = _sips_output_exists(tool_name, target)
         if output_exists is True:
-            return JevAssessment(
+            return DecisionModelAssessment(
                 True,
-                "Jev preflight: output already exists and may be overwritten",
+                "Decision model preflight: output already exists and may "
+                "be overwritten",
             )
         state = {
             "schema": _QUESTION_VERSION,
@@ -344,29 +359,32 @@ async def assess_tool_call(
         }
         if output_exists is False:
             state["verified_facts"] = {"output_exists": False}
-        response = await JevClient().evaluate(
-            JevRequest(state=state, questions=_QUESTIONS),
+        response = await DecisionModelClient().evaluate(
+            DecisionModelRequest(state=state, questions=_QUESTIONS),
         )
         result = _interpret(
             {"answers": response.answers},
             baseline_ask=baseline_ask,
         )
-        return JevAssessment(
+        return DecisionModelAssessment(
             result.needs_approval,
             result.reason,
             latency_ms=int((time.monotonic() - started) * 1000),
         )
-    except (JevServiceError, ValueError, TypeError) as exc:
-        logger.warning("Jev assessment unavailable (%s)", type(exc).__name__)
+    except (DecisionModelServiceError, ValueError, TypeError) as exc:
+        logger.warning(
+            "Decision model assessment unavailable (%s)",
+            type(exc).__name__,
+        )
         error_type = (
             "not_configured"
-            if isinstance(exc, JevServiceError)
+            if isinstance(exc, DecisionModelServiceError)
             and "not configured" in str(exc)
             else type(exc).__name__
         )
-        return JevAssessment(
+        return DecisionModelAssessment(
             True,
-            "Jev assessment unavailable; approval required",
+            "Decision model assessment unavailable; approval required",
             error_type,
             int((time.monotonic() - started) * 1000),
         )

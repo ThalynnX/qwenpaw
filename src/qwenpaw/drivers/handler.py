@@ -201,7 +201,7 @@ class DriverHandler(ABC):
             and execution_level.requires_approval_for_all_tools()
         )
         if effect == POLICY_EFFECT_ALLOW and execution_level.value == "jev":
-            from ..security.jev import assess_tool_call
+            from ..security.decision_model import assess_tool_call
 
             assessment = await assess_tool_call(
                 context.driver_name,

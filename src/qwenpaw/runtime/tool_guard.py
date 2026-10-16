@@ -245,7 +245,11 @@ async def _guarded_tool_check_permissions(
     # No findings on AUTO/SMART → allow.
     if guard_result is None or not guard_result.findings:
         if exec_level is ToolExecutionLevel.JEV:
-            return await _jev_guard_decision(self, tool_name, input_data)
+            return await _decision_model_guard_decision(
+                self,
+                tool_name,
+                input_data,
+            )
         return PermissionDecision(
             behavior=PermissionBehavior.ALLOW,
             message="Tool guard: no findings.",
@@ -268,7 +272,11 @@ async def _guarded_tool_check_permissions(
         max_sev = guard_result.max_severity
         if max_sev in (GuardSeverity.INFO, GuardSeverity.LOW):
             if exec_level is ToolExecutionLevel.JEV:
-                return await _jev_guard_decision(self, tool_name, input_data)
+                return await _decision_model_guard_decision(
+                    self,
+                    tool_name,
+                    input_data,
+                )
             return PermissionDecision(
                 behavior=PermissionBehavior.ALLOW,
                 message=(
@@ -290,15 +298,15 @@ async def _guarded_tool_check_permissions(
     return decision
 
 
-async def _jev_guard_decision(
+async def _decision_model_guard_decision(
     tool: Any,
     tool_name: str,
     input_data: dict[str, Any],
 ) -> Any:
-    """Add Jev to a deterministic ALLOW in the fallback Guard path."""
+    """Review deterministic ALLOW in the fallback Guard path."""
     from agentscope.permission import PermissionBehavior, PermissionDecision
 
-    from ..security.jev import assess_tool_call
+    from ..security.decision_model import assess_tool_call
 
     target = next(
         (
@@ -315,7 +323,7 @@ async def _jev_guard_decision(
             message=assessment.reason,
         )
     result = _strict_info_guard_result(tool_name, input_data)
-    result.findings[0].title = "Jev assessment requires approval"
+    result.findings[0].title = "Decision model assessment requires approval"
     result.findings[0].description = assessment.reason
     return await _ask_user_approval(
         agent_id=getattr(tool, "_qp_agent_id", ""),

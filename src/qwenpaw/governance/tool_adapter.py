@@ -388,7 +388,7 @@ async def _policy_tool_check_permissions(
     )
     if effective_level is ToolExecutionLevel.JEV and soft_ask_shell:
         # A severity-driven shell ASK has no compiled sandbox yet. Never
-        # turn it into an unsandboxed ALLOW merely because Jev is confident.
+        # turn it into an unsandboxed ALLOW based on model confidence.
         if not getattr(governor, "sandbox_usable", False):
             soft_ask = False
         else:
@@ -397,14 +397,16 @@ async def _policy_tool_check_permissions(
                     tc_spec,
                 )
             except Exception:
-                logger.exception("Jev soft-ASK sandbox preparation failed")
+                logger.exception(
+                    "Decision model soft-ASK sandbox preparation failed",
+                )
                 soft_ask = False
     if effective_level is ToolExecutionLevel.JEV and (
         decision.action
         in (GovernanceAction.ALLOW, GovernanceAction.SANDBOX_FALLBACK)
         or soft_ask
     ):
-        from ..security.jev import assess_tool_call
+        from ..security.decision_model import assess_tool_call
 
         assessment = await assess_tool_call(
             tc_spec.tool_name,
@@ -433,7 +435,7 @@ async def _policy_tool_check_permissions(
                 reason=assessment.reason,
                 sandbox_config=decision.sandbox_config,
                 findings=decision.findings,
-                source="jev",
+                source="decision_model",
             )
         elif soft_ask:
             decision = GovernanceDecision(
@@ -441,7 +443,7 @@ async def _policy_tool_check_permissions(
                 reason=assessment.reason,
                 sandbox_config=decision.sandbox_config,
                 findings=decision.findings,
-                source="jev",
+                source="decision_model",
             )
     governor.audit(tc_spec, decision)
 
@@ -456,8 +458,8 @@ async def _policy_tool_check_permissions(
             and soft_ask_shell
         )
     )
-    self._qp_jev_sandbox_required = (
-        decision.source == "jev" and self._qp_sandbox_mode
+    self._qp_decision_model_sandbox_required = (
+        decision.source == "decision_model" and self._qp_sandbox_mode
     )
     if self._qp_sandbox_mode:
         self._qp_sandbox_config = decision.sandbox_config
@@ -530,9 +532,9 @@ async def _policy_tool_call(
     ):
         return result
 
-    # A Jev approval authorizes the original sandboxed call, not a retry
+    # Model approval authorizes only the original sandboxed call, not a retry
     # with broader host access.
-    if getattr(self, "_qp_jev_sandbox_required", False):
+    if getattr(self, "_qp_decision_model_sandbox_required", False):
         return result
 
     # Extract violation message from metadata or content
@@ -689,7 +691,7 @@ async def _ask_user_approval(
 
     generalized_target = (
         target
-        if source == "jev"
+        if source in {"jev", "decision_model"}
         else await generalize_target_for_approval(
             tool_name,
             target,
@@ -752,8 +754,8 @@ async def _ask_user_approval(
                         "Sandbox Violation — Approve Unsandboxed Execution?"
                         if violation_msg
                         else (
-                            "Jev assessment requires approval"
-                            if source == "jev"
+                            "Decision model assessment requires approval"
+                            if source in {"jev", "decision_model"}
                             else "Policy Approval Required"
                         )
                     ),
@@ -799,18 +801,18 @@ async def _ask_user_approval(
             guardians_used=["governance_policy"],
         )
 
-    if source == "jev" and policy_findings:
+    if source in {"jev", "decision_model"} and policy_findings:
         guard_result.findings.append(
             GuardFinding(
                 id=uuid.uuid4().hex[:8],
-                rule_id="jev_assessment",
+                rule_id="decision_model_assessment",
                 category=GuardThreatCategory.RESOURCE_ABUSE,
                 severity=GuardSeverity.INFO,
-                title="Jev assessment requires approval",
+                title="Decision model assessment requires approval",
                 description=governance_reason
-                or "Jev assessment was uncertain",
+                or "Decision model assessment was uncertain",
                 tool_name=tool_name,
-                guardian="jev",
+                guardian="decision_model",
             ),
         )
 
@@ -889,8 +891,8 @@ async def _ask_user_approval(
 
     summary = format_findings_summary(guard_result)
     if decision == ApprovalDecision.APPROVED:
-        if source != "jev":
-            # An approval prompted by Jev applies to this call only.
+        if source not in {"jev", "decision_model"}:
+            # A decision-model approval applies to this call only.
             rule_target = (
                 generalized_target
                 if scope == ApprovalScope.SIMILAR
