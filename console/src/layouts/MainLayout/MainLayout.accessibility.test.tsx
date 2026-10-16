@@ -31,9 +31,14 @@ vi.mock("../../stores/useSyncCodingMode", () => ({
   useSyncCodingMode: () => undefined,
 }));
 vi.mock("../../plugins/registry/hooks", async () => {
-  const { Navigate } = await vi.importActual<typeof import("react-router-dom")>(
-    "react-router-dom",
+  const { BUILTIN_ROUTES } = await vi.importActual<
+    typeof import("../registry/builtinRoutes")
+  >("../registry/builtinRoutes");
+  const acpRoute = BUILTIN_ROUTES.find(({ id }) => id === "core.acp");
+  const acpAliasRoute = BUILTIN_ROUTES.find(
+    ({ id }) => id === "core.acp-alias",
   );
+  if (!acpRoute || !acpAliasRoute) throw new Error("ACP routes are required");
 
   return {
     useRoutes: () => [
@@ -56,13 +61,13 @@ vi.mock("../../plugins/registry/hooks", async () => {
       {
         id: "core.acp",
         path: "/acp",
-        caseSensitive: true,
+        caseSensitive: acpRoute.caseSensitive,
         Component: () => <div>ACP page</div>,
       },
       {
         id: "core.acp-alias",
         path: "/ACP",
-        Component: () => <Navigate to="/acp" replace />,
+        Component: acpAliasRoute.component,
       },
     ],
   };
@@ -82,6 +87,8 @@ function HistoryControls() {
   return (
     <>
       <output data-testid="pathname">{location.pathname}</output>
+      <output data-testid="search">{location.search}</output>
+      <output data-testid="hash">{location.hash}</output>
       <button type="button" onClick={() => navigate(-1)}>
         Back
       </button>
@@ -151,7 +158,10 @@ describe("MainLayout accessibility", () => {
     const user = userEvent.setup();
 
     render(
-      <MemoryRouter initialEntries={["/origin", "/ACP"]} initialIndex={1}>
+      <MemoryRouter
+        initialEntries={["/origin", "/ACP?source=external#section"]}
+        initialIndex={1}
+      >
         <HistoryControls />
         <MainLayout />
       </MemoryRouter>,
@@ -160,17 +170,23 @@ describe("MainLayout accessibility", () => {
     await waitFor(() => {
       expect(screen.getByTestId("pathname")).toHaveTextContent("/acp");
     });
+    expect(screen.getByTestId("search")).toHaveTextContent("?source=external");
+    expect(screen.getByTestId("hash")).toHaveTextContent("#section");
     expect(screen.getByText("ACP page")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Back" }));
     await waitFor(() => {
       expect(screen.getByTestId("pathname")).toHaveTextContent("/origin");
     });
+    expect(screen.getByTestId("search")).toBeEmptyDOMElement();
+    expect(screen.getByTestId("hash")).toBeEmptyDOMElement();
 
     await user.click(screen.getByRole("button", { name: "Forward" }));
     await waitFor(() => {
       expect(screen.getByTestId("pathname")).toHaveTextContent("/acp");
     });
+    expect(screen.getByTestId("search")).toHaveTextContent("?source=external");
+    expect(screen.getByTestId("hash")).toHaveTextContent("#section");
   });
 
   it("keeps the canonical ACP route stable", () => {
