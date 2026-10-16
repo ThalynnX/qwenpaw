@@ -23,7 +23,9 @@ export function SettingsDrawer({
   const content = (
     <ConfigProvider
       getPopupContainer={(trigger) =>
-        trigger?.closest<HTMLElement>('[role="dialog"]') ?? document.body
+        trigger?.closest<HTMLElement>("[data-vaul-drawer]") ??
+        trigger?.closest<HTMLElement>(".os-window-overlay-root") ??
+        document.body
       }
     >
       <div className={styles.form}>{children}</div>
