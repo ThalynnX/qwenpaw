@@ -423,6 +423,26 @@ export function AgentModelSettings({
                   <RotateCcw size={15} />
                 </button>
               </div>
+              {decisionProviders && (
+                <div className={styles.settingLine}>
+                  <span>{t("models.defaultDecisionModel")}</span>
+                  <ModelChoice
+                    ariaLabel={t("models.defaultDecisionModel")}
+                    modelType="decision"
+                    value={decisionModel}
+                    label={
+                      modelSlotLabel(decisionProviders, decisionModel) ??
+                      t("modelSelector.noFallback")
+                    }
+                    disabled={saving}
+                    resetOption={{
+                      label: t("modelSelector.noFallback"),
+                      onReset: () => setDecisionModel(null),
+                    }}
+                    onChange={setDecisionModel}
+                  />
+                </div>
+              )}
               <div className={styles.settingLine}>
                 <span>{t("modelSelector.enableFallback")}</span>
                 <Switch
@@ -472,26 +492,6 @@ export function AgentModelSettings({
                     </div>
                   ),
                 )}
-              {decisionProviders && (
-                <div className={styles.settingLine}>
-                  <span>{t("models.defaultDecisionModel")}</span>
-                  <ModelChoice
-                    ariaLabel={t("models.defaultDecisionModel")}
-                    modelType="decision"
-                    value={decisionModel}
-                    label={
-                      modelSlotLabel(decisionProviders, decisionModel) ??
-                      t("modelSelector.noFallback")
-                    }
-                    disabled={saving}
-                    resetOption={{
-                      label: t("modelSelector.noFallback"),
-                      onReset: () => setDecisionModel(null),
-                    }}
-                    onChange={setDecisionModel}
-                  />
-                </div>
-              )}
               {agentId && (
                 <button
                   type="button"
