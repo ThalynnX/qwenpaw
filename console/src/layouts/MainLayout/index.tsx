@@ -94,6 +94,7 @@ export default function MainLayout({ hubMode = false }: { hubMode?: boolean }) {
                       <Route
                         key={r.id}
                         path={r.path}
+                        caseSensitive={r.caseSensitive}
                         element={
                           <PageShell
                             title={getRouteTitle(r, i18n.language)}

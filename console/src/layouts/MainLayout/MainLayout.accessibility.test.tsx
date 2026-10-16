@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import MainLayout from ".";
 
@@ -30,21 +30,43 @@ vi.mock("../../components/AgentStatusPollingController", () => ({
 vi.mock("../../stores/useSyncCodingMode", () => ({
   useSyncCodingMode: () => undefined,
 }));
-vi.mock("../../plugins/registry/hooks", () => ({
-  useRoutes: () => [
-    {
-      id: "core.chat",
-      path: "/chat",
-      Component: () => {
-        if (routeControl.suspended) {
-          throw routeControl.promise;
-        }
+vi.mock("../../plugins/registry/hooks", async () => {
+  const { Navigate } = await vi.importActual<typeof import("react-router-dom")>(
+    "react-router-dom",
+  );
 
-        return <div>Chat route</div>;
+  return {
+    useRoutes: () => [
+      {
+        id: "core.chat",
+        path: "/chat",
+        Component: () => {
+          if (routeControl.suspended) {
+            throw routeControl.promise;
+          }
+
+          return <div>Chat route</div>;
+        },
       },
-    },
-  ],
-}));
+      {
+        id: "test.origin",
+        path: "/origin",
+        Component: () => <div>Origin page</div>,
+      },
+      {
+        id: "core.acp",
+        path: "/acp",
+        caseSensitive: true,
+        Component: () => <div>ACP page</div>,
+      },
+      {
+        id: "core.acp-alias",
+        path: "/ACP",
+        Component: () => <Navigate to="/acp" replace />,
+      },
+    ],
+  };
+});
 vi.mock("../../plugins/registry/Slot", () => ({ Slot: () => null }));
 vi.mock("../../components/PageShell", () => ({
   PageShell: ({ children }: { children: React.ReactNode }) => children,
@@ -52,6 +74,23 @@ vi.mock("../../components/PageShell", () => ({
 vi.mock("./RouteDocumentTitle", () => ({
   RouteDocumentTitle: () => null,
 }));
+
+function HistoryControls() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  return (
+    <>
+      <output data-testid="pathname">{location.pathname}</output>
+      <button type="button" onClick={() => navigate(-1)}>
+        Back
+      </button>
+      <button type="button" onClick={() => navigate(1)}>
+        Forward
+      </button>
+    </>
+  );
+}
 
 describe("MainLayout accessibility", () => {
   afterEach(() => {
@@ -106,5 +145,43 @@ describe("MainLayout accessibility", () => {
 
     expect(await screen.findByText("Chat route")).toBeInTheDocument();
     expect(screen.queryByLabelText("common.loading")).not.toBeInTheDocument();
+  });
+
+  it("replaces the uppercase ACP alias with the canonical route", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/origin", "/ACP"]} initialIndex={1}>
+        <HistoryControls />
+        <MainLayout />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("pathname")).toHaveTextContent("/acp");
+    });
+    expect(screen.getByText("ACP page")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("pathname")).toHaveTextContent("/origin");
+    });
+
+    await user.click(screen.getByRole("button", { name: "Forward" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("pathname")).toHaveTextContent("/acp");
+    });
+  });
+
+  it("keeps the canonical ACP route stable", () => {
+    render(
+      <MemoryRouter initialEntries={["/acp"]}>
+        <HistoryControls />
+        <MainLayout />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("pathname")).toHaveTextContent("/acp");
+    expect(screen.getByText("ACP page")).toBeInTheDocument();
   });
 });

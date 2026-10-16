@@ -201,6 +201,7 @@ export const BUILTIN_ROUTES: Route[] = [
   {
     id: "core.acp",
     path: "/acp",
+    caseSensitive: true,
     component: ACPPage,
     meta: routeMeta("nav.acp", "ACP", "workspace", "agent"),
   },
