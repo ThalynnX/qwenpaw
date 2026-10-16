@@ -254,15 +254,6 @@ export const BUILTIN_MENU: MenuItem[] = [
     order: 50,
   },
   {
-    id: "core.jev-service",
-    location: "primary.settings",
-    parentId: "core.settings-group",
-    label: navLabel("nav.jevService", "Jev Service"),
-    icon: SparkMcpMcpLine,
-    route: "core.jev-service",
-    order: 52,
-  },
-  {
     id: "core.offload-policy",
     location: "primary.settings",
     parentId: "core.settings-group",

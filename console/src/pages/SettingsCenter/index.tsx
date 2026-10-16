@@ -1,5 +1,4 @@
 import {
-  Suspense,
   useMemo,
   useRef,
   useState,
@@ -35,6 +34,7 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { ChunkErrorBoundary } from "@/components/ChunkErrorBoundary";
+import { ChunkRecoverySuspense } from "@/components/ChunkRecoverySuspense";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useMenuItems, useRoutes } from "@/plugins/registry/hooks";
 import { usePlugins } from "@/plugins/PluginContext";
@@ -232,15 +232,6 @@ const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         descriptionFallback: "Runtime variables and secrets",
         routeId: "core.environments",
         Icon: Globe,
-      },
-      {
-        key: "jev-service",
-        labelKey: "nav.jevService",
-        fallback: "Jev Service",
-        descriptionKey: "settingsCenter.descriptions.jevService",
-        descriptionFallback: "Shared TypeSafe Jev connection",
-        routeId: "core.jev-service",
-        Icon: Plug,
       },
       {
         key: "security",
@@ -645,7 +636,7 @@ export default function SettingsCenter() {
         >
           {ActiveComponent ? (
             <ChunkErrorBoundary resetKey={activePage?.key ?? "settings"}>
-              <Suspense
+              <ChunkRecoverySuspense
                 fallback={
                   <div className={styles.loading}>
                     <Spin tip={t("common.loading")} />
@@ -653,7 +644,7 @@ export default function SettingsCenter() {
                 }
               >
                 <ActiveComponent />
-              </Suspense>
+              </ChunkRecoverySuspense>
             </ChunkErrorBoundary>
           ) : null}
         </main>

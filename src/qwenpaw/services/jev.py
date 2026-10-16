@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Reusable TypeSafe Jev client and credential management.
+"""Reusable TypeSafe Jev client backed by the standard model provider.
 
 Callers own their questions, state projection, response interpretation, and
 failure policy. This module deliberately has no security-mode semantics.
@@ -14,12 +14,11 @@ from typing import Any, Mapping
 
 import httpx
 
-from ..config.utils import get_config_path, load_config
+from ..config.utils import get_config_path
 from ..drivers.credentials.store import AsyncCredentialStore
-from ..drivers.credentials.types import CredentialRecord
 
 _CREDENTIAL_REF = "services/typesafe_jev"
-_EVALUATION_PATH = "/v1/systemone"
+_EVALUATION_PATH = "/systemone"
 
 
 class JevServiceError(RuntimeError):
@@ -30,7 +29,7 @@ class JevServiceError(RuntimeError):
 class JevRequest:
     state: str | dict[str, Any] | list[Any]
     questions: Mapping[str, Mapping[str, Any]]
-    model: str = "jev-latest"
+    model: str | None = None
 
 
 @dataclass(frozen=True)
@@ -44,8 +43,31 @@ def _credential_store() -> AsyncCredentialStore:
     return AsyncCredentialStore(get_config_path().parent / "credentials.yaml")
 
 
+def _provider_settings() -> tuple[str, str, str, dict[str, str]]:
+    """Read the configured TypeSafe provider and decision model."""
+    from ..providers.provider_manager import ProviderManager
+
+    try:
+        manager = ProviderManager.get_instance()
+        provider = manager.get_provider("typesafe")
+    except Exception as exc:
+        raise JevServiceError("TypeSafe provider is unavailable") from exc
+    if provider is None or not provider.enabled:
+        raise JevServiceError("TypeSafe provider is unavailable")
+    slot = manager.default_models.get("decision")
+    model = (
+        slot.model
+        if slot is not None and slot.provider_id == "typesafe"
+        else "jev-latest"
+    )
+    return provider.api_key, provider.base_url, model, provider.custom_headers
+
+
 async def get_api_key() -> str | None:
-    """Resolve an encrypted key, falling back to the process environment."""
+    """Use the provider key, then an older Jev key during migration."""
+    provider_key, _, _, _ = await asyncio.to_thread(_provider_settings)
+    if provider_key.strip():
+        return provider_key.strip()
     try:
         record = await _credential_store().get(_CREDENTIAL_REF)
         key = record.secrets.get("api_key")
@@ -54,19 +76,6 @@ async def get_api_key() -> str | None:
     except Exception:
         pass
     return os.getenv("TYPESAFE_API_KEY") or None
-
-
-async def set_api_key(key: str) -> None:
-    """Persist a key with the existing encrypted credential store."""
-    if not key.strip():
-        raise ValueError("API key must not be empty")
-    await _credential_store().put(
-        CredentialRecord(
-            ref=_CREDENTIAL_REF,
-            kind="typesafe_api_key",
-            secrets={"api_key": key.strip()},
-        ),
-    )
 
 
 class JevClient:
@@ -87,7 +96,7 @@ class JevClient:
         """Submit one state with typed questions; validate envelope only."""
         if (
             not request.questions
-            or not request.model.strip()
+            or (request.model is not None and not request.model.strip())
             or not isinstance(request.state, (str, dict, list))
         ):
             raise ValueError("model and questions are required")
@@ -101,23 +110,31 @@ class JevClient:
                 "criteria",
             ):
                 raise ValueError(f"missing criteria: {name}")
+        (
+            _,
+            provider_base_url,
+            provider_model,
+            custom_headers,
+        ) = await asyncio.to_thread(
+            _provider_settings,
+        )
         key = await get_api_key()
         if not key:
             raise JevServiceError("TypeSafe API key is not configured")
-        base_url = (
-            self.base_url
-            or (await asyncio.to_thread(load_config)).jev_service.base_url
-        )
+        base_url = self.base_url or provider_base_url
         try:
             async with httpx.AsyncClient(
                 timeout=self.timeout_seconds,
             ) as client:
                 response = await client.post(
                     f"{base_url.rstrip('/')}{_EVALUATION_PATH}",
-                    headers={"Authorization": f"Bearer {key}"},
+                    headers={
+                        **custom_headers,
+                        "Authorization": f"Bearer {key}",
+                    },
                     json={
                         "state": request.state,
-                        "model": request.model,
+                        "model": request.model or provider_model,
                         "questions": request.questions,
                     },
                 )

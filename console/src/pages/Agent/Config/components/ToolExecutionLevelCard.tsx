@@ -1,6 +1,6 @@
 import { Card, Space } from "antd";
 import { useEffect, useState } from "react";
-import { request } from "@/api/request";
+import { providerApi } from "@/api/modules/provider";
 import { Link } from "react-router-dom";
 import { Shield, ShieldCheck, ShieldQuestion, ShieldOff } from "lucide-react";
 import InlineHelp from "@/components/InlineHelp";
@@ -32,8 +32,11 @@ export function ToolExecutionLevelCard({
   const [configured, setConfigured] = useState(false);
 
   useEffect(() => {
-    void request<{ configured: boolean }>("/config/jev-service")
-      .then((status) => setConfigured(status.configured))
+    void providerApi.listProviders()
+      .then((providers) => {
+        const typeSafe = providers.find((provider) => provider.id === "typesafe");
+        setConfigured(Boolean(typeSafe?.enabled && typeSafe.api_key));
+      })
       .catch(() => setConfigured(false));
   }, []);
 
@@ -105,7 +108,7 @@ export function ToolExecutionLevelCard({
           <span>{configured
             ? t("agentConfig.toolExecutionLevel.jevConnected")
             : t("agentConfig.toolExecutionLevel.jevNotConnected")}</span>
-          <Link to="/settings/jev-service">
+          <Link to="/settings/models">
             {t("agentConfig.toolExecutionLevel.jevConfigure")}
           </Link>
         </Space>

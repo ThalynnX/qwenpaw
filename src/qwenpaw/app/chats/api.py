@@ -451,6 +451,10 @@ async def batch_delete_chats(
 
     """
     chats = {chat.id: chat for chat in await mgr.list_chats(archived=None)}
+    # Stop any live run first: a deleted chat must not leave a run behind
+    # in the tracker, or it inflates the aggregate running count forever.
+    for chat_id in chat_ids:
+        await workspace.task_tracker.request_stop(chat_id)
     deleted = await mgr.delete_chats(chat_ids=chat_ids)
     if deleted:
         await CHECKPOINT_RUNTIME.delete_session_checkpoints(
@@ -710,6 +714,31 @@ async def clear_chat_project_dirs(
     return await _project_dirs_response(updated, workspace)
 
 
+@router.put("/{chat_id}/decision-settings")
+async def set_decision_settings(
+    chat_id: str,
+    enabled: bool = Body(..., strict=True),
+    mgr: ChatManager = Depends(get_chat_manager),
+    workspace=Depends(get_workspace),
+):
+    """Save a decision preference for an existing session."""
+    from ...config.config import load_agent_config
+    from ...services.session_thinking import decision_settings
+
+    if await mgr.get_chat(chat_id) is None:
+        raise HTTPException(404, "Chat not found")
+    config = await asyncio.to_thread(load_agent_config, workspace.agent_id)
+    settings = await asyncio.to_thread(decision_settings, config, enabled)
+    if enabled and not settings["configured"]:
+        raise HTTPException(
+            422,
+            "No agent or global decision model configured",
+        )
+    if await mgr.set_session_decision(chat_id, enabled) is None:
+        raise HTTPException(404, "Chat not found")
+    return settings
+
+
 @router.get(f"/thinking-default")
 async def get_default_thinking(
     provider_id: str | None = None,
@@ -961,6 +990,9 @@ async def delete_chat(
         HTTPException: If chat not found (404)
     """
     chat = await mgr.get_chat(chat_id)
+    # Stop any live run first: a deleted chat must not leave a run behind
+    # in the tracker, or it inflates the aggregate running count forever.
+    await workspace.task_tracker.request_stop(chat_id)
     deleted = await mgr.delete_chats(chat_ids=[chat_id])
     if not deleted:
         raise HTTPException(

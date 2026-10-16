@@ -57,6 +57,10 @@
     "advancedSettings": "高级",
     "done": "完成",
     "autoSaveFailed": "未能保存改动",
+    "discardChangesTitle": "放弃未保存的改动？",
+    "discardChangesContent": "部分改动尚未保存。你可以继续编辑，或放弃未保存的改动并关闭。",
+    "discardAndClose": "放弃并关闭",
+    "keepEditing": "继续编辑",
     "configure": "配置",
     "all": "全部",
     "decrease": "减少",
@@ -91,6 +95,10 @@
     "copied": "错误信息已复制",
     "copyFailed": "复制失败，请展开详情后手动复制。",
     "checking": "正在复查失败资源…",
+    "serverReadiness": {
+      "checking": "正在等待本地服务和页面资源恢复可用…",
+      "timeout": "本地服务或页面资源仍不可用，请稍后再次尝试重新加载。"
+    },
     "recheckNote": "originalError 为原始异常，recheck 为故障后的资源复查结果，不能代表首次请求。未知信息保留为 null；复查无法区分 DNS、TLS、CORS 或代理故障。",
     "observations": {
       "missing": "资源复查：资源当前不存在（404）。",
@@ -255,7 +263,6 @@
     "settings": "设置",
     "moreSettings": "更多设置",
     "models": "模型",
-    "jevService": "Jev 服务",
     "environments": "环境变量",
     "offloadPolicy": "工具后台策略",
     "security": "安全",
@@ -266,17 +273,6 @@
     "plugins": "插件",
     "backups": "备份",
     "pluginManager": "插件管理"
-  },
-  "jevService": {
-    "baseUrl": "Base URL",
-    "apiKey": "TypeSafe API Key",
-    "sharedHint": "此连接供工具审批和 QwenPaw 其他功能共用，不属于对话模型 Provider。",
-    "keyConfigured": "已配置 API Key；留空则保持不变",
-    "keyMissing": "未配置 API Key",
-    "save": "保存服务配置",
-    "saved": "Jev 服务配置已保存",
-    "saveFailed": "保存 Jev 服务配置失败",
-    "loadFailed": "加载 Jev 服务配置失败"
   },
   "os": {
     "console": "控制台",
@@ -451,7 +447,6 @@
       "voice": "语音输入与转写",
       "heartbeat": "智能体在线状态与周期唤醒",
       "environments": "运行变量和密钥",
-      "jevService": "供安全审批及其他功能共用的 TypeSafe Jev 连接",
       "security": "执行策略与安全规则",
       "offloadPolicy": "工具后台执行策略",
       "tokenUsage": "用量统计与趋势",
@@ -2381,6 +2376,7 @@
     "configuredModels": "已配置模型",
     "freeModelsOnly": "仅免费模型",
     "chooseFallback": "备用模型",
+    "noFallback": "不使用",
     "moveFallbackUp": "上移 {{model}}",
     "moveFallbackDown": "下移 {{model}}",
     "removeFallback": "移除 {{model}}",
@@ -2393,6 +2389,10 @@
     "searchCandidates": "搜索候选模型..."
   },
   "models": {
+    "modelType": "模型类型",
+    "modelTypeChat": "聊天",
+    "modelTypeDecision": "决策",
+    "decisionModelHint": "在此配置决策模型，供后续自动化功能接入；不能用于聊天。",
     "connectProviderTitle": "连接你的第一个模型",
     "cardStatus": {
       "configured": "已配置",
@@ -2417,6 +2417,9 @@
     "providersTitle": "提供商",
     "providersDescription": "为每个提供商配置 API 密钥和端点。",
     "llmTitle": "模型",
+    "defaultModels": "默认模型",
+    "defaultChatModel": "对话模型",
+    "defaultDecisionModel": "决策模型",
     "defaultLlm": "默认LLM",
     "notConfiguredYet": "尚未配置",
     "llmDescription": "在这里设置全局默认的 LLM 模型。你也可以在聊天页面为具体 Agent 单独选择使用的模型。",
@@ -2911,6 +2914,9 @@
     "sourceControl": "源码管理",
     "preview": "预览",
     "htmlPreview": "HTML 预览",
+    "htmlReadOnlyTitle": "此页面包含动态内容",
+    "htmlReadOnlyNotice": "动态内容无法在只读预览中展示。请在浏览器中打开，查看完整效果。",
+    "htmlReadOnlyNotice_fallback": "点击下方按钮，在浏览器中打开页面，查看完整效果。",
     "openHtmlInBrowser": "在浏览器中打开",
     "edit": "编辑",
     "selectFile": "选择文件以打开",
@@ -3569,8 +3575,8 @@
       "jevDesc": "先执行硬性禁止和强制确认规则，再由 Jev 评估操作风险",
       "jevPrivacy": "工具名、操作、目标和参数名可能发送给 TypeSafe；不会发送聊天记录或文件正文。",
       "jevConnected": "已配置 TypeSafe API Key",
-      "jevNotConnected": "未配置 TypeSafe API Key；配置前有副作用的调用均需确认。",
-      "jevConfigure": "配置 Jev 服务",
+      "jevNotConnected": "TypeSafe Provider 尚未配置 API Key；旧版 Jev 密钥仍可临时使用，请在模型页面统一管理。",
+      "jevConfigure": "配置 TypeSafe Provider",
       "auto": "自动模式",
       "autoDesc": "仅命中工具和文件审批规则的操作需审批（默认）",
       "off": "关闭模式",
@@ -3706,6 +3712,8 @@
     "webSearchApiKeyLabel": "API 密钥（可选）",
     "webSearchQuotaHintBefore": "未注册每日限 100 次，前往 ",
     "webSearchQuotaHintAfter": " 注册可享每日 1000 次免费额度。",
+    "webSearchTavilyKeyHintBefore": "可选。未配置或鉴权失败时将使用免费搜索。前往 ",
+    "webSearchTavilyKeyHintAfter": " 获取密钥。",
     "active": "个已激活",
     "available": "可用",
     "noEnabled": "暂无已启用的工具",
@@ -3858,7 +3866,8 @@
     "filterAll": "全部工具",
     "filterEnabled": "已启用",
     "filterDisabled": "未启用",
-    "enabledCount": "已启用 {{enabled}} / {{total}}"
+    "enabledCount": "已启用 {{enabled}} / {{total}}",
+    "webSearchConfigLoadError": "无法加载该搜索提供商的凭证，请重试后再保存。"
   },
   "modelConfig": {
     "promptTitle": "需要配置 LLM 模型，配置模型后在 Chat 页面选择",
@@ -3886,6 +3895,10 @@
     "system": "跟随系统"
   },
   "chat": {
+    "sessionSettings": {
+      "advanced": "高级选项",
+      "decisionEnabled": "使用决策模型"
+    },
     "longTextPaste": {
       "title": "粘贴长文本",
       "asText": "粘贴为文本",
@@ -4015,6 +4028,10 @@
       "moveToGroup": "移动到分组",
       "copyId": "复制对话 ID",
       "delete": "删除"
+    },
+    "pluginSubmission": {
+      "staleConversation": "请回到原来的对话后再提交。",
+      "notReady": "对话尚未就绪，请打开原来的对话后重试。"
     },
     "queue": {
       "title": "消息队列",
@@ -5271,6 +5288,7 @@
     "catalogSha256": "SHA256",
     "kindBundle": "插件包",
     "kindTool": "工具",
+    "kindHub": "Hub",
     "filterByName": "按名称筛选",
     "filterByKind": "按标签筛选",
     "marketTitle": "插件市场",
@@ -5343,6 +5361,7 @@
     "categoryAll": "全部",
     "categoryPlaceholder": "搜索分类",
     "searchResult": "\"{{keyword}}\" 相关技能共搜索到 {{count}} 个结果",
+    "noHubs": "暂无已加载的 Hub，请在插件管理中安装 Hub 插件。",
     "providerUnavailable": "数据源不可用",
     "noResults": "没有找到结果",
     "startTyping": "在上方输入关键字以搜索技能市场",

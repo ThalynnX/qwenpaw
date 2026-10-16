@@ -268,10 +268,17 @@ async def test_sensitive_target_never_reaches_service(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_unconfigured_effectful_call_requires_approval(monkeypatch):
+    from qwenpaw.services import jev
+
     async def no_key():
         return None
 
-    monkeypatch.setattr("qwenpaw.services.jev.get_api_key", no_key)
+    monkeypatch.setattr(jev, "get_api_key", no_key)
+    monkeypatch.setattr(
+        jev,
+        "_provider_settings",
+        lambda: ("", "https://api.typesafe.ai/v1", "jev-latest", {}),
+    )
     result = await assess_tool_call("Write", "notes.txt")
     assert result.needs_approval
     assert result.error_type == "not_configured"
@@ -284,7 +291,6 @@ async def test_unconfigured_effectful_call_requires_approval(monkeypatch):
 @pytest.mark.asyncio
 async def test_typed_request_and_response(monkeypatch):
     from qwenpaw.services import jev
-    from types import SimpleNamespace
 
     async def key():
         return "test-key"
@@ -292,9 +298,12 @@ async def test_typed_request_and_response(monkeypatch):
     monkeypatch.setattr(jev, "get_api_key", key)
     monkeypatch.setattr(
         jev,
-        "load_config",
-        lambda: SimpleNamespace(
-            jev_service=SimpleNamespace(base_url="https://api.typesafe.ai"),
+        "_provider_settings",
+        lambda: (
+            "test-key",
+            "https://api.typesafe.ai/v1",
+            "jev-latest",
+            {},
         ),
     )
     original_client = httpx.AsyncClient
