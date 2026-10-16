@@ -6,6 +6,10 @@ const stylesSource = readFileSync(
   join(process.cwd(), "src/layouts/index.module.less"),
   "utf8",
 );
+const sidebarAStylesSource = readFileSync(
+  join(process.cwd(), "src/layouts/sidebarA.module.less"),
+  "utf8",
+);
 const sidebarSource = readFileSync(
   join(process.cwd(), "src/layouts/Sidebar.tsx"),
   "utf8",
@@ -133,6 +137,22 @@ describe("Sidebar overflow layout", () => {
     expect(activeRule).toContain(
       "background: var(--app-nav-selected-bg-hover);",
     );
+  });
+
+  it("uses the selected navigation token for Sidebar A active routes", () => {
+    const navGridStart = sidebarAStylesSource.indexOf(".navGrid {");
+    const activeStart = sidebarAStylesSource.indexOf(
+      '&[aria-current="page"] {',
+      navGridStart,
+    );
+    const activeEnd = sidebarAStylesSource.indexOf("\n    }", activeStart);
+    const activeRule = sidebarAStylesSource.slice(activeStart, activeEnd);
+
+    expect(navGridStart).toBeGreaterThanOrEqual(0);
+    expect(activeStart).toBeGreaterThan(navGridStart);
+    expect(activeEnd).toBeGreaterThan(activeStart);
+    expect(activeRule).toContain("color: var(--app-nav-selected-text);");
+    expect(activeRule).not.toContain("color: var(--app-accent-text);");
   });
 
   it("keeps collapsed open and route-active states distinct", () => {
