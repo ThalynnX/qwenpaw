@@ -120,13 +120,7 @@ export function CapabilityTags({
   iconOnly?: boolean;
 }) {
   const { t } = useTranslation();
-  if (model.model_type === "decision") {
-    return (
-      <CapabilityTag icon={Boxes} iconOnly={iconOnly}>
-        {t("models.modelTypeDecision")}
-      </CapabilityTag>
-    );
-  }
+  const isDecision = model.model_type === "decision";
   const modalities = [
     model.supports_image,
     model.supports_audio,
@@ -157,7 +151,12 @@ export function CapabilityTags({
     : "models.tagNotProbed";
   return (
     <>
-      {(!iconOnly || modalities.some(Boolean)) && (
+      {isDecision && (
+        <CapabilityTag icon={Boxes} iconOnly={iconOnly}>
+          {t("models.modelTypeDecision")}
+        </CapabilityTag>
+      )}
+      {((!iconOnly && !isDecision) || modalities.some(Boolean)) && (
         <CapabilityTag
           icon={icon}
           iconOnly={iconOnly}
