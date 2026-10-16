@@ -274,7 +274,11 @@ function ImportWorkflow() {
     setPluginConfirmed(false);
   }, [selectionKey]);
 
-  const current = !job ? 0 : job.state === "awaiting_selection" ? 1 : 2;
+  const current = !job
+    ? 0
+    : ["scanning", "awaiting_selection"].includes(job.state)
+    ? 1
+    : 2;
   const isDone = Boolean(
     job &&
       ["completed", "completed_with_issues", "failed", "interrupted"].includes(
