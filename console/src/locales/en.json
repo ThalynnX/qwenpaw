@@ -3712,7 +3712,7 @@
       "smart": "Smart Mode",
       "smartDesc": "Low-risk tool calls and external file access run automatically; medium- and high-risk operations require approval",
       "jev": "Jev Mode",
-      "jevDesc": "Hard denials and mandatory approvals run first",
+      "jevDesc": "Apply local safety rules first; Jev assesses operations outside those rules",
       "jevPrivacy": "Tool name, operation, target and parameter names may be sent to TypeSafe. No conversation or file contents are sent.",
       "jevConnected": "TypeSafe API Key configured",
       "jevNotConnected": "TypeSafe provider has no API Key. A previously saved Jev key may still work; configure the provider to manage it here.",
