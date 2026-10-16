@@ -25,6 +25,7 @@ import { ChannelIcon } from "../Channels/components";
 import styles from "./index.module.less";
 
 const MOBILE_PAGE_SIZE = 20;
+const COMPACT_LAYOUT_QUERY = "(max-width: 1024px)";
 
 function SessionsPage() {
   const { t } = useTranslation();
@@ -59,12 +60,12 @@ function SessionsPage() {
   const [filterChannel, setFilterChannel] = useState<string>("");
   const [filterTitle, setFilterTitle] = useState<string>("");
   const [availableChannels, setAvailableChannels] = useState<string[]>([]);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isCompactLayout, setIsCompactLayout] = useState(false);
 
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 768px)");
-    setIsMobile(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    const mq = window.matchMedia(COMPACT_LAYOUT_QUERY);
+    setIsCompactLayout(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsCompactLayout(e.matches);
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
@@ -257,11 +258,12 @@ function SessionsPage() {
   return (
     <div className={styles.sessionsPage}>
       <PageHeader
+        className={styles.pageHeader}
         items={[{ title: t("nav.control") }, { title: t("sessions.title") }]}
         extra={
           <div className={styles.headerRight}>
             <FilterBar
-              isMobile={isMobile}
+              isMobile={isCompactLayout}
               filterUserId={filterUserId}
               filterChannel={filterChannel}
               filterTitle={filterTitle}
@@ -311,7 +313,7 @@ function SessionsPage() {
         style={{ padding: "0 16px" }}
       />
 
-      {isMobile ? (
+      {isCompactLayout ? (
         <div className={styles.mobileCardList}>
           {mobileSessions.map((session) => (
             <Card

@@ -221,17 +221,23 @@
   min-height: 44px;
 }
 
-@media (max-width: 768px) {
-  .pageHeader {
+@media (max-width: 1024px) {
+  .sessionsPage .pageHeader {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     padding: 12px 16px;
-    flex-wrap: wrap;
-    gap: 8px;
+    gap: 12px;
     align-items: flex-start;
+
+    > div {
+      width: 100%;
+      min-width: 0;
+    }
   }
 
   .headerRight {
     width: 100%;
-    align-items: flex-start;
+    align-items: stretch;
     flex-direction: column;
     gap: 8px;
   }
