@@ -186,8 +186,6 @@ class ModelInfo(BaseModel):
         """Normalize legacy model fields and obsolete probe results."""
         if not isinstance(data, dict):
             return data
-        # Discovery merges only explicitly set fields, including the default type.
-        data.setdefault("model_type", "chat")
         if "max_tokens" in data:
             raise ValueError(
                 "ModelInfo.max_tokens is no longer supported; use "

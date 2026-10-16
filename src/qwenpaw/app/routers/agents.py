@@ -1324,7 +1324,13 @@ async def update_agent_model_settings(
     """Patch model-routing fields without overwriting other settings."""
     values = {field: getattr(body, field) for field in body.model_fields_set}
 
-    def validate_selections() -> None:
+    def apply_settings(existing_config: AgentProfileConfig) -> None:
+        updated = AgentProfileConfig.model_validate(
+            {
+                **existing_config.model_dump(),
+                **values,
+            },
+        )
         for field, model_type in (
             ("active_model", "chat"),
             ("decision_model", "decision"),
@@ -1332,6 +1338,11 @@ async def update_agent_model_settings(
             ("fallback_models", "chat"),
         ):
             value = values.get(field)
+            if field == "fallback_models":
+                if not updated.fallback_policy.enabled:
+                    continue
+                if "fallback_policy" in values:
+                    value = updated.fallback_models
             slots = value if isinstance(value, list) else [value]
             for slot in slots:
                 if slot is not None:
@@ -1342,15 +1353,6 @@ async def update_agent_model_settings(
                         model_type,
                     )
 
-    await run_sync_io(validate_selections)
-
-    def apply_settings(existing_config: AgentProfileConfig) -> None:
-        AgentProfileConfig.model_validate(
-            {
-                **existing_config.model_dump(),
-                **values,
-            },
-        )
         for key, value in values.items():
             setattr(existing_config, key, value)
 
