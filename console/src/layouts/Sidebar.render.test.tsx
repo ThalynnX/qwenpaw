@@ -596,6 +596,10 @@ describe("Sidebar", () => {
       // Collapsed nav has no menu labels, only tooltips/buttons
       expect(screen.queryByText("Workspace")).toBeNull();
     });
+    expect(screen.getByRole("button", { name: "Workspace" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     expect(screen.getByTestId("app-brand")).not.toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
     await waitFor(() => {

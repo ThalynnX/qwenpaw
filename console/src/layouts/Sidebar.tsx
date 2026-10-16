@@ -627,6 +627,7 @@ export default function Sidebar({
         <button
           type="button"
           aria-label={typeof item.label === "string" ? item.label : undefined}
+          aria-current={isActive ? "page" : undefined}
           className={`${styles.collapsedNavItem} ${
             isActive ? styles.collapsedNavItemActive : ""
           }`}
