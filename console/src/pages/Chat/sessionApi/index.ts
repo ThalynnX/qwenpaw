@@ -749,20 +749,30 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
 
   registerResolvedChat(chat: ChatSpec, owner: SessionOwnerToken): void {
     if (!this.isActiveOwner(owner)) return;
-    const previousId = this.getEffectiveSessionId(chat.id);
+    const previousIds = new Map(
+      [chat.id, chat.session_id].map((id) => [
+        id,
+        this.getEffectiveSessionId(id),
+      ]),
+    );
     this.resolvedRouteSession = {
       ...chatSpecToSession(chat),
       realId: chat.id,
     };
-    if (previousId !== chat.id) {
-      // A confirmed Chat UUID supersedes another Chat's SDK display alias.
+    const changedIds = new Set<string>();
+    for (const [id, previousId] of previousIds) {
+      if (previousId === this.getEffectiveSessionId(id)) continue;
+      changedIds.add(id);
+      this.sessionRequests.delete(id);
+      this.sessionResultCache.delete(id);
+      this.lastSelectedIds.delete(id);
+    }
+    if (changedIds.size) {
+      // Confirmed canonical and runtime IDs supersede stale display aliases.
       // Drop alias-keyed work and restore the displaced row's canonical ID.
-      this.sessionRequests.delete(chat.id);
-      this.sessionResultCache.delete(chat.id);
-      this.lastSelectedIds.delete(chat.id);
       this.sessionList = this.sessionList.map((session) => {
         const existing = session as ExtendedSession;
-        return existing.id === chat.id && existing.realId
+        return changedIds.has(existing.id) && existing.realId
           ? { ...existing, id: existing.realId }
           : session;
       });
@@ -1183,7 +1193,12 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
     if (canonical) return canonical;
 
     const resolved = this.resolvedRouteSession;
-    if (resolved?.id === id || resolved?.realId === id) return resolved;
+    if (
+      resolved?.id === id ||
+      resolved?.realId === id ||
+      resolved?.sessionId === id
+    )
+      return resolved;
 
     const display = this.sessionList.find((x) => x.id === id) as
       | ExtendedSession
@@ -1192,16 +1207,14 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
 
     // Runtime session_id values are opaque. Most locally-created values use
     // the timestamp-random format, but imported/auto-registered Chats may use
-    // UUID-looking runtime IDs as well. Resolve those aliases only when the
-    // match is unique: the backend permits multiple Chats to share a runtime
-    // identity, and choosing an arbitrary one would cross conversation data.
+    // UUID-looking runtime IDs as well. Use an unconfirmed list alias only
+    // when the match is unique: the backend permits multiple Chats to share
+    // a runtime identity, and guessing would cross conversation data.
     const runtimeMatches = new Map<string, ExtendedSession>();
     for (const session of this.sessionList as ExtendedSession[]) {
       if (session.sessionId === id)
         runtimeMatches.set(session.realId ?? session.id, session);
     }
-    if (resolved?.sessionId === id)
-      runtimeMatches.set(resolved.realId ?? resolved.id, resolved);
     return runtimeMatches.size === 1
       ? runtimeMatches.values().next().value
       : undefined;
@@ -1354,9 +1367,9 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
       matchedExistingIds.add(existing.id);
 
       const next = { ...s } as ExtendedSession;
-      if (existing.realId) {
-        // Already resolved: keep the local id and the existing realId so the
-        // library's currentSessionId (local timestamp) stays valid during SSE.
+      if (existing.realId && existing.realId === s.id) {
+        // Keep local aliases only for the same canonical Chat: runtime IDs
+        // can be reassigned after deletion. Preserve the SDK ID during SSE.
         next.id = existing.id;
         next.realId = existing.realId;
       }

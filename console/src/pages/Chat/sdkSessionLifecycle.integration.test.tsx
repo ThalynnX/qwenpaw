@@ -508,6 +508,44 @@ describe("installed SDK activation after route ownership resolution", () => {
     },
   );
 
+  it.each([false, true])(
+    "loads reassigned runtime history over a stale sidebar (preloaded=%s)",
+    async (preloaded) => {
+      const alias = "9a8f4757-69c8-4179-b8a4-f02471bba385";
+      vi.mocked(api.listChats).mockResolvedValue([
+        { ...record(A), session_id: alias },
+      ]);
+      sessionApi.preferredChatId = alias;
+      await sessionApi.getSessionList();
+      fixture.history.mockResolvedValue(linkedHistory(A));
+      if (preloaded) await sessionApi.preloadSession(alias);
+      fixture.history.mockClear();
+      fixture.history.mockImplementation(async (id) => {
+        if (id === A) throw new ApiError(404, "Chat not found");
+        return linkedHistory(id);
+      });
+      vi.spyOn(api, "resolveChat").mockResolvedValue({
+        agent_id: AGENT,
+        chat: { ...record(B), session_id: alias },
+      });
+      const host = mountLinkedHost(`/chat/${alias}`);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("linked-messages")).toHaveTextContent(
+          `linked-history-${B}`,
+        );
+        expect(screen.getByTestId("linked-messages")).toBeVisible();
+      });
+      expect(screen.getByTestId("linked-messages")).not.toHaveTextContent(
+        `linked-history-${A}`,
+      );
+      expect(host.current().sessions.currentSessionId).toBe(alias);
+      expect(fixture.history).toHaveBeenCalledWith(B, expect.any(Object));
+      expect(fixture.history).not.toHaveBeenCalledWith(A, expect.any(Object));
+      expect(fixture.create).not.toHaveBeenCalled();
+    },
+  );
+
   it("keeps archived history when a runtime alias becomes its canonical route", async () => {
     const alias = "9a8f4757-69c8-4179-b8a4-f02471bba385";
     vi.spyOn(api, "resolveChat").mockResolvedValue({

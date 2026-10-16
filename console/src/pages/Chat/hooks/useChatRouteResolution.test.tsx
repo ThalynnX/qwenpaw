@@ -369,6 +369,108 @@ describe("chat route ownership resolution", () => {
     },
   );
 
+  it.each(["none", "converted", "preloaded"] as const)(
+    "loads the new Chat after a runtime alias is reassigned (cache=%s)",
+    async (cache) => {
+      const original = "11111111-1111-4111-8111-111111111111";
+      const alias = "1788357954784-abc123";
+      const list = vi
+        .spyOn(api, "listChats")
+        .mockResolvedValue([{ ...chat(original), session_id: alias }]);
+      const get = vi.spyOn(api, "getChat").mockResolvedValue({
+        messages: [],
+        status: "idle",
+      });
+      sessionApi.preferredChatId = alias;
+      await sessionApi.getSessionList();
+      expect(sessionApi.getSessionIdentity(alias).chatId).toBe(original);
+      if (cache === "converted") await sessionApi.getSession(alias);
+      if (cache === "preloaded") await sessionApi.preloadSession(alias);
+      get.mockClear();
+      get.mockImplementation(async (id) => {
+        if (id === original) throw new ApiError(404, "Chat not found");
+        return { messages: [], status: "idle" };
+      });
+      vi.spyOn(api, "resolveChat").mockResolvedValue({
+        agent_id: "a",
+        chat: { ...chat(), session_id: alias },
+      });
+      const selected = vi.fn();
+      sessionApi.onSessionSelected = selected;
+      const { result } = mount(alias);
+
+      await waitFor(() => expect(result.current.blocked).toBe(false));
+      await expect(sessionApi.getSession(alias)).resolves.toMatchObject({
+        realId: TARGET,
+        sessionId: alias,
+      });
+      expect(sessionApi.getSessionIdentity(alias).chatId).toBe(TARGET);
+      expect(get).toHaveBeenCalledExactlyOnceWith(TARGET, expect.any(Object));
+      expect(selected).toHaveBeenCalledExactlyOnceWith(alias, TARGET);
+      expect(useSessionListStore.getState().sessions).toMatchObject([
+        { id: original, realId: original },
+      ]);
+
+      list.mockResolvedValue([{ ...chat(), session_id: alias }]);
+      await act(async () => {
+        syncSessionsGlobal(await sessionApi.getSessionList());
+      });
+      expect(useSessionListStore.getState().sessions).toMatchObject([
+        { id: TARGET },
+      ]);
+      expect(sessionApi.getSessionIdentity(alias).chatId).toBe(TARGET);
+    },
+  );
+
+  it("keeps canonical IDs ahead of a confirmed runtime alias", async () => {
+    const original = "11111111-1111-4111-8111-111111111111";
+    vi.spyOn(api, "listChats").mockResolvedValue([chat(original)]);
+    await sessionApi.getSessionList();
+
+    sessionApi.registerResolvedChat(
+      { ...chat(), session_id: original },
+      sessionApi.getActiveOwner(),
+    );
+
+    expect(sessionApi.getSessionIdentity(original).chatId).toBe(original);
+    expect(sessionApi.getSessionIdentity(TARGET).chatId).toBe(TARGET);
+  });
+
+  it("rejects a late preload after a runtime alias is reassigned", async () => {
+    const original = "11111111-1111-4111-8111-111111111111";
+    const alias = "1788357954784-abc123";
+    vi.spyOn(api, "listChats").mockResolvedValue([
+      { ...chat(original), session_id: alias },
+    ]);
+    sessionApi.preferredChatId = alias;
+    await sessionApi.getSessionList();
+    const pending = deferred<ChatHistory>();
+    const get = vi.spyOn(api, "getChat").mockImplementation(async (id) => {
+      if (id === original) return pending.promise;
+      return { messages: [], status: "idle" };
+    });
+    const stale = Promise.allSettled([sessionApi.preloadSession(alias)]);
+    vi.spyOn(api, "resolveChat").mockResolvedValue({
+      agent_id: "a",
+      chat: { ...chat(), session_id: alias },
+    });
+    const { result } = mount(alias);
+    await waitFor(() => expect(result.current.blocked).toBe(false));
+    const fresh = sessionApi.getSession(alias);
+    const requestedTarget = get.mock.calls.some(([id]) => id === TARGET);
+    pending.resolve({ messages: [], status: "idle" });
+
+    expect(requestedTarget).toBe(true);
+    await expect(fresh).resolves.toMatchObject({ realId: TARGET });
+    expect(await stale).toMatchObject([
+      { status: "rejected", reason: { name: "AbortError" } },
+    ]);
+    await expect(sessionApi.getSession(alias)).resolves.toMatchObject({
+      realId: TARGET,
+      sessionId: alias,
+    });
+  });
+
   it("rejects a late preload for an alias claimed by a canonical Chat", async () => {
     const original = "11111111-1111-4111-8111-111111111111";
     vi.spyOn(api, "listChats").mockResolvedValue([
