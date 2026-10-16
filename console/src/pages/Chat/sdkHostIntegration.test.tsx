@@ -12,6 +12,7 @@ import { useSyncExternalStore, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { renderWithProviders } from "@/test/common_setup";
 import ChatPage from "./index";
+import { LongTextPasteInput } from "./LongTextPaste";
 import { chatExtensions } from "@/plugins/registry/chatExtensions";
 
 // ---------------------------------------------------------------------------
@@ -30,7 +31,6 @@ const {
   mockQueueEnqueue,
   mockOwnershipState,
   mockCopyText,
-  mockClearSubmittedSenderInput,
   mockBeginLoopModeSubmission,
   mockRequiresQwenPawModel,
   mockSdkInput,
@@ -47,7 +47,6 @@ const {
   mockQueueEnqueue: vi.fn(),
   mockOwnershipState: { acquire: true },
   mockCopyText: vi.fn().mockResolvedValue(undefined),
-  mockClearSubmittedSenderInput: vi.fn(),
   mockBeginLoopModeSubmission: vi.fn((text: string) => text),
   mockRequiresQwenPawModel: vi.fn(() => true),
   mockSdkInput: { loading: false, setSessionLoading: vi.fn() },
@@ -250,7 +249,7 @@ vi.mock("./OptionsPanel/defaultConfig", () => ({
       },
     },
     welcome: {},
-    sender: {},
+    sender: { longTextUpload: false },
   })),
 }));
 
@@ -563,7 +562,6 @@ vi.mock("./utils", async () => {
     getActiveSenderTextarea: vi.fn(() => null),
     getSenderTextareaFromTarget: vi.fn(() => null),
     setTextareaValue: vi.fn(),
-    clearSubmittedSenderInput: mockClearSubmittedSenderInput,
   };
 });
 
@@ -730,7 +728,6 @@ describe("ChatPage coverage", () => {
       mockQueueEnqueue.mock.calls.every(([queue]) => queue === source),
     ).toBe(true);
     expect(localStorage.getItem(draftKey)).toBe("new route draft");
-    expect(mockClearSubmittedSenderInput).not.toHaveBeenCalled();
     localStorage.removeItem(draftKey);
   });
 
@@ -1262,16 +1259,18 @@ describe("ChatPage coverage", () => {
     await screen.findByTestId("chat-ui");
 
     const reqActions = capturedOptions?.requestActions?.list;
-    if (reqActions && reqActions.length > 1 && reqActions[1].onClick) {
-      await reqActions[1].onClick({
-        data: {
-          input: [
-            { role: "user", content: [{ type: "text", text: "user msg" }] },
-          ],
-        },
-      });
-      expect(true).toBe(true);
-    }
+    const copyAction = reqActions?.[1];
+    expect(copyAction?.icon?.type).toBe("span");
+    expect(copyAction?.onClick).toBeTypeOf("function");
+
+    await copyAction.onClick({
+      data: {
+        input: [
+          { role: "user", content: [{ type: "text", text: "user msg" }] },
+        ],
+      },
+    });
+    expect(mockCopyText).toHaveBeenCalledWith("user msg");
   });
 
   // ── requestActions: timestamp render ───────────────────────────────────
@@ -2050,21 +2049,15 @@ describe("ChatPage coverage", () => {
     }
   });
 
-  // ── sender longTextUpload customRequest ────────────────────────────────
-  it("sender longTextUpload customRequest is available", async () => {
+  it("uses the host paste adapter without SDK draft conversion or truncation", async () => {
     renderWithProviders(<ChatPage />, {
       initialEntries: ["/chat/test-session"],
     });
     await screen.findByTestId("chat-ui");
 
-    const longTextUpload = capturedOptions?.sender?.longTextUpload;
-    if (longTextUpload) {
-      expect(typeof longTextUpload.customRequest).toBe("function");
-      expect(typeof longTextUpload.prompt).toBe("function");
-      // Exercise the prompt function
-      const promptText = longTextUpload.prompt();
-      expect(typeof promptText).toBe("string");
-    }
+    expect(capturedOptions?.sender?.longTextUpload).toBe(false);
+    expect(capturedOptions?.sender?.maxLength).toBeUndefined();
+    expect(capturedOptions?.sender?.components?.input).toBe(LongTextPasteInput);
   });
 
   // ── sender placeholder ─────────────────────────────────────────────────
@@ -2646,21 +2639,24 @@ describe("ChatPage coverage", () => {
     expect(holdOwnershipLock).not.toHaveBeenCalled();
   });
 
-  it.each([false, true])(
-    "preserves the draft until acceptance and keeps later edits (ok=%s)",
-    async (ok) => {
+  it.each([
+    { route: "/chat/test-session", ok: false },
+    { route: "/chat/test-session", ok: true },
+    { route: "/chat", ok: true },
+  ])(
+    "clears the submitted draft before transport and keeps later edits ($route, ok=$ok)",
+    async ({ route, ok }) => {
       renderWithProviders(<ChatPage />, {
-        initialEntries: ["/chat/test-session"],
+        initialEntries: [route],
       });
       await screen.findByTestId("chat-ui");
       const { getDraftStorageKey } = await import("./chatInputDraft");
       const key = getDraftStorageKey("default");
       // Direct submission is available only after history and ownership settle.
-      // Submitting sooner exercises the queue path, which correctly clears its draft.
       const { holdOwnershipLock } = await import("@/stores/messageQueueStore");
       await waitFor(() =>
         expect(holdOwnershipLock).toHaveBeenCalledWith(
-          "test-session",
+          route === "/chat" ? "draft:default" : "test-session",
           expect.any(Function),
           expect.any(AbortSignal),
         ),
@@ -2671,7 +2667,8 @@ describe("ChatPage coverage", () => {
           query: "hello",
           fileList: [],
         }),
-      ).toMatchObject({ proceed: true });
+      ).toMatchObject({ proceed: true, clear: true });
+      expect(localStorage.getItem(key)).toBeNull();
       let finish!: (response: any) => void;
       global.fetch = vi.fn(
         () =>
@@ -2683,24 +2680,52 @@ describe("ChatPage coverage", () => {
         input: [{ role: "user", content: "hello" }],
       });
       await waitFor(() => expect(finish).toBeDefined());
-      expect(localStorage.getItem(key)).toBe("submitted-draft");
-      if (ok) localStorage.setItem(key, "newer-draft");
+      expect(localStorage.getItem(key)).toBeNull();
+      localStorage.setItem(key, "newer-draft");
       await act(async () => {
         finish({ ok, status: ok ? 200 : 503, body: null });
         await request;
       });
-      expect(localStorage.getItem(key)).toBe(
-        ok ? "newer-draft" : "submitted-draft",
-      );
-      if (ok) {
-        expect(mockClearSubmittedSenderInput).toHaveBeenCalledOnce();
-        expect(mockClearSubmittedSenderInput).toHaveBeenCalledWith("hello");
-      } else {
-        expect(mockClearSubmittedSenderInput).not.toHaveBeenCalled();
-      }
+      expect(localStorage.getItem(key)).toBe("newer-draft");
       localStorage.removeItem(key);
     },
   );
+
+  it("keeps a draft edited while the submission status check is pending", async () => {
+    const chatId = "75590000-0000-4000-8000-000000000002";
+    renderWithProviders(<ChatPage />, {
+      initialEntries: [`/chat/${chatId}`],
+    });
+    await screen.findByTestId("chat-ui");
+    const { holdOwnershipLock } = await import("@/stores/messageQueueStore");
+    await waitFor(() =>
+      expect(holdOwnershipLock).toHaveBeenCalledWith(
+        chatId,
+        expect.any(Function),
+        expect.any(AbortSignal),
+      ),
+    );
+    const { getDraftStorageKey } = await import("./chatInputDraft");
+    const key = getDraftStorageKey("default");
+    localStorage.setItem(key, "submitted-draft");
+    let finish!: (status: { status: string }) => void;
+    mockGetChatStatus.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const submission = capturedOptions.sender.beforeSubmit({
+      query: "hello",
+      fileList: [],
+    });
+    expect(finish).toBeDefined();
+    localStorage.setItem(key, "newer-draft");
+    finish({ status: "idle" });
+    expect(await submission).toMatchObject({ proceed: true, clear: true });
+    expect(localStorage.getItem(key)).toBe("newer-draft");
+    localStorage.removeItem(key);
+  });
 
   // ── customFetch with session in input ──────────────────────────────────
   it("customFetch extracts session from input", async () => {

@@ -2,7 +2,8 @@
 // because the packaged Tauri app enforces a `script-src 'self'` CSP that
 // blocks inline scripts. Loaded as a classic script before the module entry
 // so it observes entry-chunk failures; the module entry must call
-// window.__qwenpawBootWatchdog.disarm() once it has rendered.
+// window.__qwenpawBootWatchdog.disarm() once it has rendered. This is a
+// fallback when the richer inline startup monitor could not be installed.
 (function () {
   "use strict";
 
@@ -12,7 +13,7 @@
   var MAX_AUTO_RELOADS = 1;
   var BOOT_TIMEOUT_MS = 15000;
 
-  if (window[HANDLE]) {
+  if (window.__qwenpawStartupMonitorInstalled || window[HANDLE]) {
     return;
   }
 

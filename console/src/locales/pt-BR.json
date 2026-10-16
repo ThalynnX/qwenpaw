@@ -64,11 +64,37 @@
     }
   },
   "chunkError": {
-    "title": "Falha ao carregar pagina",
-    "subTitle": "This may be caused by a network issue or an application update.",
+    "startup": {
+      "title": "Não foi possível iniciar o console",
+      "resource": "Falha ao carregar os recursos necessários para iniciar o aplicativo.",
+      "runtime": "Ocorreu um erro durante a inicialização do aplicativo.",
+      "timeout": "O aplicativo ainda não concluiu a inicialização. Recarregue a página ou copie os detalhes do erro para investigar."
+    },
+    "title": "Falha ao carregar a página",
+    "subTitle": "Isso pode ser causado por um problema de rede ou por uma atualização do aplicativo.",
     "genericTitle": "Algo deu errado",
-    "genericSubTitle": "An unexpected error occurred while rendering this page.",
-    "reload": "Recarregar"
+    "genericSubTitle": "Ocorreu um erro inesperado ao renderizar esta página.",
+    "reload": "Recarregar",
+    "details": "Ver detalhes do erro",
+    "copy": "Copiar informações do erro",
+    "copied": "Informações do erro copiadas",
+    "copyFailed": "Não foi possível copiar. Expanda os detalhes e copie manualmente.",
+    "checking": "Verificando novamente o recurso que não pôde ser carregado…",
+    "serverReadiness": {
+      "checking": "Aguardando o serviço local e os recursos da página ficarem disponíveis…",
+      "timeout": "O serviço local ou os recursos da página ainda estão indisponíveis. Tente recarregar novamente em breve."
+    },
+    "recheckNote": "originalError é a exceção inicial; recheck é uma verificação posterior do recurso, não a resposta original. Valores desconhecidos permanecem null. Essa verificação não permite distinguir falhas de DNS, TLS, CORS ou proxy.",
+    "observations": {
+      "missing": "Nova verificação do recurso: o recurso não existe no momento (404).",
+      "denied": "Nova verificação do recurso: a solicitação sem credenciais de login foi negada.",
+      "html": "Nova verificação do recurso: a URL do módulo retornou uma página da web.",
+      "http-error": "Nova verificação do recurso: o servidor retornou um status de erro. Veja os detalhes do erro.",
+      "available": "A nova verificação do recurso foi bem-sucedida; a causa da falha inicial ainda é desconhecida.",
+      "request-failed": "Nova verificação do recurso: a solicitação falhou; a causa específica é desconhecida.",
+      "timeout": "Nova verificação do recurso: o tempo limite foi excedido; a causa específica é desconhecida.",
+      "unavailable": "Não é possível verificar o recurso novamente; a causa da falha inicial é desconhecida."
+    }
   },
   "portabilityImport": {
     "qwenpawOnly": "A importação está disponível apenas para agentes que usam o backend QwenPaw. Selecione um agente QwenPaw para continuar.",
@@ -2504,6 +2530,7 @@
     "rootMissing": "Ausente",
     "rootsPending": "{{count}} mais disponíveis após a primeira mensagem",
     "sourceEmpty": "Ainda não há arquivos nesta fonte.",
+    "listFailed": "Falha ao carregar a lista de arquivos do diretório. Tente novamente.",
     "loadMore": "Carregar próximos 200",
     "upload": "Enviar arquivos",
     "conflictPolicy": "Política de conflito de upload",
@@ -2523,6 +2550,11 @@
     "noSystemPromptCandidates": "Nenhum arquivo correspondente está disponível.",
     "sourceControl": "Controle de código-fonte",
     "preview": "Preview",
+    "htmlPreview": "Prévia de HTML",
+    "htmlReadOnlyTitle": "Esta página contém conteúdo dinâmico",
+    "htmlReadOnlyNotice": "O conteúdo dinâmico não pode ser exibido nesta prévia somente leitura. Abra o arquivo no navegador para acessar todos os recursos.",
+    "htmlReadOnlyNotice_fallback": "Clique no botão abaixo para abrir a página no navegador e ter a experiência completa.",
+    "openHtmlInBrowser": "Abrir no navegador",
     "edit": "Editar",
     "selectFile": "Selecione um arquivo para abrir",
     "closeTab": "Fechar aba",
@@ -3149,6 +3181,8 @@
     "webSearchApiKeyLabel": "Chave de API (opcional)",
     "webSearchQuotaHintBefore": "Grátis: 100 chamadas/dia. Registre-se em ",
     "webSearchQuotaHintAfter": " para 1.000/dia.",
+    "webSearchTavilyKeyHintBefore": "Opcional. Se não configurado ou se a autenticação falhar, a busca gratuita será usada. Obtenha uma chave em ",
+    "webSearchTavilyKeyHintAfter": ".",
     "active": "ativo(s)",
     "available": "Disponível",
     "noEnabled": "Nenhuma ferramenta ativada",
@@ -3304,7 +3338,8 @@
       "runtime": "Execução e automação",
       "migration": "Migração de aplicativos",
       "other": "Sem categoria"
-    }
+    },
+    "webSearchConfigLoadError": "Falha ao carregar as credenciais deste provedor. Tente novamente antes de salvar."
   },
   "modelConfig": {
     "promptTitle": "LLM Model Required — Select in Chat After Configuration",
@@ -3476,6 +3511,12 @@
     "sidebarPreview": "Itens visíveis"
   },
   "chat": {
+    "longTextPaste": {
+      "title": "Colar texto longo",
+      "asText": "Colar como texto",
+      "asFile": "Anexar como arquivo",
+      "characters": "{{count}} caracteres"
+    },
     "historyLoadFailed": "Não foi possível carregar a conversa. Abra-a novamente.",
     "newTask": "Nova tarefa",
     "newChat": "Novo chat",
@@ -3502,7 +3543,6 @@
     "prompt1": "Let's start a new journey!",
     "prompt2": "Can you tell me what skills you have?",
     "inputPlaceholder": "\"↑↓\" for message navigation · \"/\" for quick commands",
-    "longTextUploadPrompt": "Please read the uploaded prompt file and answer it.",
     "emptyOutputError": "O assistente retornou uma resposta vazia.",
     "commands": {
       "clear": {

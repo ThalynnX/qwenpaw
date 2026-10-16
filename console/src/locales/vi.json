@@ -64,11 +64,37 @@
     }
   },
   "chunkError": {
+    "startup": {
+      "title": "Không thể khởi động bảng điều khiển",
+      "resource": "Không thể tải các tài nguyên cần thiết để khởi động ứng dụng.",
+      "runtime": "Đã xảy ra lỗi khi khởi tạo ứng dụng.",
+      "timeout": "Ứng dụng chưa khởi động xong. Hãy tải lại trang hoặc sao chép thông tin lỗi để kiểm tra."
+    },
     "title": "Không thể tải trang",
     "subTitle": "Có thể do lỗi mạng hoặc ứng dụng vừa được cập nhật.",
     "genericTitle": "Đã xảy ra lỗi",
     "genericSubTitle": "Có lỗi không mong muốn khi hiển thị trang này.",
-    "reload": "Tải lại"
+    "reload": "Tải lại",
+    "details": "Xem chi tiết lỗi",
+    "copy": "Sao chép thông tin lỗi",
+    "copied": "Đã sao chép thông tin lỗi",
+    "copyFailed": "Không thể sao chép. Hãy mở phần chi tiết và sao chép thủ công.",
+    "checking": "Đang kiểm tra lại tài nguyên không tải được…",
+    "serverReadiness": {
+      "checking": "Đang chờ dịch vụ cục bộ và tài nguyên trang sẵn sàng…",
+      "timeout": "Dịch vụ cục bộ hoặc tài nguyên trang vẫn chưa sẵn sàng. Hãy thử tải lại sau ít phút."
+    },
+    "recheckNote": "originalError là ngoại lệ ban đầu; recheck là kết quả kiểm tra lại tài nguyên sau khi xảy ra lỗi, không phải phản hồi ban đầu. Giá trị chưa xác định được giữ là null. Việc kiểm tra lại không thể phân biệt lỗi DNS, TLS, CORS hoặc proxy.",
+    "observations": {
+      "missing": "Kiểm tra lại tài nguyên: tài nguyên hiện không tồn tại (404).",
+      "denied": "Kiểm tra lại tài nguyên: yêu cầu không kèm thông tin đăng nhập đã bị từ chối.",
+      "html": "Kiểm tra lại tài nguyên: URL của mô-đun trả về một trang web.",
+      "http-error": "Kiểm tra lại tài nguyên: máy chủ trả về mã trạng thái lỗi. Xem chi tiết lỗi.",
+      "available": "Đã kiểm tra lại tài nguyên thành công; nguyên nhân lỗi tải ban đầu vẫn chưa được xác định.",
+      "request-failed": "Kiểm tra lại tài nguyên: yêu cầu thất bại; nguyên nhân cụ thể chưa được xác định.",
+      "timeout": "Kiểm tra lại tài nguyên: đã hết thời gian chờ; nguyên nhân cụ thể chưa được xác định.",
+      "unavailable": "Không thể kiểm tra lại tài nguyên; nguyên nhân lỗi ban đầu chưa được xác định."
+    }
   },
   "portabilityImport": {
     "qwenpawOnly": "Chỉ các tác tử sử dụng backend QwenPaw mới có thể nhập dữ liệu. Hãy chọn tác tử QwenPaw để tiếp tục.",
@@ -1106,6 +1132,12 @@
     "runtimeRestartFailed": "Không thể khởi động lại môi trường"
   },
   "chat": {
+    "longTextPaste": {
+      "title": "Dán văn bản dài",
+      "asText": "Dán dưới dạng văn bản",
+      "asFile": "Đính kèm tệp",
+      "characters": "{{count}} ký tự"
+    },
     "historyLoadFailed": "Không thể tải cuộc trò chuyện. Vui lòng mở lại.",
     "newTask": "Tác vụ mới",
     "newChat": "Cuộc trò chuyện mới",
@@ -1132,7 +1164,6 @@
     "prompt1": "Hãy bắt đầu hành trình mới!",
     "prompt2": "Bạn có thể cho tôi biết những kỹ năng của mình không?",
     "inputPlaceholder": "\"↑↓\" điều hướng tin nhắn · \"/\" lệnh nhanh",
-    "longTextUploadPrompt": "Vui lòng đọc tệp prompt đã tải lên và trả lời dựa trên nội dung đó.",
     "emptyOutputError": "Trợ lý đã trả về phản hồi trống.",
     "commands": {
       "clear": {
@@ -1892,6 +1923,8 @@
     "webSearchApiKeyLabel": "Khóa API (tùy chọn)",
     "webSearchQuotaHintBefore": "Miễn phí 100 lần gọi/ngày. Đăng ký tại ",
     "webSearchQuotaHintAfter": " để nhận 1.000 lần/ngày.",
+    "webSearchTavilyKeyHintBefore": "Tùy chọn. Nếu chưa cấu hình hoặc xác thực thất bại, sẽ dùng tìm kiếm miễn phí. Lấy khóa tại ",
+    "webSearchTavilyKeyHintAfter": ".",
     "active": "đang hoạt động",
     "available": "Có sẵn",
     "noEnabled": "Không có công cụ nào được bật",
@@ -2047,7 +2080,8 @@
       "runtime": "Thực thi và tự động hóa",
       "migration": "Di chuyển ứng dụng",
       "other": "Chưa phân loại"
-    }
+    },
+    "webSearchConfigLoadError": "Không tải được thông tin xác thực của nhà cung cấp này. Thử lại trước khi lưu."
   },
   "mcp": {
     "title": "MCP Client",
@@ -2338,6 +2372,7 @@
     "rootMissing": "Thiếu",
     "rootsPending": "{{count}} thư mục khác sẽ khả dụng sau tin nhắn đầu tiên",
     "sourceEmpty": "Nguồn này chưa có tệp.",
+    "listFailed": "Không thể tải danh sách thư mục. Vui lòng thử lại.",
     "loadMore": "Tải 200 mục tiếp theo",
     "upload": "Tải tệp lên",
     "conflictPolicy": "Chính sách xung đột tải lên",
@@ -2357,6 +2392,11 @@
     "noSystemPromptCandidates": "Không có tệp phù hợp.",
     "sourceControl": "Quản lý mã nguồn",
     "preview": "Preview",
+    "htmlPreview": "Xem trước HTML",
+    "htmlReadOnlyTitle": "Trang này có nội dung động",
+    "htmlReadOnlyNotice": "Không thể hiển thị nội dung động trong bản xem trước chỉ đọc này. Hãy mở tệp trong trình duyệt để có trải nghiệm đầy đủ.",
+    "htmlReadOnlyNotice_fallback": "Nhấp vào nút bên dưới để mở trang trong trình duyệt và trải nghiệm đầy đủ các tính năng.",
+    "openHtmlInBrowser": "Mở trong trình duyệt",
     "edit": "Chỉnh sửa",
     "selectFile": "Chọn tệp để mở",
     "closeTab": "Đóng tab",
