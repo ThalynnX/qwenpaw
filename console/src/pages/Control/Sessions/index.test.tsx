@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import less from "less";
 import type { ComponentProps, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -33,6 +34,33 @@ const stylesSource = readFileSync(
   join(process.cwd(), "src/pages/Control/Sessions/index.module.less"),
   "utf8",
 );
+const pageHeaderStylesSource = readFileSync(
+  join(process.cwd(), "src/components/PageHeader/index.module.less"),
+  "utf8",
+);
+
+function getActiveCss(css: string, width: number) {
+  const source = document.createElement("style");
+  source.textContent = css;
+  document.head.appendChild(source);
+
+  const activeRules = Array.from(source.sheet?.cssRules ?? []).flatMap(
+    (rule) => {
+      if (rule.type !== CSSRule.MEDIA_RULE) {
+        return rule.cssText;
+      }
+
+      const mediaRule = rule as CSSMediaRule;
+      const maxWidth = mediaRule.conditionText.match(/max-width:\s*(\d+)px/);
+      if (!maxWidth || width > Number(maxWidth[1])) {
+        return [];
+      }
+      return Array.from(mediaRule.cssRules, (nestedRule) => nestedRule.cssText);
+    },
+  );
+  source.remove();
+  return activeRules.join("\n");
+}
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<object>("react-router-dom");
@@ -207,7 +235,37 @@ afterEach(() => {
 });
 
 describe("SessionsPage mobile progressive rendering", () => {
-  it("keeps the compact header override stronger than PageHeader defaults", () => {
+  it("keeps the 600px header in one column after shared styles load", async () => {
+    const { css } = await less.render(
+      `${stylesSource}\n${pageHeaderStylesSource}`,
+    );
+    const activeStyles = document.createElement("style");
+    activeStyles.textContent = getActiveCss(css, 600);
+    document.head.appendChild(activeStyles);
+
+    const fixture = document.createElement("div");
+    fixture.className = "sessionsPage";
+    fixture.innerHTML = `
+      <header class="pageHeader">
+        <div class="leading"></div>
+        <div class="extra"></div>
+      </header>
+    `;
+    document.body.appendChild(fixture);
+
+    const [leading, extra] = Array.from(
+      fixture.querySelectorAll<HTMLElement>(".pageHeader > div"),
+    );
+    expect(getComputedStyle(leading).gridColumn).toBe("1");
+    expect(getComputedStyle(leading).gridRow).toBe("auto");
+    expect(getComputedStyle(extra).gridColumn).toBe("1");
+    expect(getComputedStyle(extra).gridRow).toBe("auto");
+
+    fixture.remove();
+    activeStyles.remove();
+  });
+
+  it("keeps the compact table fallback in the route stylesheet", () => {
     const compactStart = stylesSource.indexOf("@media (max-width: 1024px)");
     const compactRules = stylesSource.slice(compactStart);
 
@@ -221,7 +279,10 @@ describe("SessionsPage mobile progressive rendering", () => {
 
   it.each([
     { width: 390, compact: true },
+    { width: 600, compact: true },
     { width: 820, compact: true },
+    { width: 1024, compact: true },
+    { width: 1025, compact: false },
     { width: 1280, compact: false },
   ])(
     "uses the expected responsive layout at $width px",
