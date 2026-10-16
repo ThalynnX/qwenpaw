@@ -31,6 +31,26 @@ describe("SettingsCenter responsive layout", () => {
     expect(mobileRule).toContain("width: calc(100% - 48px);");
   });
 
+  it("keeps the branded mobile settings selector wide enough", () => {
+    const sharedFrameStart = stylesSource.indexOf(
+      "/* Shared settings frame, without overriding extension-owned components. */",
+    );
+    const mobileStart = stylesSource.indexOf(
+      "@media (max-width: 768px)",
+      sharedFrameStart,
+    );
+    const mobileRule = stylesSource.slice(
+      mobileStart,
+      stylesSource.indexOf('.content[data-core-settings="true"]', mobileStart),
+    );
+
+    expect(sharedFrameStart).toBeGreaterThanOrEqual(0);
+    expect(mobileStart).toBeGreaterThanOrEqual(0);
+    expect(mobileRule).toContain("> :global(.ant-select),");
+    expect(mobileRule).toContain("> :global(.qwenpaw-select) {");
+    expect(mobileRule).toContain("min-width: 160px;");
+  });
+
   it("stacks wide controls before the navigation becomes mobile", () => {
     const compactDesktopStart = stylesSource.indexOf(
       "@media (min-width: 769px) and (max-width: 900px)",
