@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import less from "less";
 import type { ComponentProps, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -24,6 +27,40 @@ const capturedTableProps = vi.hoisted<{
 const capturedCardProps = vi.hoisted<{
   values: Array<Record<string, unknown>>;
 }>(() => ({ values: [] }));
+const capturedFilterBarProps = vi.hoisted<{
+  isMobile?: boolean;
+}>(() => ({}));
+const stylesSource = readFileSync(
+  join(process.cwd(), "src/pages/Control/Sessions/index.module.less"),
+  "utf8",
+);
+const pageHeaderStylesSource = readFileSync(
+  join(process.cwd(), "src/components/PageHeader/index.module.less"),
+  "utf8",
+);
+
+function getActiveCss(css: string, width: number) {
+  const source = document.createElement("style");
+  source.textContent = css;
+  document.head.appendChild(source);
+
+  const activeRules = Array.from(source.sheet?.cssRules ?? []).flatMap(
+    (rule) => {
+      if (rule.type !== CSSRule.MEDIA_RULE) {
+        return rule.cssText;
+      }
+
+      const mediaRule = rule as CSSMediaRule;
+      const maxWidth = mediaRule.conditionText.match(/max-width:\s*(\d+)px/);
+      if (!maxWidth || width > Number(maxWidth[1])) {
+        return [];
+      }
+      return Array.from(mediaRule.cssRules, (nestedRule) => nestedRule.cssText);
+    },
+  );
+  source.remove();
+  return activeRules.join("\n");
+}
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<object>("react-router-dom");
@@ -47,25 +84,36 @@ vi.mock("./useSessions", () => ({
 
 vi.mock("./components", () => ({
   FilterBar: ({
+    isMobile,
     filterTitle,
     onTitleChange,
   }: {
+    isMobile?: boolean;
     filterTitle: string;
     onTitleChange: (value: string) => void;
-  }) => (
-    <input
-      aria-label="title-filter"
-      value={filterTitle}
-      onChange={(event) => onTitleChange(event.target.value)}
-    />
-  ),
+  }) => {
+    capturedFilterBarProps.isMobile = isMobile;
+    return (
+      <input
+        aria-label="title-filter"
+        value={filterTitle}
+        onChange={(event) => onTitleChange(event.target.value)}
+      />
+    );
+  },
   SessionDrawer: () => null,
   formatTime: (value: unknown) => String(value ?? ""),
   useSessionColumns: () => [],
 }));
 
 vi.mock("@/components/PageHeader", () => ({
-  PageHeader: ({ extra }: { extra?: ReactNode }) => <header>{extra}</header>,
+  PageHeader: ({
+    className,
+    extra,
+  }: {
+    className?: string;
+    extra?: ReactNode;
+  }) => <header className={className}>{extra}</header>,
 }));
 
 vi.mock("../Channels/components", () => ({
@@ -141,6 +189,19 @@ function setMatchMedia(matches: boolean) {
   }));
 }
 
+function setViewportWidth(width: number) {
+  window.matchMedia = vi.fn((query: string) => ({
+    matches: query === "(max-width: 1024px)" && width <= 1024,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
+
 function mockSessions(count: number) {
   const sessions = createSessions(count);
   mockUseSessions.mockReturnValue({
@@ -164,6 +225,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   capturedTableProps.value = null;
   capturedCardProps.values = [];
+  capturedFilterBarProps.isMobile = undefined;
   mockListChannelTypes.mockResolvedValue(["console"]);
   setMatchMedia(true);
 });
@@ -173,6 +235,79 @@ afterEach(() => {
 });
 
 describe("SessionsPage mobile progressive rendering", () => {
+  it("keeps the 600px header in one column after shared styles load", async () => {
+    const { css } = await less.render(
+      `${stylesSource}\n${pageHeaderStylesSource}`,
+    );
+    const activeStyles = document.createElement("style");
+    activeStyles.textContent = getActiveCss(css, 600);
+    document.head.appendChild(activeStyles);
+
+    const fixture = document.createElement("div");
+    fixture.className = "sessionsPage";
+    fixture.innerHTML = `
+      <header class="pageHeader">
+        <div class="leading"></div>
+        <div class="extra"></div>
+      </header>
+    `;
+    document.body.appendChild(fixture);
+
+    const [leading, extra] = Array.from(
+      fixture.querySelectorAll<HTMLElement>(".pageHeader > div"),
+    );
+    expect(getComputedStyle(leading).gridColumn).toBe("1");
+    expect(getComputedStyle(leading).gridRow).toBe("auto");
+    expect(getComputedStyle(extra).gridColumn).toBe("1");
+    expect(getComputedStyle(extra).gridRow).toBe("auto");
+
+    fixture.remove();
+    activeStyles.remove();
+  });
+
+  it("keeps the compact table fallback in the route stylesheet", () => {
+    const compactStart = stylesSource.indexOf("@media (max-width: 1024px)");
+    const compactRules = stylesSource.slice(compactStart);
+
+    expect(compactStart).toBeGreaterThanOrEqual(0);
+    expect(compactRules).toContain(".sessionsPage .pageHeader {");
+    expect(compactRules).toContain("display: grid;");
+    expect(compactRules).toContain("grid-template-columns: minmax(0, 1fr);");
+    expect(compactRules).toContain(".tableCard {");
+    expect(compactRules).toContain("display: none;");
+  });
+
+  it.each([
+    { width: 390, compact: true },
+    { width: 600, compact: true },
+    { width: 820, compact: true },
+    { width: 1024, compact: true },
+    { width: 1025, compact: false },
+    { width: 1280, compact: false },
+  ])(
+    "uses the expected responsive layout at $width px",
+    async ({ width, compact }) => {
+      setViewportWidth(width);
+      mockSessions(2);
+      renderWithProviders(<SessionsPage />);
+
+      if (compact) {
+        await waitFor(() =>
+          expect(screen.getAllByTestId("session-card")).toHaveLength(2),
+        );
+        expect(screen.queryByTestId("sessions-table")).toBeNull();
+      } else {
+        await waitFor(() =>
+          expect(screen.getByTestId("sessions-table")).toBeTruthy(),
+        );
+        expect(screen.getAllByTestId("session-card")).toHaveLength(1);
+      }
+      expect(capturedFilterBarProps.isMobile).toBe(compact);
+      expect(document.querySelector("header")?.className).toBeTruthy();
+      expect(window.matchMedia).toHaveBeenCalledWith("(max-width: 1024px)");
+    },
+  );
+
   it.each([500, 2000])(
     "bounds the first mobile render for %i sessions",
     async (count) => {
