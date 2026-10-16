@@ -2293,3 +2293,35 @@ Agent: [Calls generate_image_gpt tool]
 - Per-agent configuration (each agent can have its own API key)
 
 For more details, see `plugins/tool/gpt-image2/README.md`.
+
+## Host navigation allowlist (Console builds)
+
+A host that ships a focused Console can set `VITE_QWENPAW_NAVIGATION_ALLOWLIST`
+when building its frontend. The value is a JSON array of stable menu IDs:
+
+```sh
+VITE_QWENPAW_NAVIGATION_ALLOWLIST='["core.files","core.models","example.page"]' npm run build
+```
+
+Omit the variable to keep the standard QwenPaw navigation. An empty array
+removes all registered menu leaves. Invalid JSON, non-array values and empty
+or padded IDs fail configuration validation before a build starts. Rebuild
+and deploy the frontend to change the policy; this is not a per-user setting.
+
+The policy applies synchronously to registry snapshots, including late plugin
+registrations and replacements. Parent groups are kept only when an allowed
+descendant needs them, so the list need not include group IDs. Sidebar choices,
+saved preferences and reset actions operate within these snapshots. Static
+Settings Center pages use their route IDs (for example `core.models`); filtering
+happens before settings search. The fixed Inbox shortcut in navigation
+preferences uses `core.inbox`. Route-less General preferences and the main
+New task/Settings controls remain accessible.
+
+Plugin-defined entries must also be listed by their menu IDs. The host policy
+does not require a branding plugin, so unloading that plugin or opening a fresh
+browser profile does not restore excluded entries. Unlisted future menu and
+settings IDs stay hidden when QwenPaw is upgraded.
+
+This controls presentation in the Console; it does not remove routes, disable
+backend features, grant permissions, or secure direct URLs and API requests.
+Keep authorization on the server. Do not put secrets in this build variable.

@@ -37,6 +37,7 @@ import { ChunkErrorBoundary } from "@/components/ChunkErrorBoundary";
 import { ChunkRecoverySuspense } from "@/components/ChunkRecoverySuspense";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useMenuItems, useRoutes } from "@/plugins/registry/hooks";
+import { hostNavigationPolicy } from "@/plugins/registry/navigationPolicy";
 import { usePlugins } from "@/plugins/PluginContext";
 import {
   findMenuItem,
@@ -324,6 +325,7 @@ export default function SettingsCenter() {
     const coreGroups = SETTINGS_GROUPS.map((group) => ({
       ...group,
       pages: group.pages
+        .filter((page) => hostNavigationPolicy.isAllowed(page.routeId))
         .filter((page) => !page.routeId || componentByRouteId.has(page.routeId))
         .map((page) => {
           const menuIcon = page.routeId

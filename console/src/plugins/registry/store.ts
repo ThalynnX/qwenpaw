@@ -28,6 +28,7 @@ import type {
   SlotRenderer,
 } from "./types";
 import { auditStore } from "./audit";
+import { hostNavigationPolicy } from "./navigationPolicy";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared notify bus
@@ -233,7 +234,7 @@ class MenuRegistryImpl {
       const top = stack[stack.length - 1];
       if (top) winners.push(top.item);
     }
-    return winners;
+    return hostNavigationPolicy.filterMenuItems(winners);
   }
 
   private buildSnapshot(location: MenuLocation): MenuItem[] {
@@ -242,7 +243,7 @@ class MenuRegistryImpl {
       (i) => (i.location ?? "primary.settings") === location,
     );
     const visible = inBucket.filter((i) => i.visible?.() !== false);
-    return sortAndTree(visible);
+    return sortAndTree(hostNavigationPolicy.filterMenuItems(visible));
   }
 }
 
