@@ -114,6 +114,20 @@ describe("SettingsCenter responsive layout", () => {
     expect(sidebarRule).toContain("var(--app-border-subtle)");
   });
 
+  it("keeps the refined active navigation rule on the contrast-safe token", () => {
+    const activeRuleStart = stylesSource.lastIndexOf(".navItemActive {");
+    const activeRule = stylesSource.slice(
+      activeRuleStart,
+      stylesSource.indexOf("\n}", activeRuleStart) + 2,
+    );
+
+    expect(activeRuleStart).toBeGreaterThanOrEqual(0);
+    expect(activeRule).toContain("color: var(--app-nav-selected-text);");
+    expect(activeRule).not.toContain("color: var(--app-accent-text);");
+    expect(activeRule).toContain("&:hover {");
+    expect(activeRule).toContain("background: transparent;");
+  });
+
   it("keeps the dark override block free of hardcoded colours", () => {
     const darkStart = stylesSource.indexOf(".rootDark {");
     const darkRule = stylesSource.slice(
