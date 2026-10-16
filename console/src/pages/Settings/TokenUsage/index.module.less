@@ -209,8 +209,16 @@
 
 @media (max-width: 600px) {
   .mobileRangePopup {
-    :global(.qwenpaw-picker-presets),
-    :global(.ant-picker-presets),
+    :global(
+        .qwenpaw-picker-panel-container
+          .qwenpaw-picker-panel-layout
+          > .qwenpaw-picker-presets
+      ),
+    :global(
+        .ant-picker-panel-container
+          .ant-picker-panel-layout
+          > .ant-picker-presets
+      ),
     :global(.qwenpaw-picker-panel:first-child),
     :global(.ant-picker-panel:first-child) {
       display: none;
