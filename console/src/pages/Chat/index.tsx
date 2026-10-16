@@ -243,7 +243,6 @@ import {
   getActiveSenderTextarea,
   getSenderTextareaFromTarget,
   setTextareaValue,
-  clearSubmittedSenderInput,
   formatMessageTime,
   type CopyableResponse,
   type RuntimeLoadingBridgeApi,
@@ -1537,13 +1536,6 @@ export default function ChatPage() {
       size?: number;
     }[]
   >([]);
-  // Keep the original composer text across new-session allocation. Creating a
-  // Chat can replace the SDK Input before its acceptance callback runs, so the
-  // callback may clear an unmounted instance instead of the visible composer.
-  const pendingDirectInputRef = useRef<{
-    original: string;
-    prepared: string;
-  } | null>(null);
 
   // Build SDK fileList from QueueItem.attachments
   // SDK reads file.response.url for image_url / file_url (see AgentScopeRuntimeRequestBuilder)
@@ -3228,19 +3220,6 @@ export default function ChatPage() {
       // Every turn goes through this fetch, including the SDK's own regenerate.
       // Clear only this session: another session may still have a stopped turn.
       clearTurnStopped(entrySnapshot.sessionId);
-      const directSubmission =
-        !data.submission || data.submission.source === "direct";
-      const pendingDirectInput = directSubmission
-        ? pendingDirectInputRef.current
-        : null;
-      if (directSubmission) pendingDirectInputRef.current = null;
-      const draftStorageKey = getDraftStorageKey(entrySnapshot.agentId);
-      const submittedDraft = directSubmission
-        ? localStorage.getItem(draftStorageKey)
-        : null;
-      const submittedFiles = directSubmission
-        ? new Set(pendingFileListRef.current)
-        : new Set();
       const approvalAtSubmission =
         typeof entrySnapshot.context.approval_level === "string"
           ? normalizeLevel(entrySnapshot.context.approval_level)
@@ -3279,13 +3258,6 @@ export default function ChatPage() {
       const session: SessionInfo = input[input.length - 1]?.session || {};
       const lastInput = input.slice(-1);
       const lastMsg = lastInput[0];
-      const submittedSenderValue =
-        directSubmission &&
-        pendingDirectInput &&
-        lastMsg?.role === "user" &&
-        extractUserMessageText(lastMsg) === pendingDirectInput.prepared
-          ? pendingDirectInput.original
-          : null;
       const clientMessageId =
         lastMsg?.role === "user"
           ? data.clientRequestId ||
@@ -3431,23 +3403,6 @@ export default function ChatPage() {
         sessionApi.discardLastUserMessage(pendingSessionIds, clientMessageId);
       }
 
-      // Session allocation can replace the SDK Input before its own acceptance
-      // callback clears it. Clear the current composer only when it still holds
-      // this submission, then retire the matching host draft and attachments.
-      if (response.ok && directSubmission) {
-        if (submittedSenderValue !== null) {
-          clearSubmittedSenderInput(submittedSenderValue);
-        }
-        if (
-          submittedDraft !== null &&
-          localStorage.getItem(draftStorageKey) === submittedDraft
-        ) {
-          localStorage.removeItem(draftStorageKey);
-        }
-        pendingFileListRef.current = pendingFileListRef.current.filter(
-          (file) => !submittedFiles.has(file),
-        );
-      }
       const localIdToResolve = fallbackLocalChatId;
       if (response.ok && projectSessionId) {
         setPendingThinking(requestSnapshot.agentId, projectSessionId, null);
@@ -3634,6 +3589,9 @@ export default function ChatPage() {
       const backendChatId = resolveBackendChatId(chatIdRef.current);
       const textarea = getActiveSenderTextarea();
       const val = data.query.trim() || textarea?.value.trim() || "";
+      const draftStorageKey = getDraftStorageKey(selectedAgent);
+      const submittedDraft = localStorage.getItem(draftStorageKey);
+      const submittedFiles = new Set(pendingFileListRef.current);
       const submittedAttachments = getSubmissionAttachments(data);
       const queueAttachments =
         submittedAttachments.length > 0
@@ -3714,10 +3672,14 @@ export default function ChatPage() {
       const prepared = usesQwenPawBackend
         ? beginLoopModeSubmission(data.query)
         : data.query;
-      pendingDirectInputRef.current = {
-        original: data.query,
-        prepared,
-      };
+      // Consume this submission before model lookup, session allocation or
+      // transport. Preserve any draft and files added during the status check.
+      if (localStorage.getItem(draftStorageKey) === submittedDraft) {
+        localStorage.removeItem(draftStorageKey);
+      }
+      pendingFileListRef.current = pendingFileListRef.current.filter(
+        (file) => !submittedFiles.has(file),
+      );
       // beforeSubmit runs before the SDK allocates a new session. An empty
       // route therefore has no runtime identity yet; let the SDK supply the
       // new local ID instead of freezing a stale history/global identity.
@@ -3727,6 +3689,7 @@ export default function ChatPage() {
 
       return {
         proceed: true,
+        clear: true,
         query: prepared,
         session_id: identity.sessionId || undefined,
         context: buildChatSubmissionContext(
