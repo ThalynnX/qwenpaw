@@ -660,6 +660,7 @@ export default function Sidebar({
         key={entry.key}
         title={toolsMode === 2 ? null : entry.label}
         placement="right"
+        styles={{ root: { pointerEvents: "none" } }}
       >
         <button
           aria-label={typeof entry.label === "string" ? entry.label : undefined}
