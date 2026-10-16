@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """App-local environment isolation for the stable managed-service API."""
 
 from __future__ import annotations

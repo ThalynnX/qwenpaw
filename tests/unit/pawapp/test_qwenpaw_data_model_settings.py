@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """References stay scoped; only execution resolves provider credentials."""
 
 import importlib.util
@@ -15,23 +16,27 @@ path = (
     / "plugins/apps/qwenpaw-data/backend/model_settings.py"
 )
 spec = importlib.util.spec_from_file_location(
-    "data_model_settings_under_test", path
+    "data_model_settings_under_test",
+    path,
 )
+assert spec is not None and spec.loader is not None
 module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 
 scope_spec = importlib.util.spec_from_file_location(
-    "data_standalone_scope", path.with_name("standalone.py")
+    "data_standalone_scope",
+    path.with_name("standalone.py"),
 )
+assert scope_spec is not None and scope_spec.loader is not None
 scope_module = importlib.util.module_from_spec(scope_spec)
 sys.modules[scope_spec.name] = scope_module
 scope_spec.loader.exec_module(scope_module)
 TaskScope = scope_module.DataScope
 
 
-@pytest.fixture
-def configured(tmp_path, monkeypatch):
+@pytest.fixture(name="configured")
+def configured_service(tmp_path, monkeypatch):
     provider = SimpleNamespace(
         id="provider",
         name="Provider",
@@ -66,7 +71,9 @@ def configured(tmp_path, monkeypatch):
 
 def scope(workspace="one", principal="alice"):
     return TaskScope(
-        app_id="qwenpaw-data", principal_id=principal, workspace_id=workspace
+        app_id="qwenpaw-data",
+        principal_id=principal,
+        workspace_id=workspace,
     )
 
 
@@ -77,8 +84,10 @@ async def test_references_and_metadata_never_copy_keys(configured, tmp_path):
         scope(),
         module.ModelSettings(
             lightweight=module.ModelChoice(
-                source="host", provider_id="provider", model_id="model-b"
-            )
+                source="host",
+                provider_id="provider",
+                model_id="model-b",
+            ),
         ),
     )
     assert "private-test-key" not in json.dumps(response)
@@ -134,8 +143,10 @@ async def test_main_chat_default_remains_visible_with_data_override(
         scope(),
         module.ModelSettings(
             analysis=module.ModelChoice(
-                source="host", provider_id="provider", model_id="model-b"
-            )
+                source="host",
+                provider_id="provider",
+                model_id="model-b",
+            ),
         ),
     )
     assert response["workspace_default"]["model_id"] == "model-a"
@@ -145,16 +156,20 @@ async def test_main_chat_default_remains_visible_with_data_override(
 
 
 def test_workspace_selection_matches_main_chat_precedence(
-    tmp_path, monkeypatch
+    tmp_path,
+    monkeypatch,
 ):
+    # Exercise the internal resolver directly to isolate model precedence.
+    # pylint: disable=protected-access
     from qwenpaw.config import config
 
     service = module.ModelSettingsService(tmp_path)
     global_slot = SimpleNamespace(provider_id="global", model="global-model")
     workspace = SimpleNamespace(
         active_model=SimpleNamespace(
-            provider_id="workspace", model="workspace-model"
-        )
+            provider_id="workspace",
+            model="workspace-model",
+        ),
     )
     monkeypatch.setattr(config, "load_agent_config", lambda _: workspace)
     monkeypatch.setattr(

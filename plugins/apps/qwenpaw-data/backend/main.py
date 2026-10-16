@@ -339,15 +339,14 @@ async def _runtime_models(scope):
         models.get(role) is None
         for role in ("analysis", "lightweight", "databridge")
     ):
-
         effective = (await _describe_models(scope))["effective"]
         for role, model in effective.items():
             if not model["configured"]:
                 raise HTTPException(409, f"{role}_model_missing")
     if models.get("databridge") is not None or "databridge" in models.get(
-        "inherit_analysis", []
+        "inherit_analysis",
+        [],
     ):
-
         try:
             health = await _gateway.json("GET", "/api/health")
         except HTTPException as exc:
@@ -693,10 +692,14 @@ async def _describe_models(scope):
     try:
         identity = identity_namespace(scope)
         active_response = await _engine_gateway.json(
-            "GET", "/api/v1/preferences/active-models", user_id=identity
+            "GET",
+            "/api/v1/preferences/active-models",
+            user_id=identity,
         )
         provider_response = await _engine_gateway.json(
-            "GET", "/api/v1/preferences/providers", user_id=identity
+            "GET",
+            "/api/v1/preferences/providers",
+            user_id=identity,
         )
         active = active_response["active_models"]
         providers = provider_response["providers"]
@@ -884,8 +887,8 @@ async def context_proxy(path: str, request: Request) -> Any:
                         "model": model["model_id"],
                         "base_url": model["base_url"],
                         "api_key": model["api_key"],
-                    }
-                ).encode()
+                    },
+                ).encode(),
             ).decode()
     return await _gateway.proxy(path, request, model_binding=binding)
 
@@ -901,10 +904,13 @@ async def engine_proxy(path: str, request: Request) -> Any:
     normalized = _engine_gateway._upstream_path(path).rstrip("/")
     if request.method == "POST" and normalized == "/api/v1/console/chat":
         return await dispatch_console_chat(
-            request, _engine_gateway, _runtime_models
+            request,
+            _engine_gateway,
+            _runtime_models,
         )
     if request.method == "POST" and re.fullmatch(
-        r"/api/v1/sessions/[^/]+/chats", normalized
+        r"/api/v1/sessions/[^/]+/chats",
+        normalized,
     ):
         raise HTTPException(409, "Use the Data console to start an analysis")
     scope = await console_scope(request)

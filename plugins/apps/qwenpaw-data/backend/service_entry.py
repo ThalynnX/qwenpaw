@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Start a sidecar with only its explicitly granted environment."""
 
 import json

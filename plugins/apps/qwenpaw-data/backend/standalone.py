@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Scoped native-console admission on the stable PawApp SDK."""
 
 from __future__ import annotations
@@ -21,7 +22,8 @@ class DataScope(BaseModel):
 async def console_scope(request: Request) -> DataScope:
     principal = str(getattr(request.state, "user", None) or "default")
     workspace = request.headers.get("X-Agent-Id") or request.query_params.get(
-        "agent_id", "default"
+        "agent_id",
+        "default",
     )
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", workspace):
         raise HTTPException(422, "Invalid workspace")
@@ -32,7 +34,7 @@ async def console_scope(request: Request) -> DataScope:
         ("app_id", "X-PawApp-Id", "qwenpaw-data"),
     ):
         claims = request.query_params.getlist(query) + request.headers.getlist(
-            header
+            header,
         )
         if any(claim != expected for claim in claims):
             raise HTTPException(403, "Request scope does not match")
@@ -79,7 +81,8 @@ async def dispatch_console_chat(request: Request, gateway, model_resolver):
     except HTTPException as exc:
         if exc.status_code == 404:
             raise HTTPException(
-                503, "Update the Data Engine runtime to 0.3.2 or later"
+                503,
+                "Update the Data Engine runtime to 0.3.2 or later",
             ) from None
         raise
     if (
@@ -95,7 +98,8 @@ async def dispatch_console_chat(request: Request, gateway, model_resolver):
         or capabilities.get("console_protocol") != 1
     ):
         raise HTTPException(
-            503, "Update the Data Engine runtime to 0.3.2 or later"
+            503,
+            "Update the Data Engine runtime to 0.3.2 or later",
         )
     inputs["runtime_models"] = await model_resolver(scope)
     return await gateway.json(

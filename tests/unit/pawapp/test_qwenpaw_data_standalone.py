@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Standalone release boundaries, exercised using only the stable SDK."""
 
 import importlib.util
@@ -15,8 +16,10 @@ from fastapi import HTTPException, Request
 ROOT = Path(__file__).resolve().parents[3]
 APP = ROOT / "plugins/apps/qwenpaw-data"
 spec = importlib.util.spec_from_file_location(
-    "standalone_release", APP / "backend/standalone.py"
+    "standalone_release",
+    APP / "backend/standalone.py",
 )
+assert spec is not None and spec.loader is not None
 standalone = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = standalone
 spec.loader.exec_module(standalone)
@@ -51,8 +54,8 @@ async def test_native_admission_passes_scoped_identity_and_private_bindings():
                     "dataset_context": True,
                 },
                 {"chat": {"id": "run"}},
-            ]
-        )
+            ],
+        ),
     )
     resolver = AsyncMock(return_value={"analysis": {"api_key": "private"}})
     result = await standalone.dispatch_console_chat(
@@ -62,7 +65,7 @@ async def test_native_admission_passes_scoped_identity_and_private_bindings():
                 "text": "query",
                 "datasource_id": "ds",
                 "dataset_names": ["sales"],
-            }
+            },
         ),
         gateway,
         resolver,
@@ -76,7 +79,7 @@ async def test_native_admission_passes_scoped_identity_and_private_bindings():
         == "private"
     )
     assert call.kwargs["user_id"] == standalone.identity_namespace(
-        standalone.DataScope(principal_id="alice", workspace_id="default")
+        standalone.DataScope(principal_id="alice", workspace_id="default"),
     )
     assert "private" not in json.dumps(result)
 
@@ -95,7 +98,9 @@ async def test_browser_cannot_override_trusted_bindings(body):
     resolver = AsyncMock()
     with pytest.raises(HTTPException) as error:
         await standalone.dispatch_console_chat(
-            request(body), gateway, resolver
+            request(body),
+            gateway,
+            resolver,
         )
     assert error.value.status_code == 422
     gateway.json.assert_not_called()
@@ -122,12 +127,14 @@ async def test_conflicting_scope_claims_are_rejected(headers, query):
 @pytest.mark.asyncio
 async def test_old_engine_fails_before_resolving_credentials():
     gateway = SimpleNamespace(
-        json=AsyncMock(return_value={"scoped_sessions": True})
+        json=AsyncMock(return_value={"scoped_sessions": True}),
     )
     resolver = AsyncMock()
     with pytest.raises(HTTPException) as error:
         await standalone.dispatch_console_chat(
-            request({"text": "hi"}), gateway, resolver
+            request({"text": "hi"}),
+            gateway,
+            resolver,
         )
     assert error.value.status_code == 503
     resolver.assert_not_called()
@@ -136,7 +143,8 @@ async def test_old_engine_fails_before_resolving_credentials():
 
 @pytest.mark.asyncio
 async def test_stable_sdk_sidecar_environment_is_isolated_and_refreshed(
-    tmp_path, monkeypatch
+    tmp_path,
+    monkeypatch,
 ):
     monkeypatch.syspath_prepend(str(APP))
     from backend import service_compat
@@ -161,7 +169,7 @@ async def test_stable_sdk_sidecar_environment_is_isolated_and_refreshed(
         model["MODEL_SECRET"] = key
         await service["on_before_start"]()
         child = json.loads(
-            subprocess.check_output(service["command"], text=True)
+            subprocess.check_output(service["command"], text=True),
         )
         assert child["MODEL_SECRET"] == key
         assert child["RELEASE_NETWORK_SETTING"] == "granted"
@@ -174,12 +182,14 @@ async def test_stable_sdk_sidecar_environment_is_isolated_and_refreshed(
 @pytest.mark.parametrize("status", [401, 403, 404, 500])
 async def test_capability_errors_never_fall_back(status):
     gateway = SimpleNamespace(
-        json=AsyncMock(side_effect=HTTPException(status, "upstream"))
+        json=AsyncMock(side_effect=HTTPException(status, "upstream")),
     )
     resolver = AsyncMock()
     with pytest.raises(HTTPException) as error:
         await standalone.dispatch_console_chat(
-            request({"text": "hi"}), gateway, resolver
+            request({"text": "hi"}),
+            gateway,
+            resolver,
         )
     assert error.value.status_code == (503 if status == 404 else status)
     assert gateway.json.call_count == 1

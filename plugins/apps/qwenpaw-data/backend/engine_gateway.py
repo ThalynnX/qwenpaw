@@ -104,7 +104,8 @@ class EngineGateway:
             except HTTPException as exc:
                 if exc.status_code == 404:
                     raise HTTPException(
-                        503, "Update the Data Engine runtime to 0.3.2 or later"
+                        503,
+                        "Update the Data Engine runtime to 0.3.2 or later",
                     ) from None
                 raise
             if (
