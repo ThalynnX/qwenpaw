@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import type { ComponentProps, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { renderWithProviders } from "@/test/common_setup";
 import type { Session } from "./components";
 
@@ -15,6 +21,9 @@ const mockForm = vi.hoisted(() => ({
 const capturedTableProps = vi.hoisted<{
   value: Record<string, unknown> | null;
 }>(() => ({ value: null }));
+const capturedCardProps = vi.hoisted<{
+  values: Array<Record<string, unknown>>;
+}>(() => ({ values: [] }));
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<object>("react-router-dom");
@@ -69,9 +78,10 @@ vi.mock("@agentscope-ai/design", () => ({
       {children}
     </button>
   ),
-  Card: ({ children }: { children?: ReactNode }) => (
-    <article data-testid="session-card">{children}</article>
-  ),
+  Card: ({ children, ...props }: { children?: ReactNode }) => {
+    capturedCardProps.values.push(props);
+    return <article data-testid="session-card">{children}</article>;
+  },
   Checkbox: ({ checked, onChange, ...props }: ComponentProps<"input">) => (
     <input type="checkbox" checked={checked} onChange={onChange} {...props} />
   ),
@@ -153,6 +163,7 @@ function mockSessions(count: number) {
 beforeEach(() => {
   vi.clearAllMocks();
   capturedTableProps.value = null;
+  capturedCardProps.values = [];
   mockListChannelTypes.mockResolvedValue(["console"]);
   setMatchMedia(true);
 });
@@ -233,6 +244,23 @@ describe("SessionsPage mobile progressive rendering", () => {
     expect(capturedTableProps.value?.pagination).toEqual({
       pageSize: 10,
       showSizeChanger: false,
+    });
+    expect(capturedCardProps.values).toContainEqual(
+      expect.objectContaining({ styles: { body: { padding: 0 } } }),
+    );
+    expect(capturedCardProps.values[0]).not.toHaveProperty("bodyStyle");
+
+    const rowSelection = capturedTableProps.value?.rowSelection as {
+      onChange: (keys: React.Key[]) => void;
+      selectedRowKeys: React.Key[];
+    };
+    act(() => rowSelection.onChange(["session-1"]));
+
+    await waitFor(() => {
+      const currentSelection = capturedTableProps.value?.rowSelection as {
+        selectedRowKeys: React.Key[];
+      };
+      expect(currentSelection.selectedRowKeys).toEqual(["session-1"]);
     });
   });
 });
