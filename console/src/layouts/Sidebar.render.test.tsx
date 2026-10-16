@@ -333,6 +333,12 @@ const workspaceItem = {
   label: "Workspace",
   route: "core.workspace",
 };
+const marketplaceItem = {
+  id: "core.marketplace",
+  location: "primary.agentScoped",
+  label: "Marketplace",
+  route: "core.marketplace",
+};
 const modelsItem = {
   id: "core.models",
   location: "primary.settings",
@@ -433,6 +439,27 @@ describe("Sidebar", () => {
     fireEvent.mouseEnter(screen.getByRole("button", { name: "Workspace" }));
 
     expect(await screen.findByRole("tooltip")).toHaveTextContent("Workspace");
+  });
+
+  it("keeps compact navigation tooltips from blocking adjacent items", async () => {
+    localStorage.setItem("qwenpaw_sidebar_tools_mode", "1");
+    mocks.sidebar.focusItemIds = ["core.marketplace", "core.inbox"];
+    mocks.menuItems = [marketplaceItem, inboxItem, modelsItem];
+    mocks.routes = [
+      { id: "core.marketplace", path: "/market" },
+      { id: "core.inbox", path: "/inbox" },
+      { id: "core.models", path: "/models" },
+      { id: "core.chat", path: "/chat" },
+    ];
+    renderSidebar({ selectedKey: "core.marketplace" });
+
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "Marketplace" }));
+    expect(await screen.findByRole("tooltip")).toHaveStyle({
+      pointerEvents: "none",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Inbox" }));
+    expect(screen.getByTestId("probe-path")).toHaveTextContent("/inbox");
   });
 
   it("collapses tools when the open header blank area is clicked", async () => {
