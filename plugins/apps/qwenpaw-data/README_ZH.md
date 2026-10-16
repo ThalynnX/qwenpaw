@@ -238,7 +238,7 @@ DataBridge 启用 **复用 QwenPaw 已配置的模型** 后，保存配置或启
 
 ## 独立应用 1.0.3
 
-本次发布基于稳定版 QwenPaw 2.2.2，配套 QwenPaw-Data 运行时 0.3.2。
+本次发布基于稳定版 QwenPaw 2.2.2，配套 QwenPaw-Data 运行时 0.3.3。
 Data 分析默认使用主聊天当前工作区的模型，摘要和 DataBridge 默认继承分析模型。
 在 Data 的「设置 → 模型」中选择覆盖；供应商凭据仍在主聊天中管理。
 Embedding 与图索引属于共享数据服务，单独配置。

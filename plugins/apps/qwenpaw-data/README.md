@@ -379,7 +379,7 @@ conversations to the same engine through the channel bridge.
 
 ## Standalone app 1.0.3 release
 
-This release targets stable QwenPaw 2.2.2 and QwenPaw-Data runtime 0.3.2.
+This release targets stable QwenPaw 2.2.2 and QwenPaw-Data runtime 0.3.3.
 See [the release boundary and validation guide](RELEASE.md). The app uses
 the Engine native console API; the generic Host vNext task contract ships
 separately. Main Chat model inheritance does not require that platform upgrade.
