@@ -112,3 +112,25 @@ def test_context_overflow_error_does_not_match() -> None:
         status_code=400,
     )
     assert QwenPawAgent._is_audio_fallback_error(exc) is False
+
+
+def test_lm_studio_zero_audio_limit_matches() -> None:
+    """Issue #8171: LM Studio rejects audio for a model without audio
+    support with "At most 0 audio(s) may be provided in one prompt."."""
+    exc = _FakeAPIError(
+        'Error code: 400 - {"error":"At most 0 audio(s) may be provided '
+        'in one prompt."}',
+        status_code=400,
+    )
+    assert QwenPawAgent._is_audio_fallback_error(exc) is True
+
+
+def test_lm_studio_nonzero_audio_limit_does_not_match() -> None:
+    """A positive per-prompt limit is a request-shape limit, not proof
+    the model cannot take audio, so it must not enter this path."""
+    exc = _FakeAPIError(
+        "Error code: 400 - At most 1 audio(s) may be provided in one "
+        "prompt.",
+        status_code=400,
+    )
+    assert QwenPawAgent._is_audio_fallback_error(exc) is False

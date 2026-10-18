@@ -694,6 +694,9 @@ class QwenPawAgent(CodingModeMixin, Agent):
            "audio input is not supported".
         4. Providers that reject the ``input_audio`` wire part as an
            unknown / unexpected field or variant.
+        5. LM Studio (OpenAI-compatible) serving a model without audio
+           support — HTTP 400 "At most 0 audio(s) may be provided in one
+           prompt." (issue #8171).
 
         Callers gate this classifier on ``_last_wire_request_had_audio()``,
         so shape 2 cannot misclassify genuinely malformed image/video
@@ -737,6 +740,8 @@ class QwenPawAgent(CodingModeMixin, Agent):
         ):
             return True
         if "audio input is not supported" in error_str:
+            return True
+        if "at most 0 audio" in error_str and "may be provided" in error_str:
             return True
         return False
 
