@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import io
 import json
@@ -17,7 +18,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, TypeVar
 
 import frontmatter
@@ -30,6 +31,7 @@ from ..utils.file_handling import (
     single_line_log_value,
 )
 from .models import SkillInfo, SkillRequirements
+from .zip_names import zip_member_name
 
 try:
     import fcntl
@@ -760,18 +762,31 @@ def _extract_and_validate_zip(data: bytes, tmp_dir: Path) -> None:
             )
 
         root_path = tmp_dir.resolve()
+        members = []
         for info in zf.infolist():
-            target = (tmp_dir / info.filename).resolve()
+            # Decode before normalizing separators: a GBK character can
+            # contain 0x5c as its second byte.
+            name = zip_member_name(info).replace("\\", "/")
+            if "\0" in name or PureWindowsPath(name).drive:
+                raise SkillsError(
+                    message=f"Unsafe path in zip: {name}",
+                )
+            target = (tmp_dir / name).resolve()
             if not target.is_relative_to(root_path):
                 raise SkillsError(
-                    message=f"Unsafe path in zip: {info.filename}",
+                    message=f"Unsafe path in zip: {name}",
                 )
             if info.external_attr >> 16 & 0o120000 == 0o120000:
                 raise SkillsError(
                     message=f"Symlink not allowed in zip: {info.filename}",
                 )
+            member = copy.copy(info)
+            member.filename = name
+            members.append(member)
 
-        zf.extractall(tmp_dir)
+        # Retain ZipFile's platform-specific extraction rules. Each copy keeps
+        # orig_filename for the local-header name check when reading its data.
+        zf.extractall(tmp_dir, members=members)
 
 
 def _safe_child_path(base_dir: Path, relative_name: str) -> Path:
