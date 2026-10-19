@@ -46,6 +46,7 @@ function state(overrides = {}) {
     selectedAgent: "agent",
     loading: false,
     error: "",
+    detectError: "",
     ...actions,
     ...overrides,
   };
@@ -118,6 +119,74 @@ describe("ImportPage", () => {
       screen.getByRole("button", { name: "portabilityImport.continue" }),
     );
     expect(actions.scan).toHaveBeenCalledWith(["codex", "qoder"]);
+  });
+
+  it("isolates stale Agent A sources while Agent B retries detection", async () => {
+    vi.mocked(actions.detect)
+      .mockReset()
+      .mockRejectedValueOnce(new Error("Sources unavailable"))
+      .mockResolvedValueOnce([
+        { source: "qoder", name: "Qoder", detected: true },
+      ]);
+    vi.mocked(useImportJob).mockReturnValue(
+      state({
+        selectedAgent: "agent-b",
+        sources: [{ source: "codex", name: "Agent A Codex", detected: true }],
+        error: "Sources unavailable",
+        detectError: "Sources unavailable",
+      }) as never,
+    );
+    const view = renderPage();
+
+    const retry = screen.getByRole("button", { name: "common.retry" });
+    expect(screen.getByRole("alert")).toHaveTextContent("Sources unavailable");
+    expect(screen.queryByText("Agent A Codex")).toBeNull();
+    expect(screen.queryByText("portabilityImport.noSources")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "portabilityImport.continue" }),
+    ).toBeNull();
+
+    fireEvent.click(retry);
+    await waitFor(() => expect(actions.detect).toHaveBeenCalledTimes(2));
+    expect(actions.scan).not.toHaveBeenCalled();
+    expect(actions.start).not.toHaveBeenCalled();
+    expect(actions.retry).not.toHaveBeenCalled();
+
+    vi.mocked(useImportJob).mockReturnValue(
+      state({
+        selectedAgent: "agent-b",
+        sources: [{ source: "qoder", name: "Qoder", detected: true }],
+      }) as never,
+    );
+    view.rerender(
+      <MemoryRouter>
+        <ImportPage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByText("Agent A Codex")).toBeNull();
+    expect(screen.getByRole("checkbox", { name: "Qoder" })).toBeChecked();
+    expect(
+      screen.getByRole("button", { name: "portabilityImport.continue" }),
+    ).toBeEnabled();
+    expect(actions.scan).not.toHaveBeenCalled();
+    expect(actions.start).not.toHaveBeenCalled();
+    expect(actions.retry).not.toHaveBeenCalled();
+  });
+
+  it("keeps a successful empty detection distinct from failure", () => {
+    vi.mocked(useImportJob).mockReturnValue(
+      state({ sources: [], error: "" }) as never,
+    );
+    renderPage();
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("button", { name: "common.retry" })).toBeNull();
+    expect(screen.getByText("portabilityImport.noSources")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "portabilityImport.continue" }),
+    ).toBeDisabled();
   });
 
   it("previews source changes and the destination without starting an import", async () => {
