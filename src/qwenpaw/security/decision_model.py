@@ -7,6 +7,7 @@ approval may be relaxed. No conversation or file contents are sent.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
@@ -15,11 +16,8 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from ..services.jev import (
-    JevClient as DecisionModelClient,
-    JevRequest as DecisionModelRequest,
-    JevServiceError as DecisionModelServiceError,
-)
+from ..providers.provider_manager import ProviderManager
+from ..providers.typesafe_provider import TypeSafeEvaluationError, TypeSafeProvider
 
 logger = logging.getLogger(__name__)
 _QUESTION_VERSION = "tool-risk-v4"
@@ -55,9 +53,7 @@ _QUESTIONS: dict[str, dict[str, Any]] = {
                 "Potentially destructive, externally consequential, "
                 "secret-related, or privilege-changing"
             ),
-            "unclear": (
-                "The supplied metadata is insufficient to assess safety"
-            ),
+            "unclear": ("The supplied metadata is insufficient to assess safety"),
         },
     },
     "destructive": {
@@ -82,11 +78,28 @@ _QUESTIONS: dict[str, dict[str, Any]] = {
     "privilege_change": {
         "type": "noul",
         "instructions": (
-            "Could this operation expand permissions or weaken a security "
-            "boundary?"
+            "Could this operation expand permissions or weaken a security boundary?"
         ),
     },
 }
+
+
+def _decision_provider() -> tuple[TypeSafeProvider, str]:
+    """Resolve the configured TypeSafe provider and decision model."""
+    try:
+        manager = ProviderManager.get_instance()
+        provider = manager.get_provider("typesafe")
+    except Exception as exc:
+        raise TypeSafeEvaluationError("TypeSafe provider is unavailable") from exc
+    if not isinstance(provider, TypeSafeProvider) or not provider.enabled:
+        raise TypeSafeEvaluationError("TypeSafe provider is unavailable")
+    slot = manager.default_models.get("decision")
+    model = (
+        slot.model
+        if slot is not None and slot.provider_id == "typesafe"
+        else "jev-latest"
+    )
+    return provider, model
 
 
 @dataclass(frozen=True)
@@ -232,9 +245,7 @@ def _interpret(
     selected_choice = impact.get("choice")
     selected_probability = probabilities.get(selected_choice, 0)
     if any(
-        isinstance(p, bool)
-        or not isinstance(p, (float, int))
-        or not 0 <= p <= 1
+        isinstance(p, bool) or not isinstance(p, (float, int)) or not 0 <= p <= 1
         for p in probabilities.values()
     ):
         raise ValueError("invalid probability")
@@ -273,11 +284,7 @@ def _interpret(
     return DecisionModelAssessment(
         not safe,
         "Decision model: "
-        + (
-            ", ".join(risks)
-            if risks
-            else "risk or uncertainty requires confirmation"
-        )
+        + (", ".join(risks) if risks else "risk or uncertainty requires confirmation")
         if not safe
         else "Decision model: low-risk assessment",
     )
@@ -300,9 +307,7 @@ async def assess_tool_call(
         or _is_declared_local_read(tool_name, target)
         or (
             _is_read_only_shell_listing(tool_name, target)
-            and not any(
-                _SENSITIVE.search(str(name)) for name in (params or {})
-            )
+            and not any(_SENSITIVE.search(str(name)) for name in (params or {}))
         )
     ):
         return DecisionModelAssessment(
@@ -317,8 +322,7 @@ async def assess_tool_call(
         if not target.strip() or target.strip() == "*":
             return DecisionModelAssessment(
                 True,
-                "Decision model: target is too broad to assess; "
-                "approval required",
+                "Decision model: target is too broad to assess; approval required",
             )
         if (
             len(target) > 600
@@ -329,14 +333,12 @@ async def assess_tool_call(
         ):
             return DecisionModelAssessment(
                 True,
-                "Decision model: target cannot be safely shared; "
-                "approval required",
+                "Decision model: target cannot be safely shared; approval required",
             )
         if any(_SENSITIVE.search(str(name)) for name in (params or {})):
             return DecisionModelAssessment(
                 True,
-                "Decision model: sensitive parameter name requires "
-                "confirmation",
+                "Decision model: sensitive parameter name requires confirmation",
             )
         output_exists = _sips_output_exists(tool_name, target)
         if output_exists is True:
@@ -350,20 +352,21 @@ async def assess_tool_call(
             "tool": tool_name[:100],
             "operation": operation[:100],
             "target": target[:600],
-            "parameter_names": sorted(str(k)[:60] for k in (params or {}))[
-                :30
-            ],
+            "parameter_names": sorted(str(k)[:60] for k in (params or {}))[:30],
             "sandboxed": sandboxed,
             "baseline_ask": baseline_ask,
             "risk_signals": (risk_signals or [])[:10],
         }
         if output_exists is False:
             state["verified_facts"] = {"output_exists": False}
-        response = await DecisionModelClient().evaluate(
-            DecisionModelRequest(state=state, questions=_QUESTIONS),
+        provider, model = await asyncio.to_thread(_decision_provider)
+        response = await provider.evaluate(
+            state=state,
+            questions=_QUESTIONS,
+            model=model,
         )
         result = _interpret(
-            {"answers": response.answers},
+            response,
             baseline_ask=baseline_ask,
         )
         return DecisionModelAssessment(
@@ -371,15 +374,14 @@ async def assess_tool_call(
             result.reason,
             latency_ms=int((time.monotonic() - started) * 1000),
         )
-    except (DecisionModelServiceError, ValueError, TypeError) as exc:
+    except (TypeSafeEvaluationError, ValueError, TypeError) as exc:
         logger.warning(
             "Decision model assessment unavailable (%s)",
             type(exc).__name__,
         )
         error_type = (
             "not_configured"
-            if isinstance(exc, DecisionModelServiceError)
-            and "not configured" in str(exc)
+            if isinstance(exc, TypeSafeEvaluationError) and "not configured" in str(exc)
             else type(exc).__name__
         )
         return DecisionModelAssessment(

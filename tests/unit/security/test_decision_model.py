@@ -3,16 +3,39 @@
 
 # pylint: disable=protected-access
 
-import pytest
-import httpx
+from types import SimpleNamespace
 
+import httpx
+import pytest
+
+from qwenpaw.providers.provider_manager import ProviderManager
+from qwenpaw.providers.typesafe_provider import TypeSafeProvider
 from qwenpaw.security.decision_model import (
+    _decision_provider,
     _interpret,
     _is_read_only_shell_listing,
     _sips_output_exists,
     assess_tool_call,
 )
 from qwenpaw.security.tool_guard.execution_level import ToolExecutionLevel
+
+
+@pytest.fixture(autouse=True)
+def typesafe_provider(monkeypatch):
+    provider = TypeSafeProvider(
+        id="typesafe",
+        name="TypeSafe",
+        base_url="https://api.typesafe.ai/v1",
+        api_key="test-key",
+    )
+    manager = SimpleNamespace(
+        get_provider=lambda provider_id: (
+            provider if provider_id == "typesafe" else None
+        ),
+        default_models={},
+    )
+    monkeypatch.setattr(ProviderManager, "get_instance", lambda: manager)
+    return provider
 
 
 def _response(*, choice="routine", confidence=0.95, risk=0.01):
@@ -49,6 +72,22 @@ def test_decision_model_is_smart_baseline():
     level = ToolExecutionLevel.from_config("JEV")
     assert level is ToolExecutionLevel.JEV
     assert level.is_smart_mode()
+
+
+def test_selected_decision_model_comes_from_provider_manager(
+    monkeypatch,
+    typesafe_provider,
+):
+    manager = SimpleNamespace(
+        get_provider=lambda provider_id: (
+            typesafe_provider if provider_id == "typesafe" else None
+        ),
+        default_models={
+            "decision": SimpleNamespace(provider_id="typesafe", model="jev-2"),
+        },
+    )
+    monkeypatch.setattr(ProviderManager, "get_instance", lambda: manager)
+    assert _decision_provider() == (typesafe_provider, "jev-2")
 
 
 def test_only_confident_low_risk_response_skips_approval():
@@ -95,7 +134,7 @@ async def test_read_only_listing_skips_model_but_not_existing_ask(
             "verified read-only listing should not call decision model",
         )
 
-    monkeypatch.setattr("qwenpaw.services.jev.JevClient.evaluate", unexpected)
+    monkeypatch.setattr(TypeSafeProvider, "evaluate", unexpected)
     command = "ls -la ~/Desktop/ | grep -i '\\.pdf$'"
     result = await assess_tool_call(
         "Bash",
@@ -120,15 +159,12 @@ async def test_declared_local_media_read_skips_decision_model(
 ):
     from qwenpaw.agents.tools.view_media import view_image
 
-    assert (
-        view_image._tool_descriptor.metadata["decision_model_local_read"]
-        is True
-    )
+    assert view_image._tool_descriptor.metadata["decision_model_local_read"] is True
 
     async def unexpected(*args):
         raise AssertionError("local media read should not call decision model")
 
-    monkeypatch.setattr("qwenpaw.services.jev.JevClient.evaluate", unexpected)
+    monkeypatch.setattr(TypeSafeProvider, "evaluate", unexpected)
     target = str(tmp_path / "desktop_screenshot_small.jpg")
     assert not (await assess_tool_call("ViewImage", target)).needs_approval
     assert (
@@ -139,19 +175,15 @@ async def test_declared_local_media_read_skips_decision_model(
 @pytest.mark.asyncio
 async def test_remote_media_read_still_reaches_decision_model(monkeypatch):
     from qwenpaw.agents.tools.view_media import view_image
-    from qwenpaw.services.jev import JevResponse
 
-    assert (
-        view_image._tool_descriptor.metadata["decision_model_local_read"]
-        is True
-    )
+    assert view_image._tool_descriptor.metadata["decision_model_local_read"] is True
     seen = []
 
-    async def evaluate(_client, request):
+    async def evaluate(_provider, **request):
         seen.append(request)
-        return JevResponse(model="jev-1", answers=_response()["answers"])
+        return _response()
 
-    monkeypatch.setattr("qwenpaw.services.jev.JevClient.evaluate", evaluate)
+    monkeypatch.setattr(TypeSafeProvider, "evaluate", evaluate)
     await assess_tool_call("ViewImage", "https://example.com/image.jpg")
     assert len(seen) == 1
 
@@ -163,16 +195,14 @@ async def test_sips_existing_output_requires_approval_without_decision_model(
 ):
     output = tmp_path / "small.jpg"
     output.write_bytes(b"existing")
-    command = (
-        f"sips -Z 1600 -s format jpeg {tmp_path}/input.png --out {output}"
-    )
+    command = f"sips -Z 1600 -s format jpeg {tmp_path}/input.png --out {output}"
 
     async def unexpected(*args):
         raise AssertionError(
             "verified overwrite should not call decision model",
         )
 
-    monkeypatch.setattr("qwenpaw.services.jev.JevClient.evaluate", unexpected)
+    monkeypatch.setattr(TypeSafeProvider, "evaluate", unexpected)
     result = await assess_tool_call(
         "Bash",
         command,
@@ -184,26 +214,23 @@ async def test_sips_existing_output_requires_approval_without_decision_model(
 
 @pytest.mark.asyncio
 async def test_sips_new_output_supplies_verified_fact(monkeypatch, tmp_path):
-    from qwenpaw.services.jev import JevResponse
 
     output = tmp_path / "small.jpg"
-    command = (
-        f"sips -Z 1600 -s format jpeg {tmp_path}/input.png --out {output}"
-    )
+    command = f"sips -Z 1600 -s format jpeg {tmp_path}/input.png --out {output}"
     seen = []
 
-    async def evaluate(_client, request):
+    async def evaluate(_provider, **request):
         seen.append(request)
-        return JevResponse(model="jev-1", answers=_response()["answers"])
+        return _response()
 
-    monkeypatch.setattr("qwenpaw.services.jev.JevClient.evaluate", evaluate)
+    monkeypatch.setattr(TypeSafeProvider, "evaluate", evaluate)
     result = await assess_tool_call(
         "Bash",
         command,
         params={"command": command},
     )
     assert not result.needs_approval
-    assert seen[0].state["verified_facts"] == {"output_exists": False}
+    assert seen[0]["state"]["verified_facts"] == {"output_exists": False}
 
 
 def test_sips_preflight_rejects_shell_expansion_and_compound_commands(
@@ -217,12 +244,8 @@ def test_sips_preflight_rejects_shell_expansion_and_compound_commands(
         )
         is None
     )
-    assert (
-        _sips_output_exists("Bash", "sips input.png --out /tmp/$NAME") is None
-    )
-    assert (
-        _sips_output_exists("Bash", "sips input.png --out /tmp/*.jpg") is None
-    )
+    assert _sips_output_exists("Bash", "sips input.png --out /tmp/$NAME") is None
+    assert _sips_output_exists("Bash", "sips input.png --out /tmp/*.jpg") is None
 
 
 @pytest.mark.asyncio
@@ -231,16 +254,11 @@ async def test_shell_syntax_reaches_model_instead_of_immediate_approval(
 ):
     seen = []
 
-    async def evaluate(_client, request):
+    async def evaluate(_provider, **request):
         seen.append(request)
-        from qwenpaw.services.jev import JevResponse
+        return _response(choice="read_only")
 
-        return JevResponse(
-            model="jev-1",
-            answers=_response(choice="read_only")["answers"],
-        )
-
-    monkeypatch.setattr("qwenpaw.services.jev.JevClient.evaluate", evaluate)
+    monkeypatch.setattr(TypeSafeProvider, "evaluate", evaluate)
     command = 'ls -lh ~/Desktop/*.pdf 2>/dev/null || echo "NO_PDF_FOUND"'
     result = await assess_tool_call(
         "Bash",
@@ -249,10 +267,11 @@ async def test_shell_syntax_reaches_model_instead_of_immediate_approval(
     )
     assert not result.needs_approval
     assert len(seen) == 1
-    assert seen[0].state["target"] == command
-    assert "read_only" in seen[0].questions["impact"]["criteria"]
-    assert "Listing filenames or file metadata alone does not count" in (
-        seen[0].questions["secret_exposure"]["instructions"]
+    assert seen[0]["state"]["target"] == command
+    assert "read_only" in seen[0]["questions"]["impact"]["criteria"]
+    assert (
+        "Listing filenames or file metadata alone does not count"
+        in (seen[0]["questions"]["secret_exposure"]["instructions"])
     )
 
 
@@ -261,7 +280,7 @@ async def test_literal_secret_is_not_sent_to_decision_model(monkeypatch):
     async def unexpected(*args):
         raise AssertionError("secret must not reach service")
 
-    monkeypatch.setattr("qwenpaw.services.jev.JevClient.evaluate", unexpected)
+    monkeypatch.setattr(TypeSafeProvider, "evaluate", unexpected)
     result = await assess_tool_call("Bash", "echo sk-1234567890abcdefghijkl")
     assert result.needs_approval
 
@@ -271,7 +290,7 @@ async def test_sensitive_target_never_reaches_service(monkeypatch):
     async def unexpected(*args):
         raise AssertionError("service should not be contacted")
 
-    monkeypatch.setattr("qwenpaw.services.jev.JevClient.evaluate", unexpected)
+    monkeypatch.setattr(TypeSafeProvider, "evaluate", unexpected)
     result = await assess_tool_call(
         "Bash",
         "curl -H 'Authorization: Bearer abc'",
@@ -280,18 +299,13 @@ async def test_sensitive_target_never_reaches_service(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_unconfigured_effectful_call_requires_approval(monkeypatch):
-    from qwenpaw.services import jev
-
-    async def no_key():
+async def test_unconfigured_effectful_call_requires_approval(
+    monkeypatch, typesafe_provider
+):
+    async def no_key(_provider):
         return None
 
-    monkeypatch.setattr(jev, "get_api_key", no_key)
-    monkeypatch.setattr(
-        jev,
-        "_provider_settings",
-        lambda: ("", "https://api.typesafe.ai/v1", "jev-latest", {}),
-    )
+    monkeypatch.setattr(TypeSafeProvider, "_evaluation_api_key", no_key)
     result = await assess_tool_call("Write", "notes.txt")
     assert result.needs_approval
     assert result.error_type == "not_configured"
@@ -303,22 +317,6 @@ async def test_unconfigured_effectful_call_requires_approval(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_typed_request_and_response(monkeypatch):
-    from qwenpaw.services import jev
-
-    async def key():
-        return "test-key"
-
-    monkeypatch.setattr(jev, "get_api_key", key)
-    monkeypatch.setattr(
-        jev,
-        "_provider_settings",
-        lambda: (
-            "test-key",
-            "https://api.typesafe.ai/v1",
-            "jev-latest",
-            {},
-        ),
-    )
     original_client = httpx.AsyncClient
 
     def handler(request):
@@ -339,7 +337,7 @@ async def test_typed_request_and_response(monkeypatch):
         return httpx.Response(200, json=_response())
 
     monkeypatch.setattr(
-        jev.httpx,
+        httpx,
         "AsyncClient",
         lambda **kwargs: original_client(
             transport=httpx.MockTransport(handler),
