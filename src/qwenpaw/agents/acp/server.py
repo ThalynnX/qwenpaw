@@ -103,17 +103,17 @@ _ACP_RUNTIME_MODEL_SLOT_KEY = "qwenpaw.runtime_model_slot"
 _GENERIC_PROMPT_ERROR = (
     "QwenPaw failed to process the request. Check server logs for details."
 )
+_ACP_KEEPALIVE_SECONDS = 20.0
+ACP_KEEPALIVE_META_KEY = "qwenpaw.keepalive"
 
 
 def _stop_reason_for_prompt_error(exc: BaseException) -> str:
     """Return a normal ACP stop reason for an expected task failure."""
-    message = str(exc).lower()
-    if (
-        "inappropriate content" in message
-        or "data_inspection_failed" in message
-        or "datainspectionfailed" in message
-    ):
-        return f"refusal"
+    if isinstance(exc, Exception):
+        from ...providers.model_error_policy import classify_model_error
+
+        if classify_model_error(exc).kind == f"content_safety":
+            return f"refusal"
     return f"end_turn"
 
 
@@ -670,6 +670,8 @@ class QwenPawACPAgent(Agent):
 
         tracker = _EnvelopeTracker()
         was_cancelled = False
+        loop = asyncio.get_running_loop()
+        last_emit = loop.time()
 
         try:
             async for event in workspace.stream_query(request):
@@ -687,8 +689,14 @@ class QwenPawACPAgent(Agent):
                         session_id=session_id,
                         update=upd,
                     )
+                    last_emit = loop.time()
 
-                await self._emit_usage_if_available(session_id)
+                if await self._emit_usage_if_available(session_id):
+                    last_emit = loop.time()
+
+                if loop.time() - last_emit >= _ACP_KEEPALIVE_SECONDS:
+                    await self._emit_keepalive(session_id)
+                    last_emit = loop.time()
         except asyncio.CancelledError:
             was_cancelled = True
             logger.info(
@@ -1239,7 +1247,7 @@ class QwenPawACPAgent(Agent):
     async def _emit_usage_if_available(
         self,
         session_id: str,
-    ) -> None:
+    ) -> bool:
         """Send a usage chunk if new usage data is available."""
         usage_meta = self._pop_session_usage(session_id)
         if usage_meta:
@@ -1280,6 +1288,19 @@ class QwenPawACPAgent(Agent):
                     field_meta=field_meta,
                 ),
             )
+            return True
+        return False
+
+    async def _emit_keepalive(self, session_id: str) -> None:
+        """Send a transport-only frame when events did not map to ACP."""
+        await self._conn.session_update(
+            session_id=session_id,
+            update=AgentMessageChunk(
+                sessionUpdate="agent_message_chunk",
+                content=text_block(""),
+                field_meta={ACP_KEEPALIVE_META_KEY: True},
+            ),
+        )
 
     @staticmethod
     def _pop_session_usage(
