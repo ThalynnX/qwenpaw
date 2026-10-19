@@ -909,6 +909,25 @@ class TestNormalizeBundle:
         assert scripts == {"b.py": "s"}
         assert extra == {"assets": {"c.txt": "c"}}
 
+    def test_preserves_binary_file(self):
+        payload = b"\x89PNG\x00\xff"
+        _, _, _, _, extra_files = hub._normalize_bundle(
+            {
+                "name": "demo-skill",
+                "files": {"SKILL.md": SKILL_MD, "assets/image.png": payload},
+            },
+        )
+        assert extra_files == {"assets": {"image.png": payload}}
+
+    def test_rejects_non_utf8_skill_markdown(self):
+        with pytest.raises(SkillsError, match="SKILL.md is not valid UTF-8"):
+            hub._normalize_bundle(
+                {
+                    "name": "demo-skill",
+                    "files": {"SKILL.md": b"\xff"},
+                },
+            )
+
     def test_existing_trees_win_over_files(self):
         data = {
             "content": SKILL_MD,
@@ -1415,25 +1434,6 @@ class TestGithubApiFunctions:
         encoded = base64.b64encode(payload).decode()
         out = _run(hub._github_read_file({"content": encoded}))
         assert out == payload
-
-    def test_normalize_bundle_preserves_binary_file(self):
-        payload = b"\x89PNG\x00\xff"
-        _, _, _, _, extra_files = hub._normalize_bundle(
-            {
-                "name": "demo-skill",
-                "files": {"SKILL.md": SKILL_MD, "assets/image.png": payload},
-            },
-        )
-        assert extra_files == {"assets": {"image.png": payload}}
-
-    def test_normalize_bundle_rejects_non_utf8_skill_markdown(self):
-        with pytest.raises(SkillsError, match="SKILL.md is not valid UTF-8"):
-            hub._normalize_bundle(
-                {
-                    "name": "demo-skill",
-                    "files": {"SKILL.md": b"\xff"},
-                },
-            )
 
     def test_read_file_bad_base64(self):
         with pytest.raises(SkillsError, match="Unable to read"):
@@ -2754,7 +2754,9 @@ class TestPrepareInstallPayload:
 
 class TestInstallSkillFromHub:
     def test_install_preserves_github_binary_files(
-        self, monkeypatch, tmp_path
+        self,
+        monkeypatch,
+        tmp_path,
     ):
         skill_md = b"---\nname: demo-skill\ndescription: demo\n---\n# Demo"
         payload = b"\x89PNG\x00\xff"

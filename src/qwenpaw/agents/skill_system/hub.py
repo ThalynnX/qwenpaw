@@ -868,7 +868,7 @@ def _normalize_bundle(
                         content = file_content.decode("utf-8")
                     except UnicodeDecodeError as exc:
                         raise SkillsError(
-                            message="GitHub SKILL.md is not valid UTF-8 text",
+                            message="SKILL.md is not valid UTF-8 text",
                         ) from exc
                 elif not content:
                     content = file_content
