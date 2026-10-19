@@ -1014,15 +1014,23 @@
   }
 
   .workspace[data-mobile-pane="document"] {
-    .navigatorPane {
+    .navigatorPane,
+    .sourcePanel {
       display: none;
     }
   }
 
-  .workspace[data-mobile-pane="navigator"] {
+  .workspace[data-mobile-pane="navigator"],
+  .workspace[data-mobile-pane="source"] {
     .documentSurface {
       display: none;
     }
+  }
+
+  .sourcePanel {
+    width: 100%;
+    min-width: 0;
+    flex: 1;
   }
 
   .mobilePaneSwitch {

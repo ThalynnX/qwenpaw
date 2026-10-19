@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { useEffect } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -16,6 +17,7 @@ const lifecycle = vi.hoisted(() => ({
   closeTab: vi.fn(),
   editorMounted: vi.fn(),
   editorUnmounted: vi.fn(),
+  codingMode: false,
   navigatorMounted: vi.fn(),
   navigatorUnmounted: vi.fn(),
   navigatorProps: null as {
@@ -48,7 +50,7 @@ const lifecycle = vi.hoisted(() => ({
 }));
 
 vi.mock("../../stores/codingModeStore", () => ({
-  useCodingMode: () => ({ codingMode: false }),
+  useCodingMode: () => ({ codingMode: lifecycle.codingMode }),
 }));
 
 vi.mock("../../stores/codingTabsStore", () => {
@@ -154,6 +156,11 @@ vi.mock("../../pages/Coding/GitPanel", () => ({
 describe("FilesWorkspace directory changes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 1024,
+    });
+    lifecycle.codingMode = false;
     lifecycle.tabs = [];
     lifecycle.activeTabPath = "";
     lifecycle.editorProps = null;
@@ -544,6 +551,57 @@ describe("FilesWorkspace directory changes", () => {
       content: "local edit",
       dirty: true,
     });
+  });
+
+  it("keeps Coding Mode source control mutually exclusive at 390px", () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    });
+    lifecycle.codingMode = true;
+    lifecycle.tabs = [
+      {
+        path: "notes.md",
+        displayPath: "notes.md",
+        content: "local edit",
+        dirty: true,
+        source: "workspace",
+        previewKind: "text",
+      },
+    ];
+    lifecycle.activeTabPath = "notes.md";
+
+    render(<FilesWorkspace scope={{ kind: "agent", agentId: "agent-a" }} />);
+    const workspace = screen.getByText("editor").closest("[data-mobile-pane]");
+
+    expect(workspace).toHaveAttribute("data-mobile-pane", "document");
+    fireEvent.click(
+      within(
+        screen.getByRole("navigation", { name: "files.workspace" }),
+      ).getByLabelText("files.sourceControl"),
+    );
+    expect(workspace).toHaveAttribute("data-mobile-pane", "source");
+    expect(screen.getByText("git")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("files.openFilesLabel"));
+    expect(workspace).toHaveAttribute("data-mobile-pane", "document");
+    expect(screen.getByText("editor")).toBeInTheDocument();
+    expect(lifecycle.closeTab).not.toHaveBeenCalled();
+    expect(lifecycle.setTabDirty).not.toHaveBeenCalled();
+    expect(lifecycle.editorUnmounted).not.toHaveBeenCalled();
+    expect(lifecycle.tabs[0]).toMatchObject({
+      content: "local edit",
+      dirty: true,
+    });
+
+    fireEvent.click(
+      within(
+        screen.getByRole("navigation", { name: "files.workspace" }),
+      ).getByLabelText("files.sourceControl"),
+    );
+    fireEvent.click(screen.getByLabelText("files.navigator"));
+    expect(workspace).toHaveAttribute("data-mobile-pane", "navigator");
+    expect(screen.getByText("navigator")).toBeInTheDocument();
   });
 
   it("returns to the document pane when an existing file is selected", async () => {

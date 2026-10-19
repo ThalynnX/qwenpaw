@@ -21,14 +21,20 @@ describe("FilesWorkspace responsive layout", () => {
       /\.navigatorPane\s*\{[\s\S]*?width:\s*100%;[\s\S]*?min-width:\s*0;/,
     );
     expect(mobileRule).toMatch(
-      /\.workspace\[data-mobile-pane="document"\][\s\S]*?\.navigatorPane\s*\{[\s\S]*?display:\s*none;/,
+      /\.workspace\[data-mobile-pane="document"\][\s\S]*?\.navigatorPane[\s\S]*?\.sourcePanel\s*\{[\s\S]*?display:\s*none;/,
     );
     expect(mobileRule).toMatch(
       /\.workspace\[data-mobile-pane="navigator"\][\s\S]*?\.documentSurface\s*\{[\s\S]*?display:\s*none;/,
     );
+    expect(mobileRule).toMatch(
+      /\.workspace\[data-mobile-pane="source"\][\s\S]*?\.documentSurface\s*\{[\s\S]*?display:\s*none;/,
+    );
+    expect(mobileRule).toMatch(
+      /\.sourcePanel\s*\{[\s\S]*?width:\s*100%;[\s\S]*?min-width:\s*0;/,
+    );
   });
 
-  it("keeps the navigator and document split above 768px", () => {
+  it("keeps navigator/source-control and document splits at 820px", () => {
     const mobileStart = stylesSource.indexOf("@media (max-width: 768px)");
     const desktopRule = stylesSource.slice(0, mobileStart);
 
@@ -37,6 +43,9 @@ describe("FilesWorkspace responsive layout", () => {
     );
     expect(desktopRule).toMatch(
       /\.documentSurface\s*\{[\s\S]*?flex:\s*1;[\s\S]*?min-width:\s*360px;/,
+    );
+    expect(desktopRule).toMatch(
+      /\.sourcePanel\s*\{[\s\S]*?width:\s*clamp\(240px,\s*26%,\s*320px\);[\s\S]*?min-width:\s*220px;/,
     );
   });
 

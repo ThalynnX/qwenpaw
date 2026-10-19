@@ -1,4 +1,4 @@
-import { FileWarning, Files, GitBranch } from "lucide-react";
+import { ArrowLeft, FileWarning, Files, GitBranch } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { buildAuthHeaders } from "../../api/authHeaders";
@@ -106,9 +106,9 @@ export default function FilesWorkspace({
   const [memoryGraphRoot, setMemoryGraphRoot] =
     useState<MemoryGraphRoot | null>(null);
   const [activity, setActivity] = useState<"files" | "git">("files");
-  const [mobilePane, setMobilePane] = useState<"navigator" | "document">(
-    tabs.length > 0 ? "document" : "navigator",
-  );
+  const [mobilePane, setMobilePane] = useState<
+    "navigator" | "source" | "document"
+  >(tabs.length > 0 ? "document" : "navigator");
   const [directoryRevision, setDirectoryRevision] = useState(0);
   const [editorNavigation, setEditorNavigation] = useState<{
     path: string;
@@ -515,15 +515,15 @@ export default function FilesWorkspace({
 
   useEffect(() => {
     if (tabs.length === 0 && !memoryGraphRoot) {
-      setMobilePane("navigator");
+      setMobilePane(activity === "git" && codingMode ? "source" : "navigator");
     }
-  }, [memoryGraphRoot, tabs.length]);
+  }, [activity, codingMode, memoryGraphRoot, tabs.length]);
 
   const handleClose = (path: string) => {
     const index = tabs.findIndex((tab) => tab.path === path);
     closeTab(scopeKey, path);
     if (tabs.length === 1 && !memoryGraphRoot) {
-      setMobilePane("navigator");
+      setMobilePane(activity === "git" && codingMode ? "source" : "navigator");
     }
     if (activeTabPath === path) {
       const nextPath = tabs[index + 1]?.path ?? tabs[index - 1]?.path ?? "";
@@ -549,7 +549,10 @@ export default function FilesWorkspace({
             type="button"
             className={activity === "files" ? styles.activityActive : ""}
             aria-label={t("files.navigator")}
-            onClick={() => setActivity("files")}
+            onClick={() => {
+              setActivity("files");
+              setMobilePane("navigator");
+            }}
           >
             <Files size={18} />
           </button>
@@ -558,7 +561,10 @@ export default function FilesWorkspace({
               type="button"
               className={activity === "git" ? styles.activityActive : ""}
               aria-label={t("files.sourceControl")}
-              onClick={() => setActivity("git")}
+              onClick={() => {
+                setActivity("git");
+                setMobilePane("source");
+              }}
             >
               <GitBranch size={18} />
             </button>
@@ -601,6 +607,17 @@ export default function FilesWorkspace({
         </div>
       ) : (
         <aside className={styles.sourcePanel}>
+          {hasDocument && (
+            <button
+              type="button"
+              className={styles.mobilePaneSwitch}
+              aria-label={t("files.openFilesLabel")}
+              onClick={() => setMobilePane("document")}
+            >
+              <ArrowLeft size={16} />
+              <span>{t("files.openFilesLabel")}</span>
+            </button>
+          )}
           <header>
             <GitBranch size={15} />
             <span>{t("files.sourceControl")}</span>
@@ -612,11 +629,17 @@ export default function FilesWorkspace({
         <button
           type="button"
           className={styles.mobilePaneSwitch}
-          aria-label={t("files.navigator")}
-          onClick={() => setMobilePane("navigator")}
+          aria-label={t(
+            activity === "git" ? "files.sourceControl" : "files.navigator",
+          )}
+          onClick={() =>
+            setMobilePane(activity === "git" ? "source" : "navigator")
+          }
         >
-          <Files size={16} />
-          <span>{t("files.navigator")}</span>
+          {activity === "git" ? <GitBranch size={16} /> : <Files size={16} />}
+          <span>
+            {t(activity === "git" ? "files.sourceControl" : "files.navigator")}
+          </span>
         </button>
         {loadError && (
           <div className={styles.loadError} role="alert">
