@@ -248,6 +248,7 @@ export function useMCP() {
   const loading = loadingAgent === agentId || (!ready && !error);
 
   return {
+    agentId,
     clients,
     providerServers,
     loading,

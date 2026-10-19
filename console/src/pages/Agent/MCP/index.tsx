@@ -1,6 +1,6 @@
 import { Cascade } from "@/components/interaction/Cascade";
 import { SharedModal as Modal } from "@/components/interaction/SharedModal";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useLayoutEffect, useRef } from "react";
 import { Button, Empty, Input, Select } from "@agentscope-ai/design";
 import { Tabs, Alert, Segmented } from "antd";
 import InlineHelp from "@/components/InlineHelp";
@@ -78,6 +78,7 @@ const defaultForm = {
 function MCPPage() {
   const { t } = useTranslation();
   const {
+    agentId,
     clients,
     providerServers,
     loading,
@@ -142,6 +143,14 @@ function MCPPage() {
     setActiveTab("form");
     setCreateError(null);
   }, []);
+  const activeAgentRef = useRef(agentId);
+
+  useLayoutEffect(() => {
+    if (activeAgentRef.current === agentId) return;
+    activeAgentRef.current = agentId;
+    setCreateModalOpen(false);
+    resetModal();
+  }, [agentId, resetModal]);
 
   const handleToggleEnabled = async (
     client: MCPClientInfo,
@@ -158,6 +167,8 @@ function MCPPage() {
 
   // ---------- JSON import ----------
   const handleCreateFromJson = async () => {
+    const submitAgent = agentId;
+    if (activeAgentRef.current !== submitAgent) return;
     setCreateError(null);
     try {
       const parsed = JSON.parse(newClientJson) as Record<string, unknown>;
@@ -208,6 +219,7 @@ function MCPPage() {
       let allSuccess = true;
       for (const { key, data } of clientsToCreate) {
         const success = await createClient(key, data);
+        if (activeAgentRef.current !== submitAgent) return;
         if (!success) allSuccess = false;
       }
 
@@ -222,6 +234,8 @@ function MCPPage() {
 
   // ---------- Form create ----------
   const handleCreateFromForm = async () => {
+    const submitAgent = agentId;
+    if (activeAgentRef.current !== submitAgent) return;
     setCreateError(null);
     const key = form.key.trim();
     const name = form.name.trim();
@@ -277,6 +291,7 @@ function MCPPage() {
     };
 
     const success = await createClient(key, clientData);
+    if (activeAgentRef.current !== submitAgent) return;
     if (success) {
       setCreateModalOpen(false);
       resetModal();
@@ -380,7 +395,7 @@ function MCPPage() {
                 ) : (
                   <div className={styles.mcpGrid}>
                     {visibleClients.map((client, index) => (
-                      <Cascade key={client.key} index={index}>
+                      <Cascade key={`${agentId}:${client.key}`} index={index}>
                         <MCPClientCard
                           client={client}
                           onToggle={handleToggleEnabled}
