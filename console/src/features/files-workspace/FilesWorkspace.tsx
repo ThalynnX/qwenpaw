@@ -106,6 +106,9 @@ export default function FilesWorkspace({
   const [memoryGraphRoot, setMemoryGraphRoot] =
     useState<MemoryGraphRoot | null>(null);
   const [activity, setActivity] = useState<"files" | "git">("files");
+  const [mobilePane, setMobilePane] = useState<"navigator" | "document">(
+    tabs.length > 0 ? "document" : "navigator",
+  );
   const [directoryRevision, setDirectoryRevision] = useState(0);
   const [editorNavigation, setEditorNavigation] = useState<{
     path: string;
@@ -396,6 +399,7 @@ export default function FilesWorkspace({
       revalidatedScope.current = scopeKey;
       setLoadError("");
       setActiveTab(scopeKey, tabPath);
+      setMobilePane("document");
       void revalidateTab(tabPath);
     },
     [revalidateTab, scopeKey, setActiveTab],
@@ -449,6 +453,7 @@ export default function FilesWorkspace({
         });
         revalidatedScope.current = scopeKey;
         setActiveTab(scopeKey, tabPath);
+        setMobilePane("document");
       } catch {
         setLoadError(t("files.loadFailed"));
       }
@@ -508,9 +513,18 @@ export default function FilesWorkspace({
     if (activeTab?.content) void revalidateTab(activeTabPath);
   }, [activeTabPath, revalidateTab, scopeKey]);
 
+  useEffect(() => {
+    if (tabs.length === 0 && !memoryGraphRoot) {
+      setMobilePane("navigator");
+    }
+  }, [memoryGraphRoot, tabs.length]);
+
   const handleClose = (path: string) => {
     const index = tabs.findIndex((tab) => tab.path === path);
     closeTab(scopeKey, path);
+    if (tabs.length === 1 && !memoryGraphRoot) {
+      setMobilePane("navigator");
+    }
     if (activeTabPath === path) {
       const nextPath = tabs[index + 1]?.path ?? tabs[index - 1]?.path ?? "";
       if (nextPath) activateTab(nextPath);
@@ -525,12 +539,10 @@ export default function FilesWorkspace({
     activateTab(path);
   };
 
+  const hasDocument = tabs.length > 0 || memoryGraphRoot !== null;
+
   return (
-    <div
-      className={`${styles.workspace} ${
-        tabs.length === 0 && !memoryGraphRoot ? styles.workspaceEmpty : ""
-      }`}
-    >
+    <div className={styles.workspace} data-mobile-pane={mobilePane}>
       {codingMode && (
         <nav className={styles.activityRail} aria-label={t("files.workspace")}>
           <button
@@ -554,21 +566,39 @@ export default function FilesWorkspace({
         </nav>
       )}
       {activity === "files" || !codingMode ? (
-        <FilesNavigator
-          key={`${scopeKey}:${projectDirOverride ?? ""}:${directoryRevision}`}
-          scope={effectiveScope}
-          selectedPath={
-            tabs.find((tab) => tab.path === activeTabPath)?.displayPath ??
-            activeTabPath
-          }
-          onSelect={(target) => {
-            setMemoryGraphRoot(null);
-            void openTarget(target);
-          }}
-          activeMemoryGraphRoot={memoryGraphRoot}
-          onShowMemoryGraph={(root) => setMemoryGraphRoot(root)}
-          onShowFiles={() => setMemoryGraphRoot(null)}
-        />
+        <div className={styles.navigatorPane}>
+          {hasDocument && (
+            <button
+              type="button"
+              className={styles.mobilePaneSwitch}
+              aria-label={t("files.openFilesLabel")}
+              onClick={() => setMobilePane("document")}
+            >
+              <Files size={16} />
+              <span>{t("files.openFilesLabel")}</span>
+            </button>
+          )}
+          <FilesNavigator
+            key={`${scopeKey}:${projectDirOverride ?? ""}:${directoryRevision}`}
+            scope={effectiveScope}
+            selectedPath={
+              tabs.find((tab) => tab.path === activeTabPath)?.displayPath ??
+              activeTabPath
+            }
+            onSelect={(target) => {
+              setMemoryGraphRoot(null);
+              void openTarget(target);
+            }}
+            activeMemoryGraphRoot={memoryGraphRoot}
+            onShowMemoryGraph={(root) => {
+              setMemoryGraphRoot(root);
+              setMobilePane("document");
+            }}
+            onShowFiles={() => {
+              setMemoryGraphRoot(null);
+            }}
+          />
+        </div>
       ) : (
         <aside className={styles.sourcePanel}>
           <header>
@@ -579,6 +609,15 @@ export default function FilesWorkspace({
         </aside>
       )}
       <main className={styles.documentSurface}>
+        <button
+          type="button"
+          className={styles.mobilePaneSwitch}
+          aria-label={t("files.navigator")}
+          onClick={() => setMobilePane("navigator")}
+        >
+          <Files size={16} />
+          <span>{t("files.navigator")}</span>
+        </button>
         {loadError && (
           <div className={styles.loadError} role="alert">
             <FileWarning size={24} />

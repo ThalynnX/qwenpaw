@@ -1,4 +1,10 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { useEffect } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import FilesWorkspace from "./FilesWorkspace";
@@ -25,8 +31,10 @@ const lifecycle = vi.hoisted(() => ({
   loadFile: vi.fn(),
   saveFile: vi.fn(),
   loadMemoryFile: vi.fn(),
+  openTab: vi.fn(),
   saveFileContent: vi.fn(),
   setTabContent: vi.fn(),
+  setTabDirty: vi.fn(),
   setTabEtag: vi.fn(),
   setActiveTab: vi.fn(),
   tabs: [] as EditorTab[],
@@ -34,6 +42,7 @@ const lifecycle = vi.hoisted(() => ({
   editorProps: null as {
     onCloseOtherTabs: (path: string) => void;
     onSaveFile: (path: string, content: string) => Promise<void>;
+    onTabClose: (path: string) => void;
     onTabSelect: (path: string) => void;
   } | null,
 }));
@@ -47,10 +56,10 @@ vi.mock("../../stores/codingTabsStore", () => {
     () => ({
       clearProjectTabs: lifecycle.clearProjectTabs,
       closeTab: lifecycle.closeTab,
-      openTab: vi.fn(),
+      openTab: lifecycle.openTab,
       setActiveTab: lifecycle.setActiveTab,
       setTabContent: lifecycle.setTabContent,
-      setTabDirty: vi.fn(),
+      setTabDirty: lifecycle.setTabDirty,
       setTabEtag: lifecycle.setTabEtag,
       refreshTab: (
         scopeKey: string,
@@ -126,6 +135,7 @@ vi.mock("../../pages/Coding/TabbedEditor", () => ({
   default: function MockTabbedEditor(props: {
     onCloseOtherTabs: (path: string) => void;
     onSaveFile: (path: string, content: string) => Promise<void>;
+    onTabClose: (path: string) => void;
     onTabSelect: (path: string) => void;
   }) {
     lifecycle.editorProps = props;
@@ -501,6 +511,117 @@ describe("FilesWorkspace directory changes", () => {
 
     act(() => lifecycle.navigatorProps?.onShowFiles());
     expect(screen.getByText("editor")).toBeInTheDocument();
+  });
+
+  it("switches mobile panes without closing or changing a dirty tab", () => {
+    lifecycle.tabs = [
+      {
+        path: "notes.md",
+        displayPath: "notes.md",
+        content: "local edit",
+        dirty: true,
+        source: "workspace",
+        previewKind: "text",
+      },
+    ];
+    lifecycle.activeTabPath = "notes.md";
+
+    render(<FilesWorkspace scope={{ kind: "agent", agentId: "agent-a" }} />);
+    const workspace = screen
+      .getByText("navigator")
+      .closest("[data-mobile-pane]");
+
+    expect(workspace).toHaveAttribute("data-mobile-pane", "document");
+    fireEvent.click(screen.getByLabelText("files.navigator"));
+    expect(workspace).toHaveAttribute("data-mobile-pane", "navigator");
+    expect(screen.getByText("editor")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("files.openFilesLabel"));
+    expect(workspace).toHaveAttribute("data-mobile-pane", "document");
+    expect(lifecycle.closeTab).not.toHaveBeenCalled();
+    expect(lifecycle.setTabDirty).not.toHaveBeenCalled();
+    expect(lifecycle.editorUnmounted).not.toHaveBeenCalled();
+    expect(lifecycle.tabs[0]).toMatchObject({
+      content: "local edit",
+      dirty: true,
+    });
+  });
+
+  it("returns to the document pane when an existing file is selected", async () => {
+    lifecycle.tabs = [
+      {
+        path: "notes.md",
+        content: "before",
+        dirty: true,
+        source: "workspace",
+        previewKind: "text",
+      },
+    ];
+
+    render(<FilesWorkspace scope={{ kind: "agent", agentId: "agent-a" }} />);
+    const workspace = screen
+      .getByText("navigator")
+      .closest("[data-mobile-pane]");
+    fireEvent.click(screen.getByLabelText("files.navigator"));
+    await act(async () => {
+      lifecycle.navigatorProps?.onSelect({
+        source: "workspace",
+        path: "notes.md",
+      });
+    });
+
+    expect(workspace).toHaveAttribute("data-mobile-pane", "document");
+    expect(lifecycle.setActiveTab).toHaveBeenCalledWith(
+      "agent:agent-a",
+      "notes.md",
+    );
+  });
+
+  it("opens a new navigator selection in the document pane", async () => {
+    render(<FilesWorkspace scope={{ kind: "agent", agentId: "agent-a" }} />);
+    const workspace = screen
+      .getByText("navigator")
+      .closest("[data-mobile-pane]");
+
+    expect(workspace).toHaveAttribute("data-mobile-pane", "navigator");
+    await act(async () => {
+      lifecycle.navigatorProps?.onSelect({
+        source: "workspace",
+        path: "notes.md",
+      });
+    });
+
+    expect(workspace).toHaveAttribute("data-mobile-pane", "document");
+    expect(lifecycle.openTab).toHaveBeenCalledWith(
+      "agent:agent-a",
+      expect.objectContaining({
+        path: "notes.md",
+        previewKind: "text",
+      }),
+    );
+  });
+
+  it("returns to the navigator after the final tab closes", () => {
+    lifecycle.tabs = [
+      {
+        path: "notes.md",
+        content: "before",
+        dirty: false,
+        source: "workspace",
+      },
+    ];
+    lifecycle.activeTabPath = "notes.md";
+
+    render(<FilesWorkspace scope={{ kind: "agent", agentId: "agent-a" }} />);
+    const workspace = screen
+      .getByText("navigator")
+      .closest("[data-mobile-pane]");
+    act(() => lifecycle.editorProps?.onTabClose("notes.md"));
+
+    expect(workspace).toHaveAttribute("data-mobile-pane", "navigator");
+    expect(lifecycle.closeTab).toHaveBeenCalledWith(
+      "agent:agent-a",
+      "notes.md",
+    );
   });
 
   it("opens the section-relative path supplied by the memory graph", async () => {
