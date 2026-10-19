@@ -67,6 +67,7 @@ vi.mock("./QrcodeAuthBlock", () => ({
 }));
 
 import { ChannelFormDrawer } from "./ChannelFormDrawer";
+import { normalizeChannelSubmitValues } from "./channelConfig";
 
 const schema = {
   label: "Custom",
@@ -95,6 +96,25 @@ beforeEach(() => {
 });
 
 describe("ChannelFormDrawer owner isolation", () => {
+  it.each([undefined, "legacy-mode"])(
+    "fails closed for SIP mode %s",
+    (sipMode) => {
+      const values = {
+        sip_mode: sipMode,
+        sip_transport: "TCP",
+        livekit_api_secret: "must-not-survive",
+      };
+
+      const normalized = normalizeChannelSubmitValues("sip", values);
+
+      expect(normalized).toEqual({
+        sip_mode: sipMode,
+        sip_transport: "TCP",
+      });
+      expect(values.livekit_api_secret).toBe("must-not-survive");
+    },
+  );
+
   it("remounts the real Ant form and excludes stale secrets from autosave", async () => {
     const agentA = drawerProps({
       enabled: true,

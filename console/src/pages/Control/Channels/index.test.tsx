@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { ComponentProps, ReactNode } from "react";
-import { fireEvent, screen } from "@testing-library/react";
+import { act, fireEvent, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders } from "@/test/common_setup";
 
@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => {
     channelDrawerProps: null as null | {
       open: boolean;
       initialValues?: Record<string, unknown>;
+      onClose: () => void;
       onSubmit: (values: Record<string, unknown>) => Promise<void | boolean>;
     },
     aclDrawerProps: null as null | {
@@ -396,7 +397,7 @@ describe("ChannelsPage load recovery", () => {
         orderedKeys: ["sip"],
       }),
     );
-    renderWithProviders(<ChannelsPage />);
+    const view = renderWithProviders(<ChannelsPage />);
     fireEvent.click(screen.getByRole("button", { name: "available-sip" }));
 
     await mocks.channelDrawerProps?.onSubmit({
@@ -417,6 +418,54 @@ describe("ChannelsPage load recovery", () => {
     const payload = mocks.updateChannelConfig.mock.calls[0][1];
     expect(
       Object.keys(payload).filter((key) => key.startsWith("livekit_")),
+    ).toEqual([]);
+
+    const applyLocalUpdate = mocks.setChannels.mock.calls[0][1] as (
+      current: Record<string, Record<string, unknown>>,
+    ) => Record<string, Record<string, unknown>>;
+    const savedChannels = applyLocalUpdate({
+      sip: {
+        enabled: false,
+        isBuiltin: true,
+        sip_mode: "livekit",
+        livekit_api_secret: "persisted-secret",
+      },
+    });
+    expect(savedChannels.sip).toMatchObject({
+      isBuiltin: true,
+      sip_mode: "dev",
+      sip_transport: "TCP",
+      bot_prefix: "adjacent-sentinel",
+    });
+    expect(
+      Object.keys(savedChannels.sip).filter((key) =>
+        key.startsWith("livekit_"),
+      ),
+    ).toEqual([]);
+
+    act(() => mocks.channelDrawerProps?.onClose());
+    mocks.useChannels.mockReturnValue(
+      channelsState({
+        channels: savedChannels,
+        orderedKeys: ["sip"],
+      }),
+    );
+    view.rerender(<ChannelsPage />);
+    fireEvent.click(screen.getByRole("button", { name: "available-sip" }));
+    expect(
+      Object.keys(mocks.channelDrawerProps?.initialValues ?? {}).filter((key) =>
+        key.startsWith("livekit_"),
+      ),
+    ).toEqual([]);
+
+    mocks.updateChannelConfig.mockClear();
+    await mocks.channelDrawerProps?.onSubmit({
+      sip_mode: "dev",
+      sip_transport: "UDP",
+    });
+    const resavedPayload = mocks.updateChannelConfig.mock.calls[0][1];
+    expect(
+      Object.keys(resavedPayload).filter((key) => key.startsWith("livekit_")),
     ).toEqual([]);
   });
 

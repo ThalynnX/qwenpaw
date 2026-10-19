@@ -232,10 +232,16 @@ function ChannelsPage() {
 
       await api.updateChannelConfig(channelKey, proposedConfig, ownerAgentId);
       if (!ownsProposal()) return false;
-      setChannels(ownerAgentId, (current) => ({
-        ...current,
-        [channelKey]: { ...current[channelKey], ...updatedChannel },
-      }));
+      setChannels(ownerAgentId, (current) => {
+        const isBuiltin = current[channelKey]?.isBuiltin;
+        return {
+          ...current,
+          [channelKey]: {
+            ...updatedChannel,
+            ...(typeof isBuiltin === "boolean" ? { isBuiltin } : {}),
+          },
+        };
+      });
       return true;
     } catch (error) {
       if (!ownsProposal()) return false;
