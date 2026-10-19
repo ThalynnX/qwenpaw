@@ -129,7 +129,7 @@ def is_legacy_minimax_text(model_id: str) -> bool:
     """Exclude retired text presets, retaining exact-ID compatibility data."""
     name = model_id.casefold().rsplit(f"/", 1)[-1]
     return bool(
-        re.fullmatch(r"minimax-(?:m[12](?:[.:-].*|-.*)?|(?:text-)?01)", name)
+        re.fullmatch(r"minimax-(?:m[12](?:[.:-].*|-.*)?|(?:text-)?01)", name),
     )
 
 

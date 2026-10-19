@@ -35,7 +35,7 @@ def test_file_agent_minimax_defaults_use_sdk_protocol(model_id, base_url):
 
     async def call():
         async with httpx.AsyncClient(
-            transport=httpx.MockTransport(respond)
+            transport=httpx.MockTransport(respond),
         ) as client:
             parameters = AnthropicChatModel.Parameters()
             parameters.max_tokens = await anthropic_output_limit(

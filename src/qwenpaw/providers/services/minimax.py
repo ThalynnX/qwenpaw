@@ -13,9 +13,9 @@ class MiniMaxProvider(AnthropicProvider):
     cache_modes: ClassVar[frozenset[str]] = frozenset(
         [f"implicit", f"anthropic"],
     )
-    cache_documentation: ClassVar[str | None] = (
-        f"https://platform.minimax.io/docs/api-reference/text-prompt-caching"
-    )
+    cache_documentation: ClassVar[
+        str | None
+    ] = f"https://platform.minimax.io/docs/api-reference/text-prompt-caching"
 
     @staticmethod
     def _current_model_kwargs(model_id: str, kwargs: dict) -> dict:

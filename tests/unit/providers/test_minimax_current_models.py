@@ -47,7 +47,9 @@ def test_current_catalogs_and_templates_keep_legacy_lookup():
         assert provider.thinking_control(FLASH).efforts == EFFORTS
         assert not provider.thinking_control(FLASH).supports_off
         legacy = model_metadata(
-            provider.id, provider.base_url, f"MiniMax-M2.7"
+            provider.id,
+            provider.base_url,
+            f"MiniMax-M2.7",
         )
         assert legacy and legacy[0].model.max_input_length == 204800
     templates = [m[f"model_id"] for m in list_model_templates()]
@@ -67,7 +69,9 @@ def test_discovery_filters_old_text_but_preserves_saved_and_custom_ids(custom):
     provider = PROVIDER_OPENROUTER.model_copy(deep=True)
     provider.is_custom = custom
     legacy = ModelInfo(
-        id=f"minimax/minimax-m2.7", name=f"Saved", source=f"user"
+        id=f"minimax/minimax-m2.7",
+        name=f"Saved",
+        source=f"user",
     )
     provider.extra_models = [legacy]
     ids = [
@@ -94,7 +98,10 @@ def test_discovery_filters_old_text_but_preserves_saved_and_custom_ids(custom):
 @pytest.mark.parametrize(f"level", [f"inherit", f"off", *EFFORTS])
 @pytest.mark.parametrize(f"stream", [False, True])
 async def test_flash_efforts_reach_real_sdk_wire(
-    monkeypatch, provider, level, stream
+    monkeypatch,
+    provider,
+    level,
+    stream,
 ):
     provider = provider.model_copy(deep=True)
     provider.api_key = f"test-only"
@@ -127,7 +134,7 @@ async def test_flash_efforts_reach_real_sdk_wire(
                     f"thinking": {f"type": f"disabled"},
                     f"output_config": {f"effort": f"none"},
                     f"service_tier": f"priority",
-                }
+                },
             },
             f"adaptive",
             f"max",
@@ -193,7 +200,12 @@ async def test_direct_runtime_normalizes_legacy_controls(
 
 
 async def _capture(
-    monkeypatch, model, model_id, base_url, stream, kwargs=None
+    monkeypatch,
+    model,
+    model_id,
+    base_url,
+    stream,
+    kwargs=None,
 ):
     """Intercept HTTP after the installed Anthropic SDK serializes the body."""
     captured = []
@@ -222,7 +234,7 @@ async def _capture(
         )
 
     async with httpx.AsyncClient(
-        transport=httpx.MockTransport(respond)
+        transport=httpx.MockTransport(respond),
     ) as transport:
         async with anthropic.AsyncAnthropic(
             api_key=f"test-only",
@@ -230,7 +242,9 @@ async def _capture(
             http_client=transport,
         ) as client:
             monkeypatch.setattr(
-                model, f"_request_client", AsyncMock(return_value=client)
+                model,
+                f"_request_client",
+                AsyncMock(return_value=client),
             )
             model.stream = stream
             response = await model._call_api(model_id, [], **(kwargs or {}))
@@ -251,9 +265,9 @@ def test_user_catalog_keeps_explicit_legacy_templates(monkeypatch):
                 "saved": {
                     "template_owner": True,
                     "models": [{"id": "MiniMax-M2.7", "name": "Saved model"}],
-                }
+                },
             },
-        }
+        },
     )
     monkeypatch.setattr(
         "qwenpaw.providers.model_metadata.catalog_documents",
