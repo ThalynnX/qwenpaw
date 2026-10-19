@@ -127,14 +127,15 @@ export function useSkills() {
   );
 
   const checkScanWarnings = useCallback(
-    (skillName: string) =>
+    (skillName: string, mutation: SkillMutationToken) =>
       checkScanWarningsShared(
         skillName,
         api.getBlockedHistory,
         api.getSkillScanner,
         t,
+        () => ownsMutation(mutation),
       ),
-    [t],
+    [ownsMutation, t],
   );
 
   const loadSkillsForAgent = useCallback(
@@ -283,7 +284,7 @@ export function useSkills() {
       invalidateSkillCache({ agentId: mutation.agentId });
       await fetchSkills();
       if (!ownsMutation(mutation)) return { success: false };
-      await checkScanWarnings(result.name);
+      await checkScanWarnings(result.name, mutation);
       if (!ownsMutation(mutation)) return { success: false };
       return { success: true, name: result.name };
     } catch (error) {
@@ -327,7 +328,7 @@ export function useSkills() {
         await fetchSkills();
         if (!ownsMutation(mutation)) return { success: false };
         for (const name of result.imported) {
-          await checkScanWarnings(name);
+          await checkScanWarnings(name, mutation);
           if (!ownsMutation(mutation)) return { success: false };
         }
       }
@@ -404,7 +405,7 @@ export function useSkills() {
           await fetchSkills();
           if (!ownsMutation(mutation)) return { success: false };
           if (status.result.name) {
-            await checkScanWarnings(status.result.name);
+            await checkScanWarnings(status.result.name, mutation);
             if (!ownsMutation(mutation)) return { success: false };
           }
           return { success: true, name: String(status.result.name || "") };
@@ -495,7 +496,7 @@ export function useSkills() {
           ),
         );
         message.success(t("skills.enabledSuccessfully"));
-        await checkScanWarnings(skill.name);
+        await checkScanWarnings(skill.name, mutation);
         if (!ownsMutation(mutation)) return false;
       }
       invalidateSkillCache({ agentId: mutation.agentId });

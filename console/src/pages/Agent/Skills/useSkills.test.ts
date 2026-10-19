@@ -30,6 +30,7 @@ const hoisted = vi.hoisted(() => {
   const handleScanErrorMock = vi.fn().mockReturnValue(false);
   const checkScanWarningsMock = vi.fn().mockResolvedValue(undefined);
   const showScanErrorModalMock = vi.fn();
+  const showScanWarnModalMock = vi.fn();
   const harnessMocks = {
     listSkills: vi.fn(),
   };
@@ -51,6 +52,7 @@ const hoisted = vi.hoisted(() => {
     handleScanErrorMock,
     checkScanWarningsMock,
     showScanErrorModalMock,
+    showScanWarnModalMock,
     harnessMocks,
     agentState,
     stableT,
@@ -108,6 +110,7 @@ vi.mock("../../../utils/scanError", () => ({
   handleScanError: hoisted.handleScanErrorMock,
   checkScanWarnings: hoisted.checkScanWarningsMock,
   showScanErrorModal: hoisted.showScanErrorModalMock,
+  showScanWarnModal: hoisted.showScanWarnModalMock,
 }));
 
 import { useSkills } from "./useSkills";
@@ -119,8 +122,10 @@ const {
   modalConfirmMock,
   parseErrorDetailMock,
   handleScanErrorMock,
+  checkScanWarningsMock,
   harnessMocks,
   agentState,
+  showScanWarnModalMock,
 } = hoisted;
 
 function makeSkill(overrides: Partial<SkillSpec> = {}): SkillSpec {
@@ -169,7 +174,10 @@ describe("useSkills", () => {
     parseErrorDetailMock.mockReset();
     handleScanErrorMock.mockReset();
     handleScanErrorMock.mockReturnValue(false);
+    checkScanWarningsMock.mockReset();
+    checkScanWarningsMock.mockResolvedValue(undefined);
     harnessMocks.listSkills.mockReset();
+    showScanWarnModalMock.mockReset();
     agentState.selectedAgent = "agent-1";
     agentState.agents = [{ id: "agent-1", backend: "qwenpaw" }];
 
@@ -503,6 +511,77 @@ describe("useSkills", () => {
     expect(messageMock.error).not.toHaveBeenCalled();
     expect(result.current.uploading).toBe(false);
     expect(result.current.ready).toBe(true);
+  });
+
+  it.each([
+    ["A to B", false],
+    ["A to B to A", true],
+  ] as const)(
+    "does not show a stale scan warning after %s",
+    async (_label, switchBackToA) => {
+      agentState.agents = [
+        { id: "agent-1", backend: "qwenpaw" },
+        { id: "agent-2", backend: "qwenpaw" },
+      ];
+      apiMocks.listSkills.mockResolvedValue([]);
+      apiMocks.createSkill.mockResolvedValue({
+        created: true,
+        name: "agent-a-skill",
+      });
+      const scan = deferred<void>();
+      checkScanWarningsMock.mockImplementation(async (...args: unknown[]) => {
+        await scan.promise;
+        const shouldShow = args[4] as () => boolean;
+        if (shouldShow()) showScanWarnModalMock();
+      });
+      const { result, rerender } = renderSkillsHook();
+      await waitFor(() => expect(result.current.ready).toBe(true));
+
+      let pending!: Promise<unknown>;
+      act(() => {
+        pending = result.current.createSkill("agent-a-skill", "content");
+      });
+      await waitFor(() =>
+        expect(checkScanWarningsMock).toHaveBeenCalledTimes(1),
+      );
+      agentState.selectedAgent = "agent-2";
+      rerender();
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      if (switchBackToA) {
+        agentState.selectedAgent = "agent-1";
+        rerender();
+        await waitFor(() => expect(result.current.ready).toBe(true));
+      }
+
+      await act(async () => {
+        scan.resolve();
+        await pending;
+      });
+
+      expect(showScanWarnModalMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it("shows a scan warning for the current agent mutation", async () => {
+    agentState.selectedAgent = "agent-2";
+    agentState.agents = [{ id: "agent-2", backend: "qwenpaw" }];
+    apiMocks.listSkills.mockResolvedValue([]);
+    apiMocks.createSkill.mockResolvedValue({
+      created: true,
+      name: "agent-b-skill",
+    });
+    checkScanWarningsMock.mockImplementation(async (...args: unknown[]) => {
+      const shouldShow = args[4] as () => boolean;
+      if (shouldShow()) showScanWarnModalMock();
+    });
+    const { result } = renderSkillsHook();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+
+    await act(async () => {
+      await result.current.createSkill("agent-b-skill", "content");
+    });
+
+    expect(showScanWarnModalMock).toHaveBeenCalledTimes(1);
   });
 
   it("createSkill success: message.success + api.createSkill called + returns {success:true, name}", async () => {
