@@ -27,7 +27,10 @@ vi.mock("../../../api", () => ({
 }));
 
 vi.mock("../../../stores/agentStore", () => ({
-  useAgentStore: () => ({ selectedAgent: hoisted.selectedAgent }),
+  useAgentStore: Object.assign(
+    () => ({ selectedAgent: hoisted.selectedAgent }),
+    { getState: () => ({ selectedAgent: hoisted.selectedAgent }) },
+  ),
 }));
 
 vi.mock("../../../hooks/useAppMessage", () => ({
@@ -96,6 +99,8 @@ describe("useTools", () => {
       expect(result.current.loading).toBe(false);
     });
     expect(result.current.tools).toEqual(tools);
+    expect(result.current.error).toBeNull();
+    expect(result.current.ready).toBe(true);
   });
 
   it("keeps the latest agent tools when an older request finishes last", async () => {
@@ -156,6 +161,59 @@ describe("useTools", () => {
     expect(messageMock.error).not.toHaveBeenCalled();
   });
 
+  it("ignores an older agent rejection after the new agent loads", async () => {
+    const agentARequest = deferred<ToolInfo[]>();
+    const agentBRequest = deferred<ToolInfo[]>();
+    apiMocks.listTools
+      .mockReturnValueOnce(agentARequest.promise)
+      .mockReturnValueOnce(agentBRequest.promise);
+
+    const { result, rerender } = renderToolsHook();
+    hoisted.selectedAgent = "agent-2";
+    rerender();
+    const agentBTools = [makeTool({ name: "agent-b-tool" })];
+    await act(async () => {
+      agentBRequest.resolve(agentBTools);
+      await agentBRequest.promise;
+    });
+
+    await act(async () => {
+      agentARequest.reject(new Error("late agent-a failure"));
+      await agentARequest.promise.catch(() => undefined);
+    });
+
+    expect(result.current.tools).toEqual(agentBTools);
+    expect(result.current.error).toBeNull();
+    expect(result.current.ready).toBe(true);
+    expect(messageMock.error).not.toHaveBeenCalled();
+  });
+
+  it("ignores a stale load callback without invalidating the current load", async () => {
+    const agentBRequest = deferred<ToolInfo[]>();
+    apiMocks.listTools
+      .mockResolvedValueOnce([makeTool({ name: "agent-a-tool" })])
+      .mockReturnValueOnce(agentBRequest.promise);
+
+    const { result, rerender } = renderToolsHook();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    const staleAgentALoad = result.current.loadTools;
+
+    hoisted.selectedAgent = "agent-2";
+    rerender();
+    await act(async () => {
+      await staleAgentALoad();
+    });
+    expect(apiMocks.listTools).toHaveBeenCalledTimes(2);
+
+    const agentBTools = [makeTool({ name: "agent-b-tool" })];
+    await act(async () => {
+      agentBRequest.resolve(agentBTools);
+      await agentBRequest.promise;
+    });
+    expect(result.current.tools).toEqual(agentBTools);
+    expect(result.current.ready).toBe(true);
+  });
+
   it("loadTools failure shows message.error('tools.loadError')", async () => {
     apiMocks.listTools.mockRejectedValue(new Error("boom"));
 
@@ -166,6 +224,88 @@ describe("useTools", () => {
     });
 
     expect(messageMock.error).toHaveBeenCalledWith("tools.loadError");
+    expect(result.current.error).toEqual(new Error("boom"));
+    expect(result.current.ready).toBe(false);
+  });
+
+  it("blocks list mutations when the loaded owner is not current", async () => {
+    const enabled = makeTool({ name: "enabled", enabled: true });
+    const disabled = makeTool({ name: "disabled", enabled: false });
+    apiMocks.listTools.mockResolvedValue([enabled, disabled]);
+
+    const { result } = renderToolsHook();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    hoisted.selectedAgent = "agent-2";
+
+    await act(async () => {
+      await result.current.toggleEnabled(enabled);
+      await result.current.toggleAsyncExecution(enabled);
+      await result.current.enableAll();
+      await result.current.disableAll();
+    });
+
+    expect(apiMocks.toggleTool).not.toHaveBeenCalled();
+    expect(apiMocks.updateAsyncExecution).not.toHaveBeenCalled();
+  });
+
+  it("does not merge an old agent mutation into the new agent tools", async () => {
+    const agentATool = makeTool({ name: "shared", enabled: false });
+    const agentBTool = makeTool({ name: "shared", enabled: false });
+    const oldToggle = deferred<ToolInfo>();
+    apiMocks.listTools
+      .mockResolvedValueOnce([agentATool])
+      .mockResolvedValueOnce([agentBTool]);
+    apiMocks.toggleTool.mockReturnValue(oldToggle.promise);
+
+    const { result, rerender } = renderToolsHook();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    let pendingToggle!: Promise<void>;
+    act(() => {
+      pendingToggle = result.current.toggleEnabled(result.current.tools[0]);
+    });
+    expect(result.current.tools[0].enabled).toBe(true);
+
+    hoisted.selectedAgent = "agent-2";
+    rerender();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(result.current.tools[0].enabled).toBe(false);
+
+    await act(async () => {
+      oldToggle.resolve({ ...agentATool, enabled: true });
+      await pendingToggle;
+    });
+    expect(result.current.tools[0]).toEqual(agentBTool);
+    expect(messageMock.success).not.toHaveBeenCalled();
+  });
+
+  it("releases an old batch lock when the new agent finishes loading", async () => {
+    const agentATool = makeTool({ name: "agent-a-tool", enabled: false });
+    const agentBTool = makeTool({ name: "agent-b-tool", enabled: false });
+    const oldToggle = deferred<ToolInfo>();
+    apiMocks.listTools
+      .mockResolvedValueOnce([agentATool])
+      .mockResolvedValueOnce([agentBTool]);
+    apiMocks.toggleTool.mockReturnValue(oldToggle.promise);
+
+    const { result, rerender } = renderToolsHook();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    let pendingBatch!: Promise<void>;
+    act(() => {
+      pendingBatch = result.current.enableAll();
+    });
+    expect(result.current.batchLoading).toBe(true);
+
+    hoisted.selectedAgent = "agent-2";
+    rerender();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(result.current.batchLoading).toBe(false);
+
+    await act(async () => {
+      oldToggle.resolve({ ...agentATool, enabled: true });
+      await pendingBatch;
+    });
+    expect(result.current.tools).toEqual([agentBTool]);
+    expect(messageMock.success).not.toHaveBeenCalled();
   });
 
   it("toggleEnabled success on disabled tool flips to enabled and shows enableSuccess", async () => {
