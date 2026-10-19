@@ -1,5 +1,6 @@
-import { useEffect, useState, useDeferredValue } from "react";
+import { useDeferredValue, useEffect, useLayoutEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { LoaderCircle, RefreshCcw, TriangleAlert } from "lucide-react";
 import {
   Button,
   Card,
@@ -31,8 +32,11 @@ function SessionsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const {
+    agentId,
     sessions,
     loading,
+    error,
+    refreshSessions,
     updateSession,
     deleteSession,
     batchDeleteSessions,
@@ -48,10 +52,12 @@ function SessionsPage() {
   const [filteredSessions, setFilteredSessions] = useState<Session[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingSession, setEditingSession] = useState<Session | null>(null);
+  const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm<Session>();
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [selectionAgentId, setSelectionAgentId] = useState<string | null>(null);
   const [mobileVisibleCount, setMobileVisibleCount] =
     useState(MOBILE_PAGE_SIZE);
 
@@ -116,7 +122,16 @@ function SessionsPage() {
   // Clear selection when switching tabs
   useEffect(() => {
     setSelectedRowKeys([]);
+    setSelectionAgentId(null);
   }, [activeTab]);
+
+  useLayoutEffect(() => {
+    setSelectedRowKeys([]);
+    setSelectionAgentId(null);
+    setDrawerOpen(false);
+    setEditingSession(null);
+    setEditingAgentId(null);
+  }, [agentId]);
 
   useEffect(() => {
     setMobileVisibleCount(MOBILE_PAGE_SIZE);
@@ -124,6 +139,7 @@ function SessionsPage() {
 
   const handleEdit = (session: Session) => {
     setEditingSession(session);
+    setEditingAgentId(agentId);
     form.setFieldsValue({
       name: session.name,
       user_id: session.user_id,
@@ -134,6 +150,7 @@ function SessionsPage() {
   };
 
   const handleDelete = (sessionId: string) => {
+    const ownerAgentId = agentId;
     Modal.confirm({
       title: t("sessions.confirmDelete"),
       content: t("sessions.deleteConfirm"),
@@ -141,7 +158,7 @@ function SessionsPage() {
       okType: "primary",
       cancelText: t("cronJobs.cancelText"),
       onOk: async () => {
-        await deleteSession(sessionId);
+        await deleteSession(sessionId, ownerAgentId);
       },
     });
   };
@@ -152,9 +169,9 @@ function SessionsPage() {
 
   const handleArchiveToggle = async (session: Session) => {
     if (activeTab === "archived") {
-      await unarchiveSession(session.id);
+      await unarchiveSession(session.id, agentId);
     } else {
-      await archiveSession(session.id);
+      await archiveSession(session.id, agentId);
     }
   };
 
@@ -173,7 +190,10 @@ function SessionsPage() {
       okType: "danger",
       cancelText: t("cronJobs.cancelText"),
       onOk: async () => {
-        const success = await batchDeleteSessions(selectedRowKeys as string[]);
+        const success = await batchDeleteSessions(
+          selectedRowKeys as string[],
+          selectionAgentId ?? "",
+        );
         if (success) {
           setSelectedRowKeys([]);
         }
@@ -183,7 +203,10 @@ function SessionsPage() {
 
   const handleBatchArchive = async () => {
     if (selectedRowKeys.length === 0) return;
-    const success = await batchArchiveSessions(selectedRowKeys as string[]);
+    const success = await batchArchiveSessions(
+      selectedRowKeys as string[],
+      selectionAgentId ?? "",
+    );
     if (success) {
       setSelectedRowKeys([]);
     }
@@ -191,7 +214,10 @@ function SessionsPage() {
 
   const handleBatchUnarchive = async () => {
     if (selectedRowKeys.length === 0) return;
-    const success = await batchUnarchiveSessions(selectedRowKeys as string[]);
+    const success = await batchUnarchiveSessions(
+      selectedRowKeys as string[],
+      selectionAgentId ?? "",
+    );
     if (success) {
       setSelectedRowKeys([]);
     }
@@ -200,6 +226,7 @@ function SessionsPage() {
   const handleDrawerClose = () => {
     setDrawerOpen(false);
     setEditingSession(null);
+    setEditingAgentId(null);
   };
 
   const handleSubmit = async (values: Session) => {
@@ -209,7 +236,11 @@ function SessionsPage() {
         const updated = {
           name: values.name,
         };
-        const success = await updateSession(editingSession.id, updated);
+        const success = await updateSession(
+          editingSession.id,
+          updated,
+          editingAgentId ?? "",
+        );
         if (success) {
           setDrawerOpen(false);
         }
@@ -235,6 +266,7 @@ function SessionsPage() {
     selectedRowKeys,
     onChange: (newSelectedRowKeys: React.Key[]) => {
       setSelectedRowKeys(newSelectedRowKeys);
+      setSelectionAgentId(newSelectedRowKeys.length > 0 ? agentId : null);
     },
   };
 
@@ -242,6 +274,7 @@ function SessionsPage() {
   const hasMoreMobileSessions = mobileVisibleCount < filteredSessions.length;
 
   const handleMobileSelectionChange = (sessionId: string, checked: boolean) => {
+    setSelectionAgentId(agentId);
     setSelectedRowKeys((current) =>
       checked
         ? Array.from(new Set([...current, sessionId]))
@@ -315,6 +348,36 @@ function SessionsPage() {
 
       {isCompactLayout ? (
         <div className={styles.mobileCardList}>
+          {loading && mobileSessions.length === 0 && (
+            <div
+              className={styles.mobileListState}
+              role="status"
+              aria-live="polite"
+            >
+              <LoaderCircle
+                className={styles.mobileLoadingIcon}
+                size={24}
+                aria-hidden="true"
+              />
+              <span>{t("sessions.loading")}</span>
+            </div>
+          )}
+          {!loading && error && (
+            <div
+              className={`${styles.mobileListState} ${styles.mobileErrorState}`}
+              role="alert"
+            >
+              <TriangleAlert size={24} aria-hidden="true" />
+              <span>{t("sessions.loadFailed")}</span>
+              <Button
+                className={styles.mobileRetryButton}
+                onClick={() => void refreshSessions()}
+              >
+                <RefreshCcw size={16} aria-hidden="true" />
+                {t("common.retry")}
+              </Button>
+            </div>
+          )}
           {mobileSessions.map((session) => (
             <Card
               key={session.id}

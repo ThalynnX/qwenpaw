@@ -3970,6 +3970,7 @@
     "title": "Phiên làm việc",
     "description": "Xem và quản lý các phiên chat đang hoạt động",
     "loading": "Đang tải phiên...",
+    "loadFailed": "Không thể tải phiên. Vui lòng thử lại.",
     "confirmDelete": "Xác nhận xóa",
     "deleteConfirm": "Bạn có chắc muốn xóa phiên này không?",
     "batchDeleteConfirm": "Bạn có chắc muốn xóa {{count}} phiên đã chọn không?",
