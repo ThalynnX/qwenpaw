@@ -1,4 +1,10 @@
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { Form } from "antd";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -60,9 +66,7 @@ vi.mock("react-i18next", () => ({
 vi.mock("@/api/modules/harness", () => ({
   harnessApi: {
     status: vi.fn().mockResolvedValue(mockProvider),
-    list: vi.fn().mockResolvedValue({
-      providers: [],
-    }),
+    list: vi.fn(),
     listModels: vi.fn().mockResolvedValue({ models: [] }),
     login: vi.fn(),
     logout: vi.fn(),
@@ -73,7 +77,46 @@ vi.mock("@/utils/clipboard", () => ({
   copyText: mockCopyText,
 }));
 
-import { harnessApi } from "@/api/modules/harness";
+import { harnessApi, type HarnessProvider } from "@/api/modules/harness";
+
+const comingSoonProvider: HarnessProvider = {
+  id: "claude",
+  name: "Claude Code",
+  available: false,
+  coming_soon: true,
+  installed: false,
+  authenticated: false,
+  account: null,
+  runtime_path: null,
+  runtime_source: null,
+  error: null,
+  capabilities: mockProvider.capabilities,
+};
+
+const qoderProvider: HarnessProvider = {
+  ...mockProvider,
+  id: "qoder",
+  name: "Qoder",
+  authenticated: false,
+  account: null,
+  runtime_path: "/opt/qoder/qodercli",
+  runtime_source: "python-sdk",
+};
+
+function dshProvider(
+  overrides: Partial<HarnessProvider> = {},
+): HarnessProvider {
+  return {
+    ...mockProvider,
+    id: "dsh",
+    name: "DSH Agent",
+    authenticated: false,
+    account: null,
+    runtime_path: "/usr/local/bin/dsh",
+    runtime_source: "path",
+    ...overrides,
+  };
+}
 
 vi.mock("@/hooks/useAppMessage", () => ({
   useAppMessage: () => ({
@@ -81,10 +124,10 @@ vi.mock("@/hooks/useAppMessage", () => ({
   }),
 }));
 
-function BackendForm() {
+function BackendForm({ backend = "qwenpaw" }: { backend?: string } = {}) {
   const [form] = Form.useForm();
   return (
-    <Form form={form} initialValues={{ backend: "qwenpaw" }}>
+    <Form form={form} initialValues={{ backend }}>
       <AgentBackendFields form={form} open />
     </Form>
   );
@@ -94,6 +137,9 @@ describe("AgentBackendFields", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(harnessApi.status).mockResolvedValue(mockProvider);
+    vi.mocked(harnessApi.list).mockResolvedValue({
+      providers: [mockProvider, comingSoonProvider, qoderProvider],
+    });
     mockCopyText.mockResolvedValue(undefined);
   });
 
@@ -117,8 +163,84 @@ describe("AgentBackendFields", () => {
     expect(
       await screen.findByText("agent.backend.providerTitle"),
     ).toBeInTheDocument();
+    expect(await screen.findByText("Claude Code")).toBeInTheDocument();
     expect(screen.getByText("Codex")).toBeInTheDocument();
-    expect(screen.getByText("Claude Code")).toBeInTheDocument();
+    expect(screen.getByText("Qoder")).toBeInTheDocument();
+    expect(screen.getByText("agent.backend.codexHint")).toBeInTheDocument();
+    expect(screen.getByText("agent.backend.qoderHint")).toBeInTheDocument();
+  });
+
+  it("renders an unknown backend from the catalog without Codex copy", async () => {
+    vi.mocked(harnessApi.list).mockResolvedValueOnce({
+      providers: [dshProvider()],
+    });
+    vi.mocked(harnessApi.status).mockResolvedValue(dshProvider());
+    renderWithProviders(<BackendForm backend="dsh" />);
+
+    expect(await screen.findByText("DSH Agent")).toBeInTheDocument();
+    expect(
+      screen.getByText("agent.backend.thirdPartyBinary"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("agent.backend.thirdPartyAccount"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("agent.backend.thirdPartyDetectedBinary"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("agent.backend.thirdPartyConnect"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Codex")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("agent.backend.codexHint"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("agent.backend.binary")).not.toBeInTheDocument();
+    expect(screen.queryByText("agent.backend.account")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("agent.backend.codexNotFound"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps an unknown selected backend when the catalog omits it", async () => {
+    vi.mocked(harnessApi.list).mockResolvedValueOnce({
+      providers: [mockProvider, qoderProvider],
+    });
+    vi.mocked(harnessApi.status).mockResolvedValue(
+      dshProvider({ runtime_path: null, installed: true }),
+    );
+    renderWithProviders(<BackendForm backend="dsh" />);
+
+    expect(await screen.findByText("dsh")).toBeInTheDocument();
+    expect(
+      screen.getByText("agent.backend.thirdPartyBinary"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText("agent.backend.thirdPartyNotFound").length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("renders coming-soon providers as disabled cards", async () => {
+    renderWithProviders(<BackendForm />);
+    fireEvent.click(screen.getByText("agent.backend.thirdPartyTitle"));
+
+    const label = await screen.findByText("Claude Code");
+    const card = label.closest('[aria-disabled="true"]');
+    expect(card).not.toBeNull();
+    expect(label.closest("button")).toBeNull();
+    expect(
+      within(card as HTMLElement).getByText("harnesses.comingSoon"),
+    ).toBeInTheDocument();
+  });
+
+  it("falls back to Codex and Qoder with an error when the catalog fails", async () => {
+    vi.mocked(harnessApi.list).mockRejectedValueOnce(new Error("offline"));
+    renderWithProviders(<BackendForm />);
+    fireEvent.click(screen.getByText("agent.backend.thirdPartyTitle"));
+
+    expect(
+      await screen.findByText("agent.backend.providerLoadFailed"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Codex")).toBeInTheDocument();
     expect(screen.getByText("Qoder")).toBeInTheDocument();
   });
 

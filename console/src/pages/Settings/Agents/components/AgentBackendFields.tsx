@@ -26,11 +26,7 @@ import styles from "./AgentBackendFields.module.less";
 
 const POLL_INTERVAL_MS = 2_000;
 
-type ProviderId = "codex" | "qoder";
-
-interface ProviderOption {
-  id: ProviderId;
-  name: string;
+interface ProviderCopy {
   hintKey: string;
   accountKey: string;
   binaryKey: string;
@@ -42,10 +38,31 @@ interface ProviderOption {
   connectKey: string;
 }
 
-const PROVIDERS: ProviderOption[] = [
-  {
+interface ProviderOption extends ProviderCopy {
+  id: string;
+  name: string;
+  comingSoon: boolean;
+}
+
+// Copy reused by any backend that the runtime reports but the console does not
+// know about yet. Known providers keep their dedicated strings below.
+const GENERIC_PROVIDER_COPY: ProviderCopy = {
+  hintKey: "agent.backend.thirdPartyHint",
+  accountKey: "agent.backend.thirdPartyAccount",
+  binaryKey: "agent.backend.thirdPartyBinary",
+  binaryHelpKey: "agent.backend.thirdPartyBinaryHelp",
+  binaryPlaceholderKey: "agent.backend.thirdPartyBinaryPlaceholder",
+  detectedKey: "agent.backend.thirdPartyDetectedBinary",
+  notFoundKey: "agent.backend.thirdPartyNotFound",
+  authHintKey: "agent.backend.thirdPartyAuthHint",
+  connectKey: "agent.backend.thirdPartyConnect",
+};
+
+const PROVIDERS: Record<"codex" | "qoder", ProviderOption> = {
+  codex: {
     id: "codex",
     name: "Codex",
+    comingSoon: false,
     hintKey: "agent.backend.codexHint",
     accountKey: "agent.backend.account",
     binaryKey: "agent.backend.binary",
@@ -56,9 +73,10 @@ const PROVIDERS: ProviderOption[] = [
     authHintKey: "agent.backend.apiKeyLoginHint",
     connectKey: "harnesses.connect",
   },
-  {
+  qoder: {
     id: "qoder",
     name: "Qoder",
+    comingSoon: false,
     hintKey: "agent.backend.qoderHint",
     accountKey: "agent.backend.qoderAccount",
     binaryKey: "agent.backend.qoderBinary",
@@ -69,15 +87,41 @@ const PROVIDERS: ProviderOption[] = [
     authHintKey: "agent.backend.qoderAuthHint",
     connectKey: "agent.backend.qoderConnect",
   },
-];
+};
+
+// Used before the catalog loads and whenever the catalog request fails so the
+// settings page never loses the providers it has always supported.
+const FALLBACK_PROVIDERS: ProviderOption[] = [PROVIDERS.codex, PROVIDERS.qoder];
+
+function knownProvider(id: string): ProviderOption | undefined {
+  if (id === "codex" || id === "qoder") return PROVIDERS[id];
+  return undefined;
+}
+
+function genericProvider(id: string, name?: string): ProviderOption {
+  return {
+    id,
+    name: name?.trim() || id,
+    comingSoon: false,
+    ...GENERIC_PROVIDER_COPY,
+  };
+}
+
+function providerOption(backend: AgentBackend): ProviderOption {
+  return knownProvider(backend) ?? genericProvider(backend);
+}
+
+function toProviderOption(item: HarnessProvider): ProviderOption {
+  const known = knownProvider(item.id);
+  return {
+    ...(known ?? genericProvider(item.id, item.name)),
+    comingSoon: item.coming_soon,
+  };
+}
 
 interface AgentBackendFieldsProps {
   form: ReturnType<typeof Form.useForm>[0];
   open: boolean;
-}
-
-function providerOption(backend: AgentBackend): ProviderOption {
-  return PROVIDERS.find((item) => item.id === backend) ?? PROVIDERS[0];
 }
 
 export function AgentBackendFields({ form, open }: AgentBackendFieldsProps) {
@@ -85,12 +129,50 @@ export function AgentBackendFields({ form, open }: AgentBackendFieldsProps) {
   const { message } = useAppMessage();
   const backend =
     (Form.useWatch("backend", form) as AgentBackend | undefined) ?? "qwenpaw";
-  const selectedProvider = providerOption(backend);
+  const [providerCatalog, setProviderCatalog] =
+    useState<ProviderOption[]>(FALLBACK_PROVIDERS);
+  const [catalogFailed, setCatalogFailed] = useState(false);
   const [provider, setProvider] = useState<HarnessProvider | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [checking, setChecking] = useState(false);
   const pollTimer = useRef<number | undefined>(undefined);
   const pollTimeout = useRef<number | undefined>(undefined);
+
+  const selectedProvider =
+    providerCatalog.find((item) => item.id === backend) ??
+    providerOption(backend);
+  const gridProviders =
+    backend === "qwenpaw" || providerCatalog.some((item) => item.id === backend)
+      ? providerCatalog
+      : [...providerCatalog, providerOption(backend)];
+  const defaultThirdPartyBackend =
+    providerCatalog.find((item) => !item.comingSoon)?.id ?? "codex";
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void harnessApi
+      .list()
+      .then(({ providers }) => {
+        if (cancelled) return;
+        setProviderCatalog(
+          providers.length
+            ? providers.map(toProviderOption)
+            : FALLBACK_PROVIDERS,
+        );
+        setCatalogFailed(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setProviderCatalog((current) =>
+          current.length ? current : FALLBACK_PROVIDERS,
+        );
+        setCatalogFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const stopPolling = useCallback(() => {
     if (pollTimer.current) window.clearTimeout(pollTimer.current);
@@ -262,7 +344,9 @@ export function AgentBackendFields({ form, open }: AgentBackendFieldsProps) {
             backend !== "qwenpaw" ? styles.selected : ""
           }`}
           onClick={() =>
-            selectBackend(backend === "qwenpaw" ? "codex" : backend)
+            selectBackend(
+              backend === "qwenpaw" ? defaultThirdPartyBackend : backend,
+            )
           }
         >
           <span className={styles.typeIcon}>
@@ -284,7 +368,25 @@ export function AgentBackendFields({ form, open }: AgentBackendFieldsProps) {
           </div>
 
           <div className={styles.providerGrid}>
-            {PROVIDERS.map((item) => {
+            {gridProviders.map((item) => {
+              if (item.comingSoon) {
+                return (
+                  <div
+                    key={item.id}
+                    className={styles.providerCardDisabled}
+                    aria-disabled="true"
+                  >
+                    <span className={styles.providerIcon}>
+                      <Blocks size={18} />
+                    </span>
+                    <span className={styles.providerCopy}>
+                      <strong>{item.name}</strong>
+                      <small>{t("harnesses.comingSoon")}</small>
+                    </span>
+                    <Clock3 size={14} />
+                  </div>
+                );
+              }
               const selected = backend === item.id;
               return (
                 <button
@@ -308,17 +410,13 @@ export function AgentBackendFields({ form, open }: AgentBackendFieldsProps) {
                 </button>
               );
             })}
-            <div className={styles.providerCardDisabled}>
-              <span className={styles.providerIcon}>
-                <Blocks size={18} />
-              </span>
-              <span className={styles.providerCopy}>
-                <strong>Claude Code</strong>
-                <small>{t("harnesses.comingSoon")}</small>
-              </span>
-              <Clock3 size={14} />
-            </div>
           </div>
+
+          {catalogFailed && (
+            <p className={styles.catalogError} role="alert">
+              {t("agent.backend.providerLoadFailed")}
+            </p>
+          )}
 
           <div className={styles.providerConfig}>
             <Form.Item
