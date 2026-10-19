@@ -10,17 +10,47 @@ const stylesheetPath = join(
 const stylesheetSource = readFileSync(stylesheetPath, "utf8");
 
 describe("Environments container-responsive rows", () => {
-  it("switches to the compact row layout from container width", async () => {
+  it("observes the table width at the desktop grid boundary", async () => {
     const { css } = await less.render(stylesheetSource, {
       filename: stylesheetPath,
     });
+    const contentRule = css.match(/\.content\s*{([^}]*)}/)?.[1];
+    const tableRule = css.match(/\.table\s*{([^}]*)}/)?.[1];
+    const rowRule = css.match(/\.row\s*{([^}]*)}/)?.[1];
+    const columns = rowRule?.match(/grid-template-columns:\s*([^;]+);/)?.[1];
+    const minimumTracks = Array.from(
+      columns?.matchAll(/(?:minmax\()?([0-9]+)px/g) ?? [],
+      (match) => Number(match[1]),
+    );
+    const columnGap = Number(rowRule?.match(/gap:\s*([0-9]+)px/)?.[1]);
+    const inlinePadding = Number(
+      rowRule?.match(/padding:\s*[0-9]+px\s+([0-9]+)px/)?.[1],
+    );
+    const queryWidth = Number(
+      css.match(/@container\s*\(max-width:\s*([0-9]+)px\)/)?.[1],
+    );
+    const desktopMinimum =
+      minimumTracks.reduce((total, width) => total + width, 0) +
+      columnGap * (minimumTracks.length - 1) +
+      inlinePadding * 2;
 
-    expect(css).toMatch(/\.content\s*{[^}]*container-type:\s*inline-size;/s);
+    expect(contentRule).not.toMatch(/container-type:/);
+    expect(tableRule).toMatch(/container-type:\s*inline-size;/);
+    expect(minimumTracks).toEqual([280, 150, 100, 150]);
+    expect(queryWidth).toBe(desktopMinimum);
     expect(css).toMatch(
-      /@container\s*\(max-width:\s*760px\)\s*{[\s\S]*?\.row\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;/,
+      new RegExp(
+        `@container\\s*\\(max-width:\\s*${desktopMinimum}px\\)\\s*` +
+          "{[\\s\\S]*?\\.row\\s*{[^}]*grid-template-columns:" +
+          "\\s*minmax\\(0, 1fr\\) auto;",
+      ),
     );
     expect(css).toMatch(
-      /@container\s*\(max-width:\s*760px\)\s*{[\s\S]*?\.actions\s*{[^}]*grid-column:\s*1\s*\/\s*-1;/,
+      new RegExp(
+        `@container\\s*\\(max-width:\\s*${desktopMinimum}px\\)\\s*` +
+          "{[\\s\\S]*?\\.actions\\s*{[^}]*grid-column:" +
+          "\\s*1\\s*\\/\\s*-1;",
+      ),
     );
   });
 
