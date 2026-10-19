@@ -1,43 +1,47 @@
 # -*- coding: utf-8 -*-
-"""Hook to inject steer guidance into agent context."""
+"""Hook that injects pending ``/steer`` guidance into the agent context."""
+
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+import time
 
-if TYPE_CHECKING:
-    from ..runtime.hooks import HookContext, HookResult
+from ..runtime.hooks import HookBase, HookContext, HookResult
+from ..runtime.phases import Phase
+from .store import pop_guidance
 
 logger = logging.getLogger(__name__)
 
-STEER_KEY = "steer_guidance"
 
+class SteerInjectionHook(HookBase):
+    """Inject (and clear) pending steer guidance before the agent runs."""
 
-def make_steer_injection_hook() -> Any:
-    """Create a hook that injects steer guidance before agent execution."""
-    from ..runtime.hooks import HookAction, HookResult
-    from ..runtime.phases import Phase
+    phase = Phase.PRE_AGENT_BUILD
+    name = "steer_guidance_injection"
+    # Run after the other context-setup hooks have done their work.
+    priority = 90
 
-    async def _hook(ctx: "HookContext") -> "HookResult":
-        guidance = ctx.extras.get(STEER_KEY)
-        if not guidance:
-            return HookResult(action=HookAction.CONTINUE)
+    async def run(self, ctx: HookContext) -> HookResult:
+        session_id = str(getattr(ctx, "session_id", "") or "")
+        entry = pop_guidance(session_id)
+        if entry is None:
+            return HookResult()
 
-        # Add guidance to context injections
+        guidance, ts = entry
+        issued = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts))
         ctx.inject_context(
-            content=f"**User Steering Guidance**\n\n{guidance}\n\n"
-                    f"Please consider this guidance while processing the user's request.",
+            content=(
+                "## User Steering Guidance\n\n"
+                f"> {guidance}\n\n"
+                f"_(issued {issued})_\n\n"
+                "Take this guidance into account for the current turn. "
+                "Where it conflicts with an earlier instruction, this wins."
+            ),
             priority=50,
             source="steer",
         )
-        logger.info("[STEER] Injected guidance into context")
+        logger.info("[STEER] Injected guidance (session=%s)", session_id)
+        return HookResult()
 
-        # Clear after injection so it's only used once
-        del ctx.extras[STEER_KEY]
 
-        return HookResult(action=HookAction.CONTINUE)
-
-    return {
-        "phase": Phase.PRE_AGENT_BUILD,
-        "hook": _hook,
-    }
+__all__ = ["SteerInjectionHook"]
