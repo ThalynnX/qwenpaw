@@ -22,6 +22,7 @@ import { useAppMessage } from "../../../hooks/useAppMessage";
 import {
   ACP_DEFAULT_STDIO_BUFFER_LIMIT_BYTES,
   type ACPAgentConfig,
+  type ACPConfig,
   type ACPNodeRuntimeCandidate,
   type ACPNodeRuntimeStatus,
 } from "../../../api/types";
@@ -141,7 +142,9 @@ function ACPPage() {
   const { message } = useAppMessage();
   const { selectedAgent } = useAgentStore();
   const [agents, setAgents] = useState<Record<string, ACPAgentConfig>>({});
+  const [loadedConfig, setLoadedConfig] = useState<ACPConfig | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [filter, setFilter] = useState<FilterType>("all");
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const surfacePrefix = useId();
@@ -159,11 +162,19 @@ function ACPPage() {
 
   const fetchACP = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
+    setLoadedConfig(null);
+    setDrawerOpen(false);
+    setNodeModalOpen(false);
+    setActiveKey(null);
     try {
       const data = await api.getACPConfig();
-      setAgents(data?.agents || {});
+      if (!data?.agents) throw new Error("Invalid ACP config response");
+      setLoadedConfig(data);
+      setAgents(data.agents);
     } catch (error) {
       console.error("❌ Failed to load ACP config:", error);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -273,7 +284,13 @@ function ACPPage() {
 
       setNodeRuntimeSaving(true);
       try {
-        setNodeRuntime(await api.updateACPNodeRuntime({ node_path: nodePath }));
+        const status = await api.updateACPNodeRuntime({
+          node_path: nodePath,
+        });
+        setNodeRuntime(status);
+        setLoadedConfig((current) =>
+          current ? { ...current, node_path: status.node_path } : current,
+        );
         message.success(t("acp.nodeSaved"));
       } catch (error) {
         console.error("Failed to update ACP Node runtime:", error);
@@ -331,6 +348,7 @@ function ACPPage() {
   };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
+    if (!loadedConfig) return false;
     const targetKey = String(values.agentKey || activeKey || "").trim();
     if (!targetKey) return false;
     const existingConfig: Partial<ACPAgentConfig> =
@@ -365,9 +383,22 @@ function ACPPage() {
           delete nextAgents[activeKey];
         }
         nextAgents[targetKey] = updatedConfig;
-        await api.updateACPConfig({ agents: nextAgents });
+        const nextConfig = { ...loadedConfig, agents: nextAgents };
+        const savedConfig = await api.updateACPConfig(nextConfig);
+        setLoadedConfig(savedConfig || nextConfig);
       } else {
         await api.updateACPAgentConfig(targetKey, updatedConfig);
+        setLoadedConfig((current) =>
+          current
+            ? {
+                ...current,
+                agents: {
+                  ...current.agents,
+                  [targetKey]: updatedConfig,
+                },
+              }
+            : current,
+        );
       }
       setAgents((current) => {
         const next = { ...current };
@@ -391,7 +422,7 @@ function ACPPage() {
   };
 
   const handleDelete = () => {
-    if (!activeKey || isBuiltinACPAgent(activeKey)) return;
+    if (!loadedConfig || !activeKey || isBuiltinACPAgent(activeKey)) return;
 
     Modal.confirm({
       title: t("acp.deleteTitle", { name: activeKey }),
@@ -403,7 +434,9 @@ function ACPPage() {
         try {
           const nextAgents = { ...agents };
           delete nextAgents[activeKey];
-          await api.updateACPConfig({ agents: nextAgents });
+          const nextConfig = { ...loadedConfig, agents: nextAgents };
+          const savedConfig = await api.updateACPConfig(nextConfig);
+          setLoadedConfig(savedConfig || nextConfig);
           await fetchACP();
           handleClose();
           message.success(t("acp.deleteSuccess"));
@@ -422,17 +455,15 @@ function ACPPage() {
     { key: "custom", label: t("acp.custom") },
   ];
 
-  return (
-    <div className={styles.channelsPage}>
-      <PageHeader
-        className={stylesACP.pageHeader}
-        current={t("acp.title")}
-        afterBreadcrumb={
-          <InlineHelp>{`${t("acp.intro")} ${t(
-            "acp.protocolHelp",
-          )}`}</InlineHelp>
-        }
-        extra={
+  const renderPageHeader = (showActions: boolean) => (
+    <PageHeader
+      className={stylesACP.pageHeader}
+      current={t("acp.title")}
+      afterBreadcrumb={
+        <InlineHelp>{`${t("acp.intro")} ${t("acp.protocolHelp")}`}</InlineHelp>
+      }
+      extra={
+        showActions ? (
           <div className={stylesACP.headerActions}>
             <Button
               icon={<SlidersHorizontal size={16} />}
@@ -448,8 +479,39 @@ function ACPPage() {
               {t("acp.create")}
             </Button>
           </div>
-        }
-      />
+        ) : undefined
+      }
+    />
+  );
+
+  if (loading) {
+    return (
+      <div className={styles.channelsPage}>
+        {renderPageHeader(false)}
+        <div className={styles.loading} role="status">
+          <span className={styles.loadingText}>{t("acp.loading")}</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className={styles.channelsPage}>
+        {renderPageHeader(false)}
+        <div className={stylesACP.loadError} role="alert">
+          <span>{t("acp.loadError")}</span>
+          <Button type="primary" onClick={() => void fetchACP()}>
+            {t("common.retry")}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.channelsPage}>
+      {renderPageHeader(true)}
       <section className={stylesACP.intro}>
         <div className={stylesACP.connection} aria-label={t("acp.intro")}>
           <span>

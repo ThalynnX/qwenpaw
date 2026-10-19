@@ -676,6 +676,7 @@
   "acp": {
     "title": "ACP integrations",
     "loading": "Loading ACP configuration...",
+    "loadError": "Failed to load ACP configuration.",
     "builtin": "Presets",
     "custom": "Custom",
     "create": "Add ACP integration",
