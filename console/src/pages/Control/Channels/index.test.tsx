@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => {
     modalConfirm: vi.fn(),
     channelDrawerProps: null as null | {
       open: boolean;
+      initialValues?: Record<string, unknown>;
       onSubmit: (values: Record<string, unknown>) => Promise<void>;
     },
     aclDrawerProps: null as null | {
@@ -123,7 +124,7 @@ vi.mock("./components", () => ({
     channelKey: string;
     onClick: () => void;
   }) => <button onClick={onClick}>{`channel-${channelKey}`}</button>,
-  ChannelDrawer: (props: NonNullable<typeof mocks.channelDrawerProps>) => {
+  ChannelFormDrawer: (props: NonNullable<typeof mocks.channelDrawerProps>) => {
     mocks.channelDrawerProps = props;
     return props.open ? <div data-testid="channel-drawer" /> : null;
   },
@@ -284,7 +285,7 @@ describe("ChannelsPage load recovery", () => {
     expect(screen.getByTestId("pending-drawer")).toBeInTheDocument();
   });
 
-  it("replaces channel drafts when switching agents without leaking secrets", async () => {
+  it("provides only the current agent channel config to the form owner", async () => {
     let currentAgent = "agent-a";
     mocks.useChannels.mockReturnValue(
       channelsState({
@@ -307,7 +308,7 @@ describe("ChannelsPage load recovery", () => {
     const view = renderWithProviders(<ChannelsPage />);
 
     fireEvent.click(screen.getByRole("button", { name: "channel-dingtalk" }));
-    expect(mocks.formValues).toMatchObject({
+    expect(mocks.channelDrawerProps?.initialValues).toMatchObject({
       client_secret: "agent-a-secret",
       app_secret: "agent-a-app-secret",
       bot_token: "agent-a-bot-token",
@@ -324,7 +325,7 @@ describe("ChannelsPage load recovery", () => {
       }),
     );
     view.rerender(<ChannelsPage />);
-    expect(mocks.formValues).toEqual({});
+    expect(screen.queryByTestId("channel-drawer")).not.toBeInTheDocument();
 
     mocks.useChannels.mockReturnValue(
       channelsState({
@@ -343,13 +344,25 @@ describe("ChannelsPage load recovery", () => {
     view.rerender(<ChannelsPage />);
     fireEvent.click(screen.getByRole("button", { name: "channel-dingtalk" }));
 
-    expect(mocks.formValues).toMatchObject({ client_id: "agent-b-client" });
-    expect(mocks.formValues).not.toHaveProperty("client_secret");
-    expect(mocks.formValues).not.toHaveProperty("app_secret");
-    expect(mocks.formValues).not.toHaveProperty("bot_token");
-    expect(mocks.formValues).not.toHaveProperty("password");
+    expect(mocks.channelDrawerProps?.initialValues).toMatchObject({
+      client_id: "agent-b-client",
+    });
+    expect(mocks.channelDrawerProps?.initialValues).not.toHaveProperty(
+      "client_secret",
+    );
+    expect(mocks.channelDrawerProps?.initialValues).not.toHaveProperty(
+      "app_secret",
+    );
+    expect(mocks.channelDrawerProps?.initialValues).not.toHaveProperty(
+      "bot_token",
+    );
+    expect(mocks.channelDrawerProps?.initialValues).not.toHaveProperty(
+      "password",
+    );
 
-    await mocks.channelDrawerProps?.onSubmit({ ...mocks.formValues });
+    await mocks.channelDrawerProps?.onSubmit({
+      ...mocks.channelDrawerProps.initialValues,
+    });
     expect(mocks.updateChannelConfig).toHaveBeenCalledOnce();
     expect(mocks.updateChannelConfig).toHaveBeenCalledWith(
       "dingtalk",

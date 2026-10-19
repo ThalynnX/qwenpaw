@@ -8,7 +8,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { Form } from "@agentscope-ai/design";
 import { Badge, Button, Space } from "antd";
 import {
   ShieldCheck as SafetyOutlined,
@@ -20,7 +19,7 @@ import { useTranslation } from "react-i18next";
 import api from "../../../api";
 import {
   ChannelCard,
-  ChannelDrawer,
+  ChannelFormDrawer,
   AccessControlDrawer,
   PendingApprovalsDrawer,
   useChannels,
@@ -67,8 +66,6 @@ function ChannelsPage() {
   const proposalIdRef = useRef(0);
   const conflictModalDestroyRef = useRef<(() => void) | null>(null);
   agentIdRef.current = agentId;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [form] = Form.useForm<any>();
 
   const fetchPendingCount = useCallback(async () => {
     const ownerAgentId = agentIdRef.current;
@@ -95,7 +92,6 @@ function ChannelsPage() {
     proposalIdRef.current += 1;
     conflictModalDestroyRef.current?.();
     conflictModalDestroyRef.current = null;
-    form.resetFields();
     setDrawerOpen(false);
     setActiveKey(null);
     setDrawerAgentId(null);
@@ -105,7 +101,7 @@ function ChannelsPage() {
     setPendingDrawerAgentId(null);
     setPendingCount(0);
     setSaving(false);
-  }, [agentId, form]);
+  }, [agentId]);
 
   // Sort cards: enabled first, then disabled (preserve orderedKeys order within each group)
   const { enabledCards, disabledCards } = useMemo(() => {
@@ -137,34 +133,11 @@ function ChannelsPage() {
       setActiveKey(key);
       setDrawerAgentId(agentId);
       setDrawerOpen(true);
-      const channelConfig = keepConsoleEnabled(
-        key,
-        channels[key] || { enabled: false, bot_prefix: "" },
-      );
-      form.resetFields();
-      // Migrate legacy allowlist policy to new access control fields
-      const accessControlDm =
-        channelConfig.access_control_dm ||
-        channelConfig.dm_policy === "allowlist";
-      const accessControlGroup =
-        channelConfig.access_control_group ||
-        channelConfig.group_policy === "allowlist";
-      form.setFieldsValue({
-        ...channelConfig,
-        access_control_dm: accessControlDm,
-        access_control_group: accessControlGroup,
-        show_tool_calls: channelConfig.show_tool_calls ?? true,
-        show_tool_results: channelConfig.show_tool_results ?? true,
-        tool_call_max_length: channelConfig.tool_call_max_length ?? 200,
-        tool_result_max_length: channelConfig.tool_result_max_length ?? 500,
-        show_thinking: channelConfig.show_thinking ?? true,
-      });
     },
-    [agentId, channels, form, ready],
+    [agentId, ready],
   );
 
   const handleDrawerClose = () => {
-    form.resetFields();
     setDrawerOpen(false);
     setActiveKey(null);
     setDrawerAgentId(null);
@@ -409,13 +382,21 @@ function ChannelsPage() {
           </>
         )}
       </div>
-      <ChannelDrawer
+      <ChannelFormDrawer
+        key={`${agentId}:${activeKey ?? "closed"}`}
+        ownerKey={`${agentId}:${activeKey ?? "closed"}`}
         open={drawerOpen}
         activeKey={activeKey}
         activeLabel={activeLabel}
-        form={form}
         saving={saving}
-        initialValues={activeKey ? channels[activeKey] : undefined}
+        initialValues={
+          activeKey
+            ? keepConsoleEnabled(
+                activeKey,
+                channels[activeKey] || { enabled: false, bot_prefix: "" },
+              )
+            : undefined
+        }
         isBuiltin={activeKey ? isBuiltin(activeKey) : true}
         channelSchema={activeKey ? channelSchemas[activeKey] : undefined}
         onClose={handleDrawerClose}
