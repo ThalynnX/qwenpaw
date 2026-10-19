@@ -67,13 +67,14 @@ export function AccessControlDrawer({
   );
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [addLoading, setAddLoading] = useState(false);
   const [batchLoading, setBatchLoading] = useState(false);
   const [removingUserIds, setRemovingUserIds] = useState<Set<string>>(
     () => new Set(),
   );
   const loadVersionRef = useRef(0);
-  const removeSequenceRef = useRef(0);
-  const removeTokensRef = useRef(new Map<string, number>());
+  const actionSequenceRef = useRef(0);
+  const actionTokensRef = useRef(new Map<string, number>());
 
   const ensureCanMutate = useCallback(() => {
     if (ownerAgentId && canMutate(ownerAgentId)) return true;
@@ -83,7 +84,7 @@ export function AccessControlDrawer({
 
   useLayoutEffect(() => {
     loadVersionRef.current += 1;
-    removeTokensRef.current.clear();
+    actionTokensRef.current.clear();
     setAllACLs({});
     setSelectedChannel(null);
     setSelectedRowKeys([]);
@@ -92,35 +93,36 @@ export function AccessControlDrawer({
     setNewRemark("");
     setActiveTab("whitelist");
     setAddModalOpen(false);
+    setAddLoading(false);
     setLoading(false);
     setBatchLoading(false);
     setRemovingUserIds(new Set());
   }, [open, ownerAgentId]);
 
-  const beginRemove = (key: string) => {
-    if (!ensureCanMutate() || removeTokensRef.current.has(key)) return null;
-    const token = ++removeSequenceRef.current;
-    removeTokensRef.current.set(key, token);
+  const beginAction = (key: string) => {
+    if (!ensureCanMutate() || actionTokensRef.current.has(key)) return null;
+    const token = ++actionSequenceRef.current;
+    actionTokensRef.current.set(key, token);
     return { key, token, ownerAgentId };
   };
 
-  const ownsRemove = (remove: {
+  const ownsAction = (action: {
     key: string;
     token: number;
     ownerAgentId: string | null;
   }) =>
-    remove.ownerAgentId !== null &&
-    remove.ownerAgentId === ownerAgentId &&
-    removeTokensRef.current.get(remove.key) === remove.token &&
-    canMutate(remove.ownerAgentId);
+    action.ownerAgentId !== null &&
+    action.ownerAgentId === ownerAgentId &&
+    actionTokensRef.current.get(action.key) === action.token &&
+    canMutate(action.ownerAgentId);
 
-  const finishRemove = (remove: {
+  const finishAction = (action: {
     key: string;
     token: number;
     ownerAgentId: string | null;
   }) => {
-    if (!ownsRemove(remove)) return false;
-    removeTokensRef.current.delete(remove.key);
+    if (!ownsAction(action)) return false;
+    actionTokensRef.current.delete(action.key);
     return true;
   };
 
@@ -153,36 +155,46 @@ export function AccessControlDrawer({
   const channelKeys = Object.keys(allACLs);
   const currentACL = selectedChannel ? allACLs[selectedChannel] : null;
   const handleAdd = async () => {
-    if (!ensureCanMutate()) return;
-    if (!selectedChannel || !newUserId.trim()) return;
+    if (!selectedChannel || !newUserId.trim()) return false;
+    const channel = selectedChannel;
+    const tab = activeTab;
+    const actionOwner = beginAction(`add:${channel}:${tab}`);
+    if (!actionOwner) return false;
+    setAddLoading(true);
     const addApi =
-      activeTab === "whitelist"
+      tab === "whitelist"
         ? accessControlApi.addAclWhitelist
         : accessControlApi.addAclBlacklist;
     try {
       await addApi([
         {
-          channel: selectedChannel,
+          channel,
           user_id: newUserId.trim(),
           remark: newRemark.trim(),
           username: newUsername.trim(),
         },
       ]);
-      if (!ensureCanMutate()) return;
+      if (!ownsAction(actionOwner)) return false;
       message.success(t("channels.userAdded"));
       setNewUserId("");
       setNewUsername("");
       setNewRemark("");
       await fetchACLs();
+      return ownsAction(actionOwner);
     } catch {
-      if (ensureCanMutate()) message.error(t("channels.operationFailed"));
+      if (ownsAction(actionOwner)) {
+        message.error(t("channels.operationFailed"));
+      }
+      return false;
+    } finally {
+      if (finishAction(actionOwner)) setAddLoading(false);
     }
   };
 
   const handleRemove = async (userId: string) => {
     if (!selectedChannel) return;
     const removeKey = `${selectedChannel}:${userId}`;
-    const removeOwner = beginRemove(removeKey);
+    const removeOwner = beginAction(removeKey);
     if (!removeOwner) return;
     setRemovingUserIds((current) => new Set(current).add(removeKey));
     const removeApi =
@@ -191,15 +203,15 @@ export function AccessControlDrawer({
         : accessControlApi.removeAclBlacklist;
     try {
       await removeApi([{ channel: selectedChannel, user_id: userId }]);
-      if (!ownsRemove(removeOwner)) return;
+      if (!ownsAction(removeOwner)) return;
       message.success(t("channels.userRemoved"));
       await fetchACLs();
     } catch {
-      if (ownsRemove(removeOwner)) {
+      if (ownsAction(removeOwner)) {
         message.error(t("channels.operationFailed"));
       }
     } finally {
-      if (finishRemove(removeOwner)) {
+      if (finishAction(removeOwner)) {
         setRemovingUserIds((current) => {
           const next = new Set(current);
           next.delete(removeKey);
@@ -210,21 +222,24 @@ export function AccessControlDrawer({
   };
 
   const handleRemarkSave = async (userId: string, remark: string) => {
-    if (!ensureCanMutate()) return;
     if (!selectedChannel) return;
+    const channel = selectedChannel;
+    const tab = activeTab;
+    const actionOwner = beginAction(`remark:${channel}:${tab}:${userId}`);
+    if (!actionOwner) return;
     try {
-      await accessControlApi.updateAclRemark(selectedChannel, userId, remark);
-      if (!ensureCanMutate()) return;
+      await accessControlApi.updateAclRemark(channel, userId, remark);
+      if (!ownsAction(actionOwner)) return;
       setAllACLs((prev) => {
-        const channelData = prev[selectedChannel];
+        const channelData = prev[channel];
         if (!channelData) return prev;
-        const list = channelData[activeTab];
+        const list = channelData[tab];
         const existing = list[userId] ?? { remark: "", username: "" };
         return {
           ...prev,
-          [selectedChannel]: {
+          [channel]: {
             ...channelData,
-            [activeTab]: {
+            [tab]: {
               ...list,
               [userId]: { ...existing, remark },
             },
@@ -232,13 +247,17 @@ export function AccessControlDrawer({
         };
       });
     } catch {
-      if (ensureCanMutate()) message.error(t("channels.operationFailed"));
+      if (ownsAction(actionOwner)) {
+        message.error(t("channels.operationFailed"));
+      }
+    } finally {
+      finishAction(actionOwner);
     }
   };
 
   const handleBatchRemove = async () => {
     if (!selectedChannel || selectedRowKeys.length === 0) return;
-    const removeOwner = beginRemove(`batch:${selectedChannel}:${activeTab}`);
+    const removeOwner = beginAction(`batch:${selectedChannel}:${activeTab}`);
     if (!removeOwner) return;
     setBatchLoading(true);
     const removeApi =
@@ -252,18 +271,18 @@ export function AccessControlDrawer({
           user_id: userId as string,
         })),
       );
-      if (!ownsRemove(removeOwner)) return;
+      if (!ownsAction(removeOwner)) return;
       message.success(
         t("channels.batchSuccess", { count: selectedRowKeys.length }),
       );
       setSelectedRowKeys([]);
       await fetchACLs();
     } catch {
-      if (ownsRemove(removeOwner)) {
+      if (ownsAction(removeOwner)) {
         message.error(t("channels.operationFailed"));
       }
     } finally {
-      if (finishRemove(removeOwner)) setBatchLoading(false);
+      if (finishAction(removeOwner)) setBatchLoading(false);
     }
   };
 
@@ -272,21 +291,24 @@ export function AccessControlDrawer({
     : [];
 
   const handleUsernameSave = async (userId: string, username: string) => {
-    if (!ensureCanMutate()) return;
     if (!selectedChannel) return;
+    const channel = selectedChannel;
+    const tab = activeTab;
+    const actionOwner = beginAction(`username:${channel}:${tab}:${userId}`);
+    if (!actionOwner) return;
     try {
-      await accessControlApi.updateUsername(selectedChannel, userId, username);
-      if (!ensureCanMutate()) return;
+      await accessControlApi.updateUsername(channel, userId, username);
+      if (!ownsAction(actionOwner)) return;
       setAllACLs((prev) => {
-        const channelData = prev[selectedChannel];
+        const channelData = prev[channel];
         if (!channelData) return prev;
-        const list = channelData[activeTab];
+        const list = channelData[tab];
         const existing = list[userId] ?? { remark: "", username: "" };
         return {
           ...prev,
-          [selectedChannel]: {
+          [channel]: {
             ...channelData,
-            [activeTab]: {
+            [tab]: {
               ...list,
               [userId]: { ...existing, username },
             },
@@ -294,7 +316,11 @@ export function AccessControlDrawer({
         };
       });
     } catch {
-      if (ensureCanMutate()) message.error(t("channels.operationFailed"));
+      if (ownsAction(actionOwner)) {
+        message.error(t("channels.operationFailed"));
+      }
+    } finally {
+      finishAction(actionOwner);
     }
   };
 
@@ -480,10 +506,10 @@ export function AccessControlDrawer({
           setNewRemark("");
         }}
         onOk={async () => {
-          await handleAdd();
-          setAddModalOpen(false);
+          if (await handleAdd()) setAddModalOpen(false);
         }}
-        okButtonProps={{ disabled: !newUserId.trim() }}
+        confirmLoading={addLoading}
+        okButtonProps={{ disabled: addLoading || !newUserId.trim() }}
         destroyOnHidden
       >
         <Space direction="vertical" style={{ width: "100%" }} size={16}>

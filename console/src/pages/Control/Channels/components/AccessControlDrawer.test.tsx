@@ -202,6 +202,7 @@ vi.mock("antd", () => {
     onOk,
     onCancel,
     title,
+    confirmLoading,
     okButtonProps,
   }: {
     open?: boolean;
@@ -209,6 +210,7 @@ vi.mock("antd", () => {
     onOk?: () => void;
     onCancel?: () => void;
     title?: React.ReactNode;
+    confirmLoading?: boolean;
     okButtonProps?: { disabled?: boolean };
   }) =>
     open
@@ -221,8 +223,9 @@ vi.mock("antd", () => {
             "button",
             {
               "data-testid": "acl-modal-ok",
+              "data-loading": confirmLoading ? "true" : "false",
               onClick: onOk,
-              disabled: okButtonProps?.disabled,
+              disabled: okButtonProps?.disabled || confirmLoading,
             },
             "ok",
           ),
@@ -528,6 +531,98 @@ describe("AccessControlDrawer", () => {
     );
   });
 
+  it("submits one add request when OK is clicked twice", async () => {
+    let resolveAdd!: () => void;
+    const addRequest = new Promise<void>((resolve) => {
+      resolveAdd = resolve;
+    });
+    mocks.addAclWhitelist.mockReturnValue(addRequest);
+    renderDrawer();
+    await waitFor(() => expect(mocks.getAclAll).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByText("channels.addUser"));
+    fireEvent.change(
+      screen.getByPlaceholderText("channels.addUserPlaceholder"),
+      { target: { value: "u-once" } },
+    );
+    const ok = screen.getByTestId("acl-modal-ok");
+    fireEvent.click(ok);
+    fireEvent.click(ok);
+
+    expect(mocks.addAclWhitelist).toHaveBeenCalledOnce();
+    expect(ok).toBeDisabled();
+    expect(ok).toHaveAttribute("data-loading", "true");
+
+    await act(async () => {
+      resolveAdd();
+      await addRequest;
+    });
+    await waitFor(() =>
+      expect(screen.queryByTestId("acl-modal")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("does not let agent A add completion clear agent B loading", async () => {
+    let resolveAgentA!: () => void;
+    let resolveAgentB!: () => void;
+    const agentAAdd = new Promise<void>((resolve) => {
+      resolveAgentA = resolve;
+    });
+    const agentBAdd = new Promise<void>((resolve) => {
+      resolveAgentB = resolve;
+    });
+    mocks.addAclWhitelist
+      .mockReturnValueOnce(agentAAdd)
+      .mockReturnValueOnce(agentBAdd);
+
+    let currentAgent = "agent-a";
+    const drawer = (ownerAgentId: string) => (
+      <AccessControlDrawer
+        open
+        ownerAgentId={ownerAgentId}
+        canMutate={(owner) => owner === currentAgent}
+        onStale={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+    const view = render(drawer("agent-a"));
+    await screen.findByText("alice");
+    fireEvent.click(screen.getByText("channels.addUser"));
+    fireEvent.change(
+      screen.getByPlaceholderText("channels.addUserPlaceholder"),
+      { target: { value: "u-a" } },
+    );
+    fireEvent.click(screen.getByTestId("acl-modal-ok"));
+
+    currentAgent = "agent-b";
+    view.rerender(drawer("agent-b"));
+    await screen.findByText("alice");
+    fireEvent.click(screen.getByText("channels.addUser"));
+    fireEvent.change(
+      screen.getByPlaceholderText("channels.addUserPlaceholder"),
+      { target: { value: "u-b" } },
+    );
+    const agentBOk = screen.getByTestId("acl-modal-ok");
+    fireEvent.click(agentBOk);
+    expect(mocks.addAclWhitelist).toHaveBeenCalledTimes(2);
+    expect(agentBOk).toHaveAttribute("data-loading", "true");
+
+    await act(async () => {
+      resolveAgentA();
+      await agentAAdd;
+    });
+    expect(agentBOk).toBeDisabled();
+    expect(agentBOk).toHaveAttribute("data-loading", "true");
+
+    await act(async () => {
+      resolveAgentB();
+      await agentBAdd;
+    });
+    await waitFor(() =>
+      expect(screen.queryByTestId("acl-modal")).not.toBeInTheDocument(),
+    );
+  });
+
   it("rejects captured add, remove, and edit callbacks after ownership changes", async () => {
     let currentAgent = "agent-a";
     const onStale = vi.fn();
@@ -784,6 +879,32 @@ describe("AccessControlDrawer", () => {
       ),
     );
     expect(screen.getByText("edited-value")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["remark", "updateAclRemark"],
+    ["username", "updateUsername"],
+  ] as const)("deduplicates overlapping %s edits", async (column, apiName) => {
+    let resolveEdit!: () => void;
+    const editRequest = new Promise<void>((resolve) => {
+      resolveEdit = resolve;
+    });
+    mocks[apiName].mockReturnValue(editRequest);
+    renderDrawer();
+    await screen.findByText("alice");
+    const row = screen.getByText("alice").closest("[data-row-key]")!;
+    const trigger = row.querySelector(
+      `[data-col='${column}'] [data-testid='editable-trigger']`,
+    )!;
+
+    fireEvent.click(trigger);
+    fireEvent.click(trigger);
+    expect(mocks[apiName]).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      resolveEdit();
+      await editRequest;
+    });
   });
 
   it("reports remark and username save failures", async () => {
