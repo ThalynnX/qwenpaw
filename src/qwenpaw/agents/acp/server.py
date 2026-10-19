@@ -107,13 +107,23 @@ _ACP_KEEPALIVE_SECONDS = 20.0
 ACP_KEEPALIVE_META_KEY = "qwenpaw.keepalive"
 
 
+def _is_client_disconnect(exc: BaseException) -> bool:
+    """Return whether *exc* is an ACP transport disconnect."""
+    if isinstance(exc, BrokenPipeError):
+        return True
+    if isinstance(exc, ConnectionError):
+        message = str(exc).lower()
+        return f"connection closed" in message or f"transport closed" in message
+    return False
+
+
 def _prompt_failure_stop_reason(exc: BaseException) -> str | None:
     """Return a stop reason only for confirmed task-level failures.
 
     Unexpected exceptions must keep the original JSON-RPC error contract so
     that internal bugs are not silently converted into a normal 0-score turn.
     """
-    if isinstance(exc, (ConnectionError, BrokenPipeError)):
+    if _is_client_disconnect(exc):
         return f"end_turn"
     from ...providers.retry_chat_model import StreamIdleTimeoutError
 
@@ -1474,12 +1484,13 @@ class QwenPawACPAgent(Agent):
                     field_meta={ACP_ERROR_META_KEY: True},
                 ),
             )
-        except ConnectionError:
-            logger.info(
-                "ACP client disconnected before error report: session=%s",
-                session_id,
-            )
-        except Exception:
+        except Exception as exc:
+            if _is_client_disconnect(exc):
+                logger.info(
+                    "ACP client disconnected before error report: session=%s",
+                    session_id,
+                )
+                return
             logger.exception(
                 "ACP: failed to report prompt error to client (session=%s)",
                 session_id,
@@ -1638,7 +1649,9 @@ async def run_qwenpaw_agent(
         await agent._install_runtime_provider()
         try:
             await run_agent(agent, use_unstable_protocol=True)
-        except (ConnectionError, BrokenPipeError):
+        except ConnectionError as exc:
+            if not _is_client_disconnect(exc):
+                raise
             logger.info("ACP client disconnected; shutting down cleanly")
     finally:
         await agent._shutdown_workspace()  # pylint: disable=protected-access

@@ -98,5 +98,11 @@ def test_client_disconnect_returns_end_turn():
     assert _prompt_failure_stop_reason(error) == "end_turn"
 
 
+def test_non_transport_connection_error_is_not_normalized():
+    error = ConnectionError("database connection lost")
+
+    assert _prompt_failure_stop_reason(error) is None
+
+
 def test_generic_prompt_error_is_not_normalized():
     assert _prompt_failure_stop_reason(RuntimeError("boom")) is None
