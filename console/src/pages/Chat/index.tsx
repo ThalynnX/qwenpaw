@@ -2486,7 +2486,7 @@ export default function ChatPage() {
     if (!isChatActivePage) return;
     const binding = bindChatSubmit((input) => {
       enqueuePluginSubmission(input, {
-        active: isChatActiveRef.current && !isAgentTransitionRef.current,
+        active: isChatActiveRef.current && !isSessionTransitionRef.current,
         ready: sdkSessionAdapter.isReady(chatIdRef.current),
         agentId: selectedAgent,
         currentSessionId: chatIdRef.current || "",
