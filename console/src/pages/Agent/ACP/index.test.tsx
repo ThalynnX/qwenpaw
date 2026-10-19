@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ACPAgentConfig, ACPConfig } from "../../../api/types";
 
@@ -14,6 +20,29 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
+const agentStore = vi.hoisted(() => {
+  const state = { selectedAgent: "default" };
+  const useAgentStore = Object.assign(
+    vi.fn(() => ({ selectedAgent: state.selectedAgent })),
+    { getState: () => state },
+  );
+  return { state, useAgentStore };
+});
+
+const actions = vi.hoisted(() => ({
+  create: undefined as
+    | ((values: Record<string, unknown>) => Promise<boolean | void>)
+    | undefined,
+  rename: undefined as
+    | ((values: Record<string, unknown>) => Promise<boolean | void>)
+    | undefined,
+  remove: undefined as (() => void) | undefined,
+  toggle: undefined as (() => Promise<void>) | undefined,
+  nodeChange: undefined as
+    | ((value: string) => void | Promise<void>)
+    | undefined,
+}));
+
 vi.mock("../../../api", () => ({
   default: {
     getACPConfig: mocks.getACPConfig,
@@ -25,7 +54,7 @@ vi.mock("../../../api", () => ({
 }));
 
 vi.mock("../../../stores/agentStore", () => ({
-  useAgentStore: () => ({ selectedAgent: "default" }),
+  useAgentStore: agentStore.useAgentStore,
 }));
 
 vi.mock("../../../hooks/useAppMessage", () => ({
@@ -36,9 +65,16 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock("@agentscope-ai/design", async () =>
-  vi.importActual<typeof import("antd")>("antd"),
-);
+vi.mock("@agentscope-ai/design", async () => {
+  const antd = await vi.importActual<typeof import("antd")>("antd");
+  return {
+    ...antd,
+    Select: ({ onChange }: { onChange: (value: string) => void }) => {
+      actions.nodeChange = onChange;
+      return <button type="button">save-node-path</button>;
+    },
+  };
+});
 
 vi.mock("@/components/PageHeader", () => ({
   PageHeader: ({
@@ -68,35 +104,55 @@ vi.mock("@/components/interaction/Cascade", () => ({
 }));
 
 vi.mock("@/components/interaction/SharedModal", () => ({
-  SharedModal: () => null,
+  SharedModal: ({
+    children,
+    open,
+  }: {
+    children: React.ReactNode;
+    open: boolean;
+  }) => (open ? <div role="dialog">{children}</div> : null),
 }));
 
 vi.mock("./components/ACPCard", () => ({
   ACPCard: ({
     agentKey,
+    onClick,
     onToggle,
   }: {
     agentKey: string;
+    onClick: () => void;
     onToggle: () => Promise<void>;
-  }) => (
-    <div>
-      <span>{agentKey}</span>
-      <button type="button" onClick={() => void onToggle()}>
-        toggle-{agentKey}
-      </button>
-    </div>
-  ),
+  }) => {
+    actions.toggle = onToggle;
+    return (
+      <div>
+        <span>{agentKey}</span>
+        <button type="button" onClick={onClick}>
+          edit-{agentKey}
+        </button>
+        <button type="button" onClick={() => void onToggle()}>
+          toggle-{agentKey}
+        </button>
+      </div>
+    );
+  },
 }));
 
 vi.mock("./components/ACPDrawer", () => ({
   ACPDrawer: ({
     open,
     onSubmit,
+    onDelete,
   }: {
     open: boolean;
     onSubmit: (values: Record<string, unknown>) => Promise<boolean | void>;
-  }) =>
-    open ? (
+    onDelete: () => void;
+  }) => {
+    if (open) {
+      actions.create = onSubmit;
+      actions.remove = onDelete;
+    }
+    return open ? (
       <div role="dialog">
         <button
           type="button"
@@ -115,7 +171,8 @@ vi.mock("./components/ACPDrawer", () => ({
           save-new-agent
         </button>
       </div>
-    ) : null,
+    ) : null;
+  },
 }));
 
 import ACPPage from "./index";
@@ -134,9 +191,51 @@ const loadedConfig: ACPConfig = {
   agents: { "existing-custom": existingAgent },
 };
 
+const newAgent: ACPAgentConfig = {
+  ...existingAgent,
+  command: "new-owner-command",
+};
+
+const newOwnerConfig: ACPConfig = {
+  node_path: "/new-owner/node",
+  agents: { "new-existing": newAgent },
+};
+
+const submittedAgent = {
+  agentKey: "new-agent",
+  enabled: true,
+  command: "new-agent-command",
+  argsText: "--serve",
+  envText: "TOKEN=value",
+  trusted: true,
+  tool_parse_mode: "call_title",
+};
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, reject, resolve };
+}
+
 describe("ACP load guard", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    mocks.getACPConfig.mockReset();
+    mocks.updateACPConfig.mockReset();
+    mocks.updateACPAgentConfig.mockReset();
+    mocks.getACPNodeRuntime.mockReset();
+    mocks.updateACPNodeRuntime.mockReset();
+    mocks.message.error.mockReset();
+    mocks.message.success.mockReset();
+    agentStore.state.selectedAgent = "default";
+    actions.create = undefined;
+    actions.rename = undefined;
+    actions.remove = undefined;
+    actions.toggle = undefined;
+    actions.nodeChange = undefined;
     mocks.getACPConfig
       .mockRejectedValueOnce(new Error("network down"))
       .mockResolvedValueOnce(loadedConfig);
@@ -176,15 +275,134 @@ describe("ACP load guard", () => {
     fireEvent.click(screen.getByRole("button", { name: "save-new-agent" }));
 
     await waitFor(() => expect(mocks.updateACPConfig).toHaveBeenCalledOnce());
-    expect(mocks.updateACPConfig).toHaveBeenCalledWith({
-      node_path: "/custom/node",
-      agents: {
-        "existing-custom": existingAgent,
-        "new-agent": expect.objectContaining({
-          enabled: true,
-          command: "new-agent-command",
-        }),
+    expect(mocks.updateACPConfig).toHaveBeenCalledWith(
+      {
+        node_path: "/custom/node",
+        agents: {
+          "existing-custom": existingAgent,
+          "new-agent": expect.objectContaining({
+            enabled: true,
+            command: "new-agent-command",
+          }),
+        },
       },
+      "default",
+    );
+  });
+
+  it.each(["resolve", "reject"] as const)(
+    "ignores an old agent request that settles late with %s",
+    async (settlement) => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      agentStore.state.selectedAgent = "old";
+      const oldRequest = deferred<ACPConfig>();
+      const newRequest = deferred<ACPConfig>();
+      mocks.getACPConfig
+        .mockReset()
+        .mockImplementation((agentId: string) =>
+          agentId === "old" ? oldRequest.promise : newRequest.promise,
+        );
+
+      const view = render(<ACPPage />);
+      await waitFor(() =>
+        expect(mocks.getACPConfig).toHaveBeenCalledWith("old"),
+      );
+
+      agentStore.state.selectedAgent = "new";
+      view.rerender(<ACPPage />);
+      expect(screen.queryByRole("button", { name: "acp.create" })).toBeNull();
+      await waitFor(() =>
+        expect(mocks.getACPConfig).toHaveBeenCalledWith("new"),
+      );
+
+      await act(async () => {
+        newRequest.resolve(newOwnerConfig);
+        await newRequest.promise;
+      });
+      expect(await screen.findByText("new-existing")).toBeInTheDocument();
+
+      await act(async () => {
+        if (settlement === "resolve") {
+          oldRequest.resolve(loadedConfig);
+          await oldRequest.promise;
+        } else {
+          oldRequest.reject(new Error("late old failure"));
+          await oldRequest.promise.catch(() => undefined);
+        }
+      });
+
+      expect(screen.getByText("new-existing")).toBeInTheDocument();
+      expect(screen.queryByText("existing-custom")).toBeNull();
+      expect(screen.queryByRole("alert")).toBeNull();
+
+      fireEvent.click(screen.getByRole("button", { name: "acp.create" }));
+      fireEvent.click(screen.getByRole("button", { name: "save-new-agent" }));
+
+      await waitFor(() => expect(mocks.updateACPConfig).toHaveBeenCalledOnce());
+      expect(mocks.updateACPConfig).toHaveBeenCalledWith(
+        {
+          node_path: "/new-owner/node",
+          agents: {
+            "new-existing": newAgent,
+            "new-agent": expect.objectContaining({
+              command: "new-agent-command",
+            }),
+          },
+        },
+        "new",
+      );
+    },
+  );
+
+  it("blocks five stale-owner mutation paths and reloads current agent", async () => {
+    agentStore.state.selectedAgent = "old";
+    mocks.getACPConfig.mockReset().mockResolvedValue(loadedConfig);
+    mocks.getACPNodeRuntime.mockResolvedValue({
+      node_path: "/old/node",
+      effective_node_path: "/old/node",
+      candidates: [],
     });
+    render(<ACPPage />);
+
+    expect(await screen.findByText("existing-custom")).toBeInTheDocument();
+    const toggle = actions.toggle;
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "edit-existing-custom" }),
+    );
+    actions.rename = actions.create;
+    const rename = actions.rename;
+    const remove = actions.remove;
+
+    fireEvent.click(screen.getByRole("button", { name: "acp.create" }));
+    const create = actions.create;
+
+    fireEvent.click(screen.getByRole("button", { name: "acp.nodeSettings" }));
+    expect(
+      await screen.findByRole("button", { name: "save-node-path" }),
+    ).toBeInTheDocument();
+    const nodeChange = actions.nodeChange;
+
+    expect(create).toBeDefined();
+    expect(rename).toBeDefined();
+    expect(remove).toBeDefined();
+    expect(toggle).toBeDefined();
+    expect(nodeChange).toBeDefined();
+
+    mocks.getACPConfig.mockImplementation(() => new Promise(() => {}));
+    agentStore.state.selectedAgent = "new";
+    await act(async () => {
+      await create?.(submittedAgent);
+      await rename?.({ ...submittedAgent, agentKey: "renamed-agent" });
+      remove?.();
+      await toggle?.();
+      await nodeChange?.("/new/node");
+    });
+
+    expect(mocks.updateACPConfig).not.toHaveBeenCalled();
+    expect(mocks.updateACPAgentConfig).not.toHaveBeenCalled();
+    expect(mocks.updateACPNodeRuntime).not.toHaveBeenCalled();
+    expect(mocks.getACPConfig).toHaveBeenCalledWith("new");
+    expect(screen.getByRole("status")).toHaveTextContent("acp.loading");
   });
 });
