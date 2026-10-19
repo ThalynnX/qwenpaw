@@ -1,5 +1,6 @@
 import { useEffect, useState, useDeferredValue } from "react";
 import { useNavigate } from "react-router-dom";
+import { LoaderCircle, RefreshCcw, TriangleAlert } from "lucide-react";
 import {
   Button,
   Card,
@@ -33,6 +34,8 @@ function SessionsPage() {
   const {
     sessions,
     loading,
+    error,
+    refreshSessions,
     updateSession,
     deleteSession,
     batchDeleteSessions,
@@ -315,6 +318,36 @@ function SessionsPage() {
 
       {isCompactLayout ? (
         <div className={styles.mobileCardList}>
+          {loading && mobileSessions.length === 0 && (
+            <div
+              className={styles.mobileListState}
+              role="status"
+              aria-live="polite"
+            >
+              <LoaderCircle
+                className={styles.mobileLoadingIcon}
+                size={24}
+                aria-hidden="true"
+              />
+              <span>{t("sessions.loading")}</span>
+            </div>
+          )}
+          {!loading && error && (
+            <div
+              className={`${styles.mobileListState} ${styles.mobileErrorState}`}
+              role="alert"
+            >
+              <TriangleAlert size={24} aria-hidden="true" />
+              <span>{t("sessions.loadFailed")}</span>
+              <Button
+                className={styles.mobileRetryButton}
+                onClick={() => void refreshSessions()}
+              >
+                <RefreshCcw size={16} aria-hidden="true" />
+                {t("common.retry")}
+              </Button>
+            </div>
+          )}
           {mobileSessions.map((session) => (
             <Card
               key={session.id}

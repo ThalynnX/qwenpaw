@@ -202,11 +202,20 @@ function setViewportWidth(width: number) {
   }));
 }
 
-function mockSessions(count: number) {
-  const sessions = createSessions(count);
+function mockSessionsState(
+  overrides: {
+    sessions?: Session[];
+    loading?: boolean;
+    error?: Error | null;
+    refreshSessions?: ReturnType<typeof vi.fn>;
+  } = {},
+) {
+  const sessions = overrides.sessions ?? [];
   mockUseSessions.mockReturnValue({
     sessions,
-    loading: false,
+    loading: overrides.loading ?? false,
+    error: overrides.error ?? null,
+    refreshSessions: overrides.refreshSessions ?? vi.fn(),
     updateSession: vi.fn(),
     deleteSession: vi.fn(),
     batchDeleteSessions: vi.fn(),
@@ -216,9 +225,13 @@ function mockSessions(count: number) {
     batchUnarchiveSessions: vi.fn(),
     activeTab: "active",
     setActiveTab: vi.fn(),
-    activeCount: sessions.length,
-    archivedCount: 0,
+    activeCount: sessions.filter((session) => !session.archived).length,
+    archivedCount: sessions.filter((session) => session.archived).length,
   });
+}
+
+function mockSessions(count: number) {
+  mockSessionsState({ sessions: createSessions(count) });
 }
 
 beforeEach(() => {
@@ -307,6 +320,63 @@ describe("SessionsPage mobile progressive rendering", () => {
       expect(window.matchMedia).toHaveBeenCalledWith("(max-width: 1024px)");
     },
   );
+
+  it.each([390, 820])(
+    "shows compact loading feedback at %i px",
+    async (width) => {
+      setViewportWidth(width);
+      mockSessionsState({ loading: true });
+
+      renderWithProviders(<SessionsPage />);
+
+      expect(await screen.findByRole("status")).toHaveTextContent(
+        "sessions.loading",
+      );
+      expect(screen.queryByTestId("session-card")).toBeNull();
+      expect(screen.queryByTestId("sessions-table")).toBeNull();
+    },
+  );
+
+  it.each([390, 820])(
+    "recovers a rejected compact list at %i px without losing filters",
+    async (width) => {
+      setViewportWidth(width);
+      const refreshSessions = vi.fn();
+      mockSessionsState({
+        error: new Error("list failed"),
+        refreshSessions,
+      });
+      const view = renderWithProviders(<SessionsPage />);
+
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent("sessions.loadFailed");
+      fireEvent.change(screen.getByRole("textbox", { name: "title-filter" }), {
+        target: { value: "Chosen" },
+      });
+      fireEvent.click(
+        within(alert).getByRole("button", { name: "common.retry" }),
+      );
+      expect(refreshSessions).toHaveBeenCalledOnce();
+
+      const recoveredSessions = createSessions(26);
+      mockSessionsState({ sessions: recoveredSessions, refreshSessions });
+      view.rerender(<SessionsPage />);
+
+      await waitFor(() =>
+        expect(screen.getAllByTestId("session-card")).toHaveLength(1),
+      );
+      expect(screen.getByText("Chosen session")).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).toBeNull();
+    },
+  );
+
+  it("does not present a successful empty compact list as an error", () => {
+    mockSessions(0);
+    renderWithProviders(<SessionsPage />);
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("button", { name: "common.retry" })).toBeNull();
+  });
 
   it.each([500, 2000])(
     "bounds the first mobile render for %i sessions",

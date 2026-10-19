@@ -3262,6 +3262,7 @@
     "title": "Sesi",
     "description": "Lihat dan kelola sesi chat yang aktif",
     "loading": "Memuat sesi...",
+    "loadFailed": "Gagal memuat sesi. Silakan coba lagi.",
     "confirmDelete": "Konfirmasi Hapus",
     "deleteConfirm": "Apakah Anda yakin ingin menghapus sesi ini?",
     "batchDeleteConfirm": "Apakah Anda yakin ingin menghapus {{count}} sesi yang dipilih?",

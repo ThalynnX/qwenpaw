@@ -11,12 +11,14 @@ export function useSessions() {
   const { t } = useTranslation();
   const [allSessions, setAllSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
   const [activeTab, setActiveTab] = useState<"active" | "archived">("active");
   const { selectedAgent } = useAgentStore();
   const { message } = useAppMessage();
 
   const fetchSessions = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const data = await chatApi.listChats();
       if (data) {
@@ -24,6 +26,9 @@ export function useSessions() {
       }
     } catch (error) {
       console.error("Failed to load sessions:", error);
+      setError(
+        error instanceof Error ? error : new Error("Failed to load sessions"),
+      );
     } finally {
       setLoading(false);
     }
@@ -170,6 +175,8 @@ export function useSessions() {
   return {
     sessions,
     loading,
+    error,
+    refreshSessions: fetchSessions,
     updateSession,
     deleteSession,
     batchDeleteSessions,

@@ -93,6 +93,46 @@ describe("useSessions", () => {
     expect(result.current.sessions).toEqual(mockSessions);
   });
 
+  it("exposes list errors and retries without resetting the active tab", async () => {
+    const failure = new Error("list failed");
+    const archived = {
+      id: "archived-1",
+      name: "Recovered session",
+      archived: true,
+    };
+    (chatApi.listChats as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValueOnce([archived]);
+
+    const { result } = renderHook(() => useSessions());
+    const refreshSessions = result.current.refreshSessions;
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.error).toBe(failure);
+    expect(result.current.sessions).toEqual([]);
+    act(() => result.current.setActiveTab("archived"));
+    await act(async () => {
+      await result.current.refreshSessions();
+    });
+
+    expect(result.current.refreshSessions).toBe(refreshSessions);
+    expect(result.current.error).toBeNull();
+    expect(result.current.loading).toBe(false);
+    expect(result.current.activeTab).toBe("archived");
+    expect(result.current.sessions).toEqual([archived]);
+    expect(chatApi.listChats).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a successful empty list distinct from a request failure", async () => {
+    (chatApi.listChats as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+
+    const { result } = renderHook(() => useSessions());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.sessions).toEqual([]);
+  });
+
   // 3. updateSession 成功时更新 sessions 列表并调用 message.success
   it("updateSession 成功时更新 sessions 列表并调用 message.success", async () => {
     const updatedSession: Session = { id: "s1", name: "Updated Session 1" };
