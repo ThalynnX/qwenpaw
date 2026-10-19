@@ -120,6 +120,7 @@ vi.mock("./QrcodeAuthBlock", () => ({
 }));
 
 import { ChannelDrawer } from "./ChannelDrawer";
+import styles from "../index.module.less";
 
 // ---- Harness ---------------------------------------------------------------
 
@@ -177,6 +178,36 @@ afterEach(() => {
 // ---- Builtin channel field branches ---------------------------------------
 
 describe("ChannelDrawer builtin channel rendering", () => {
+  it.each([
+    {
+      activeKey: "sip",
+      adjacentValues: { sip_mode: "dev", sip_transport: "UDP" },
+    },
+    {
+      activeKey: "mqtt",
+      adjacentValues: { transport: "tcp", qos: "2" },
+    },
+  ])(
+    "binds the $activeKey no-text switch to its narrow-container layout without touching adjacent values",
+    async ({ activeKey, adjacentValues }) => {
+      const { form } = renderDrawer({ activeKey });
+      fireEvent.click(
+        screen.getByRole("button", { name: "collapsed Advanced settings" }),
+      );
+      const noTextSwitch = screen.getByRole("switch", {
+        name: /channels\.noTextDebounce/,
+      });
+      const formItem = noTextSwitch.closest(".ant-form-item");
+
+      expect(formItem).toHaveClass(styles.noTextDebounceItem);
+      fireEvent.click(noTextSwitch);
+      await waitFor(() => {
+        expect(form.getFieldValue("no_text_debounce")).toBe(false);
+      });
+      expect(form.getFieldsValue(true)).toMatchObject(adjacentValues);
+    },
+  );
+
   it("keeps SIP defaults and explicit values without duplicate initial-value warnings", async () => {
     const consoleError = vi
       .spyOn(console, "error")
