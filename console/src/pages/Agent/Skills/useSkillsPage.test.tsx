@@ -180,6 +180,16 @@ async function flush() {
   });
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
+
 /** Auto-confirm Modal.confirm dialogs (capture the config for inspection). */
 function autoConfirm() {
   mocks.modalConfirm.mockImplementation((cfg: { onOk?: () => void }) => {
@@ -284,6 +294,40 @@ describe("drawer lifecycle", () => {
     act(() => result.current.handleCreate());
     act(() => result.current.handleDrawerClose());
     expect(result.current.drawerOpen).toBe(false);
+    expect(result.current.editingSkillName).toBe("");
+  });
+
+  it("resets agent-owned layout and ignores late detail from agent A", async () => {
+    const detail = deferred<{ name: string; content: string }>();
+    mocks.getSkill.mockReturnValue(detail.promise);
+    const { result, rerender } = renderHook(() => useSkillsPage());
+    act(() => {
+      result.current.handleCreate();
+      result.current.setImportModalOpen(true);
+      result.current.setPoolModal("upload");
+      result.current.toggleBatchMode();
+      result.current.toggleSelect("alpha");
+    });
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current.handleEdit(result.current.skills[0] as never);
+    });
+    await waitFor(() => expect(result.current.drawerLoading).toBe(true));
+
+    mocks.selectedAgent = "agent-2";
+    rerender();
+    expect(result.current.drawerOpen).toBe(false);
+    expect(result.current.drawerLoading).toBe(false);
+    expect(result.current.importModalOpen).toBe(false);
+    expect(result.current.poolModal).toBeNull();
+    expect(result.current.batchModeEnabled).toBe(false);
+    expect(result.current.selectedSkills.size).toBe(0);
+
+    await act(async () => {
+      detail.resolve({ name: "alpha", content: "agent-a" });
+      await pending;
+    });
+    expect(result.current.editingSkill).toBeNull();
     expect(result.current.editingSkillName).toBe("");
   });
 

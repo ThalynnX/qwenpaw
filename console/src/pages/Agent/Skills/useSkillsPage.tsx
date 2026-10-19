@@ -93,7 +93,11 @@ export function useSkillsPage() {
   const [editingSkillName, setEditingSkillName] = useState("");
   const [drawerLoading, setDrawerLoading] = useState(false);
   const detailRequestIdRef = useRef(0);
+  const selectedAgentRef = useRef(selectedAgent || "default");
+  selectedAgentRef.current = selectedAgent || "default";
   const [form] = Form.useForm<SkillDrawerFormValues>();
+  const formRef = useRef(form);
+  formRef.current = form;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [poolSkills, setPoolSkills] = useState<PoolSkillSpec[]>([]);
   const [poolModal, setPoolModal] = useState<"upload" | "download" | null>(
@@ -156,6 +160,17 @@ export function useSkillsPage() {
   }, [selectedAgent, refreshChannelOptions]);
 
   useEffect(() => {
+    detailRequestIdRef.current += 1;
+    savedEdit.current = null;
+    setDrawerOpen(false);
+    setDrawerLoading(false);
+    setEditingSkill(null);
+    setEditingSkillName("");
+    setImportModalOpen(false);
+    setPoolModal(null);
+    setPoolSkills([]);
+    formRef.current.resetFields();
+    if (fileInputRef.current) fileInputRef.current.value = "";
     selectionOwnerRef.current = selectedAgent || "default";
     setSelectedSkills(new Set());
     setBatchModeEnabled(false);
@@ -377,6 +392,7 @@ export function useSkillsPage() {
   };
 
   const handleEdit = async (skill: SkillSpec) => {
+    const requestedAgent = selectedAgent || "default";
     const requestId = detailRequestIdRef.current + 1;
     detailRequestIdRef.current = requestId;
     setEditingSkill(null);
@@ -385,19 +401,32 @@ export function useSkillsPage() {
     form.resetFields();
     setDrawerOpen(true);
     try {
-      const detail = await api.getSkill(skill.name, selectedAgent);
-      if (detailRequestIdRef.current !== requestId) return;
+      const detail = await api.getSkill(skill.name, requestedAgent);
+      if (
+        detailRequestIdRef.current !== requestId ||
+        selectedAgentRef.current !== requestedAgent
+      ) {
+        return;
+      }
       savedEdit.current = detail;
       setEditingSkill(detail);
     } catch (error) {
-      if (detailRequestIdRef.current !== requestId) return;
+      if (
+        detailRequestIdRef.current !== requestId ||
+        selectedAgentRef.current !== requestedAgent
+      ) {
+        return;
+      }
       message.error(
         error instanceof Error ? error.message : t("skills.loadFailed"),
       );
       setDrawerOpen(false);
       setEditingSkillName("");
     } finally {
-      if (detailRequestIdRef.current === requestId) {
+      if (
+        detailRequestIdRef.current === requestId &&
+        selectedAgentRef.current === requestedAgent
+      ) {
         setDrawerLoading(false);
       }
     }
