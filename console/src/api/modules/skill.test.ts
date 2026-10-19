@@ -9,6 +9,7 @@ vi.mock("../authHeaders", () => ({
 }));
 
 import { request } from "../request";
+import { buildAuthHeaders } from "../authHeaders";
 import { skillApi, invalidateSkillCache } from "./skill";
 
 // ---------------------------------------------------------------------------
@@ -691,6 +692,31 @@ describe("skillApi zip uploads", () => {
     expect(String(url)).toContain("rename_map=");
     expect((init as RequestInit).method).toBe("POST");
     expect((init as RequestInit).body).toBeInstanceOf(FormData);
+  });
+
+  it("posts once with auth, captured agent, and the requested file", async () => {
+    vi.mocked(buildAuthHeaders).mockReturnValue({
+      Authorization: "Bearer test-token",
+      "X-Agent-Id": "stale-agent",
+    });
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(okJson({ imported: ["skill"], count: 1 }));
+    const file = new File(["zipdata"], "captured.zip");
+
+    await skillApi.uploadSkill(file, { enable: true }, "captured-agent");
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    const [, init] = vi.mocked(global.fetch).mock.calls[0];
+    const headers = (init as RequestInit).headers as Headers;
+    expect(headers).toBeInstanceOf(Headers);
+    expect(headers.get("Authorization")).toBe("Bearer test-token");
+    expect(headers.get("X-Agent-Id")).toBe("captured-agent");
+    expect(
+      [...headers.keys()].filter((name) => name.toLowerCase() === "x-agent-id"),
+    ).toHaveLength(1);
+    const body = (init as RequestInit).body as FormData;
+    expect(body.get("file")).toBe(file);
   });
 
   it("omits the query string when no options given (pool zip)", async () => {

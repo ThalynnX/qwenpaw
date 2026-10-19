@@ -104,7 +104,7 @@ async function _uploadZip(
   const qs = params.toString();
   const url = getApiUrl(`${endpoint}${qs ? `?${qs}` : ""}`);
 
-  const headers = buildAuthHeaders();
+  const headers = new Headers(buildAuthHeaders());
   if (agentId) headers.set("X-Agent-Id", agentId);
 
   const response = await fetch(url, {
