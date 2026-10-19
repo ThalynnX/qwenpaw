@@ -1,4 +1,13 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import less from "less";
+import {
+  act,
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
@@ -7,11 +16,16 @@ const api = vi.hoisted(() => ({
   getHeartbeatConfig: vi.fn(),
   updateHeartbeatConfig: vi.fn(),
 }));
+const agentState = vi.hoisted(() => ({ selectedAgent: "default" }));
 vi.mock("../../../api", () => ({ default: api }));
 vi.mock("../../../stores/agentStore", () => ({
-  useAgentStore: Object.assign(() => ({ selectedAgent: "default" }), {
-    subscribe: () => () => {},
-  }),
+  useAgentStore: Object.assign(
+    () => ({ selectedAgent: agentState.selectedAgent }),
+    {
+      getState: () => agentState,
+      subscribe: () => () => {},
+    },
+  ),
 }));
 vi.mock("../../../hooks/useAppMessage", () => ({
   useAppMessage: () => ({
@@ -27,9 +41,34 @@ vi.mock("@number-flow/react", () => ({
 }));
 import HeartbeatPage from "./index";
 
+const stylesSource = readFileSync(
+  join(process.cwd(), "src/pages/Control/Heartbeat/index.module.less"),
+  "utf8",
+);
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+}
+
+const config = (every: string, target: "main" | "last" | "inbox" = "main") => ({
+  enabled: true,
+  every,
+  target,
+  timeoutSeconds: 300,
+  activeHours: { start: "08:00", end: "22:00" },
+});
+
 describe("Heartbeat schedule", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    agentState.selectedAgent = "default";
+    api.loadFile.mockResolvedValue({ content: "" });
     api.getHeartbeatConfig.mockResolvedValue({
       enabled: true,
       every: "6h",
@@ -42,6 +81,48 @@ describe("Heartbeat schedule", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
+  it("constrains every 390px reply target to a full-width 44px row", async () => {
+    const { css } = await less.render(stylesSource, {
+      filename: join(
+        process.cwd(),
+        "src/pages/Control/Heartbeat/index.module.less",
+      ),
+    });
+    const mobileStart = css.lastIndexOf("@media (max-width: 390px)");
+    const mobileRule = css.slice(mobileStart);
+
+    expect(mobileStart).toBeGreaterThanOrEqual(0);
+    expect(mobileRule).toMatch(
+      /\.settingRow :global\(\.ant-segmented-group\)[\s\S]*?width:\s*100%;[\s\S]*?min-width:\s*0;[\s\S]*?max-width:\s*100%;/,
+    );
+    expect(mobileRule).toMatch(
+      /\.settingRow :global\(\.ant-segmented-group\)[\s\S]*?flex-direction:\s*column;/,
+    );
+    expect(mobileRule).toMatch(
+      /\.settingRow :global\(\.ant-segmented-item\)[\s\S]*?width:\s*100%;[\s\S]*?min-width:\s*0;[\s\S]*?min-height:\s*44px;/,
+    );
+    expect(mobileRule).toMatch(
+      /\.settingRow :global\(\.ant-segmented-item-label\)[\s\S]*?min-height:\s*44px;[\s\S]*?white-space:\s*normal;/,
+    );
+  });
+
+  it("keeps every hydrated reply target visible and selectable", async () => {
+    render(<HeartbeatPage />);
+    await screen.findByRole("switch", { name: "heartbeat.enabled" });
+
+    for (const name of [
+      "heartbeat.targetMain",
+      "heartbeat.targetLast",
+      "heartbeat.targetInbox",
+    ]) {
+      const target = screen.getByRole("radio", { name });
+      const targetItem = target.closest(".ant-segmented-item");
+      expect(targetItem).toBeVisible();
+      fireEvent.click(targetItem!);
+      expect(target).toBeChecked();
+    }
+  });
+
   it("blocks autosave controls until retry restores persisted config", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     let loadFails = true;
@@ -56,6 +137,7 @@ describe("Heartbeat schedule", () => {
       };
     });
 
+    api.loadFile.mockResolvedValue({ content: "Healthy instructions" });
     render(<HeartbeatPage />);
 
     const retry = await screen.findByRole("button", { name: "common.retry" });
@@ -66,6 +148,23 @@ describe("Heartbeat schedule", () => {
     expect(
       screen.queryByRole("radio", { name: "heartbeat.targetInbox" }),
     ).toBeNull();
+    const instructions = await screen.findByRole("textbox", {
+      name: "HEARTBEAT.md",
+    });
+    expect(instructions).toHaveValue("Healthy instructions");
+    expect(api.loadFile).toHaveBeenCalledWith("HEARTBEAT.md", "default");
+    fireEvent.change(instructions, {
+      target: { value: "Updated while schedule is unavailable" },
+    });
+    await waitFor(
+      () =>
+        expect(api.saveFile).toHaveBeenCalledWith(
+          "HEARTBEAT.md",
+          "Updated while schedule is unavailable",
+          "default",
+        ),
+      { timeout: 2500 },
+    );
     expect(api.updateHeartbeatConfig).not.toHaveBeenCalled();
 
     loadFails = false;
@@ -88,6 +187,95 @@ describe("Heartbeat schedule", () => {
     ).toHaveAttribute("aria-valuenow", "900");
     expect(screen.getByDisplayValue("09:00")).toBeInTheDocument();
     expect(screen.getByDisplayValue("21:00")).toBeInTheDocument();
+    expect(api.updateHeartbeatConfig).not.toHaveBeenCalled();
+  });
+
+  it("ignores late agent responses and only saves the current agent", async () => {
+    const agentA = deferred<ReturnType<typeof config>>();
+    api.getHeartbeatConfig.mockImplementation((agentId: string) =>
+      agentId === "agent-a" ? agentA.promise : Promise.resolve(config("12h")),
+    );
+    agentState.selectedAgent = "agent-a";
+    const view = render(<HeartbeatPage />);
+    await waitFor(() =>
+      expect(api.getHeartbeatConfig).toHaveBeenCalledWith("agent-a"),
+    );
+
+    agentState.selectedAgent = "agent-b";
+    view.rerender(<HeartbeatPage />);
+    await waitFor(() =>
+      expect(api.getHeartbeatConfig).toHaveBeenCalledWith("agent-b"),
+    );
+    expect(
+      await screen.findByRole("button", { name: "12 heartbeat.unitHours" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    await act(async () => {
+      agentA.resolve(config("1h", "inbox"));
+      await agentA.promise;
+    });
+    expect(
+      screen.getByRole("button", { name: "12 heartbeat.unitHours" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByRole("radio", { name: "heartbeat.targetMain" }),
+    ).toBeChecked();
+    expect(api.updateHeartbeatConfig).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "3 heartbeat.unitHours" }),
+    );
+    await waitFor(
+      () =>
+        expect(api.updateHeartbeatConfig).toHaveBeenCalledWith(
+          expect.objectContaining({ every: "3h", target: "main" }),
+          "agent-b",
+        ),
+      { timeout: 2500 },
+    );
+    expect(api.updateHeartbeatConfig).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps agent B visible when agent A rejects late", async () => {
+    const agentA = deferred<ReturnType<typeof config>>();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    api.getHeartbeatConfig.mockImplementation((agentId: string) =>
+      agentId === "agent-a" ? agentA.promise : Promise.resolve(config("6h")),
+    );
+    agentState.selectedAgent = "agent-a";
+    const view = render(<HeartbeatPage />);
+    await waitFor(() =>
+      expect(api.getHeartbeatConfig).toHaveBeenCalledWith("agent-a"),
+    );
+
+    agentState.selectedAgent = "agent-b";
+    view.rerender(<HeartbeatPage />);
+    expect(
+      await screen.findByRole("button", { name: "6 heartbeat.unitHours" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await act(async () => {
+      agentA.reject(new Error("late A failure"));
+      await agentA.promise.catch(() => undefined);
+    });
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(
+      screen.getByRole("switch", { name: "heartbeat.enabled" }),
+    ).toBeChecked();
+    expect(api.updateHeartbeatConfig).not.toHaveBeenCalled();
+  });
+
+  it("locks schedule writes immediately when the selected agent changes", async () => {
+    agentState.selectedAgent = "agent-a";
+    render(<HeartbeatPage />);
+    const preset = await screen.findByRole("button", {
+      name: "3 heartbeat.unitHours",
+    });
+
+    agentState.selectedAgent = "agent-b";
+    fireEvent.click(preset);
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+
     expect(api.updateHeartbeatConfig).not.toHaveBeenCalled();
   });
   it.each(["24h", "48h"])(
