@@ -156,7 +156,7 @@ class ModelSettingsService:
         }
         for role, (model, error) in effective.items():
             if error:
-                raise ValueError(error)
+                raise HTTPException(409, error)
             if (
                 selections[role] is not None
                 and selections[role].source == "local"

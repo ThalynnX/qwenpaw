@@ -38,7 +38,11 @@ Creating these branches does not publish packages or update the marketplace.
   Session IDs alone do not grant access. Identity hashes match the vNext app.
 - Sidecar environment isolation is implemented inside this app, using the
   stable SDK's managed-service lifecycle. Private environment files are mode
-  0600 and refresh before each managed start. Host process settings are unchanged.
+  0600 on POSIX and refresh before each managed start. Host process settings
+  are unchanged. Windows runs the service module in the supervised Python
+  process, preserving its PID for startup, shutdown, and restart.
+- Missing or unsupported Main Chat model selections return an actionable
+  HTTP 409 before an analysis is submitted, rather than an internal error.
 
 ## Separate vNext work
 

@@ -9,7 +9,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import HTTPException
+import httpx
+from fastapi import FastAPI, HTTPException, Request
 
 path = (
     Path(__file__).resolve().parents[3]
@@ -127,8 +128,61 @@ async def test_unsupported_provider_fails_explicitly(configured):
     provider.chat_model = "AnthropicChatModel"
     response = await service.describe(scope())
     assert not response["effective"]["analysis"]["configured"]
-    with pytest.raises(ValueError):
+    with pytest.raises(HTTPException) as error:
         await service.runtime(scope())
+    assert error.value.status_code == 409
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["missing", "unsupported", "credentials"])
+async def test_model_configuration_errors_are_actionable_http_conflicts(
+    configured,
+    monkeypatch,
+    failure,
+):
+    service, provider = configured
+    if failure == "missing":
+        monkeypatch.setattr(service, "_workspace_choice", lambda _: None)
+        expected = "Choose a default model in main chat settings."
+    elif failure == "unsupported":
+        provider.chat_model = "AnthropicChatModel"
+        expected = (
+            "Data requires an OpenAI-compatible or DashScope chat model."
+        )
+    else:
+        provider.api_key = ""
+        expected = "Configure this provider in main chat settings."
+    gateway = SimpleNamespace(
+        json=AsyncMock(
+            return_value={
+                "console_protocol": 1,
+                "scoped_sessions": True,
+                "runtime_model_bindings": True,
+                "dataset_context": True,
+            },
+        ),
+    )
+    app = FastAPI()
+
+    @app.post("/console/chat")
+    async def chat(request: Request):
+        return await scope_module.dispatch_console_chat(
+            request,
+            gateway,
+            service.runtime,
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+        base_url="http://test",
+    ) as client:
+        response = await client.post("/console/chat", json={"text": "analyze"})
+    assert response.status_code == 409
+    assert response.json() == {"detail": expected}
+    assert "private-test-key" not in response.text
+    # Admission checks compatibility, but never submits an invalid analysis.
+    assert gateway.json.call_count == 1
+    assert gateway.json.call_args.args[0] == "GET"
 
 
 @pytest.mark.asyncio

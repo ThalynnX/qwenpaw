@@ -153,14 +153,18 @@ async def test_stable_sdk_sidecar_environment_is_isolated_and_refreshed(
     monkeypatch.setenv("UNGRANTED_SECRET", "never-in-child")
     monkeypatch.setenv("RELEASE_NETWORK_SETTING", "granted")
     model = {"MODEL_SECRET": "literal-{host}-{port}"}
+    (tmp_path / "environment_probe.py").write_text(
+        "import os,json; print(json.dumps(dict(os.environ)))",
+        encoding="utf-8",
+    )
     app = SimpleNamespace(managed_service=lambda name, **kwargs: kwargs)
     service = service_compat.managed_service(
         app,
         "test",
         command=(
             sys.executable,
-            "-c",
-            "import os,json; print(json.dumps(dict(os.environ)))",
+            "-m",
+            "environment_probe",
         ),
         inherit_env=("RELEASE_NETWORK_SETTING",),
         env_factory=lambda: model,
@@ -169,13 +173,20 @@ async def test_stable_sdk_sidecar_environment_is_isolated_and_refreshed(
         model["MODEL_SECRET"] = key
         await service["on_before_start"]()
         child = json.loads(
-            subprocess.check_output(service["command"], text=True),
+            subprocess.check_output(
+                service["command"],
+                text=True,
+                cwd=tmp_path,
+            ),
         )
         assert child["MODEL_SECRET"] == key
         assert child["RELEASE_NETWORK_SETTING"] == "granted"
         assert "UNGRANTED_SECRET" not in child
         assert "MODEL_SECRET" not in os.environ
-    assert (tmp_path / "service-env/test.json").stat().st_mode & 0o777 == 0o600
+    if os.name != "nt":
+        assert (
+            tmp_path / "service-env/test.json"
+        ).stat().st_mode & 0o777 == 0o600
 
 
 @pytest.mark.asyncio
