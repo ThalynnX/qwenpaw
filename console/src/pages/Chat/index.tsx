@@ -73,6 +73,10 @@ import { getApiUrl } from "../../api/config";
 import { buildAuthHeaders } from "../../api/authHeaders";
 import { providerApi } from "../../api/modules/provider";
 import type { ProviderInfo, ModelInfo, SkillSpec } from "../../api/types";
+import {
+  AdvisorModelsPill,
+  useIsAdvisorConversation,
+} from "./ModelSelector/AdvisorModelsPill";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAgentStore } from "../../stores/agentStore";
 import {
@@ -1477,6 +1481,8 @@ export default function ChatPage() {
   const selectedAgentBackend = selectedAgentInfo?.backend ?? "qwenpaw";
   const backendCapabilities = selectedAgentInfo?.backend_capabilities;
   const usesQwenPawBackend = requiresQwenPawModel(selectedAgentBackend);
+  // An Advisor conversation runs two models, so its pill shows the pair.
+  const advisorConversation = useIsAdvisorConversation();
   const backendCommands = backendCapabilities?.commands ?? [];
   const approvalPresets = backendCapabilities?.approval_presets ?? [];
   const supportsAttachments = supportsAgentAttachments(
@@ -2486,7 +2492,7 @@ export default function ChatPage() {
     if (!isChatActivePage) return;
     const binding = bindChatSubmit((input) => {
       enqueuePluginSubmission(input, {
-        active: isChatActiveRef.current && !isAgentTransitionRef.current,
+        active: isChatActiveRef.current && !isSessionTransitionRef.current,
         ready: sdkSessionAdapter.isReady(chatIdRef.current),
         agentId: selectedAgent,
         currentSessionId: chatIdRef.current || "",
@@ -4108,14 +4114,20 @@ export default function ChatPage() {
               <LoopModeSelector
                 className={isMobile ? styles.mobileComposerControl : undefined}
                 compact={isMobile}
+                chatId={backendChatId}
+                agentId={selectedAgent}
               />
             )}
             {usesQwenPawBackend && !isSessionTransition ? (
-              <SessionThinking
-                agentId={selectedAgent}
-                sessionId={queueSessionId}
-                chatId={backendChatId}
-              />
+              advisorConversation ? (
+                <AdvisorModelsPill />
+              ) : (
+                <SessionThinking
+                  agentId={selectedAgent}
+                  sessionId={queueSessionId}
+                  chatId={backendChatId}
+                />
+              )
             ) : backendCapabilities?.model_selection ? (
               <HarnessModelSelector providerId={selectedAgentBackend} />
             ) : null}
@@ -4530,6 +4542,8 @@ export default function ChatPage() {
     scheduleHistoryClear,
     consoleSkills,
     loopAvailableModes,
+    advisorConversation,
+    backendChatId,
     selectedAgent,
     selectedAgentBackend,
     backendCapabilities,
@@ -4600,11 +4614,13 @@ export default function ChatPage() {
         <div className={styles.chatMainArea}>
           <div
             ref={chatMessagesAreaRef}
-            className={
-              isWideMode
-                ? `${styles.chatMessagesArea} ${styles.wideMode}`
-                : styles.chatMessagesArea
-            }
+            className={[
+              styles.chatMessagesArea,
+              isWideMode && styles.wideMode,
+              advisorConversation && styles.advisorComposer,
+            ]
+              .filter(Boolean)
+              .join(" ")}
           >
             <LongTextPasteProvider
               enabled={supportsAttachments}
