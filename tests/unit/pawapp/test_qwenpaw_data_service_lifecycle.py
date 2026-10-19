@@ -7,6 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import httpx
+import psutil
 import pytest
 
 from qwenpaw.pawapp import PawApp
@@ -110,11 +111,13 @@ async def test_sidecar_retains_supervised_pid_and_stops_on_restart(
             assert second["pid"] == service.diagnostics()["pid"]
             assert second["pid"] != first["pid"]
             assert second["secret"] == "rotated"
+            assert not psutil.pid_exists(first["pid"])
             if first_url != second_url:
-                with pytest.raises(httpx.ConnectError):
+                with pytest.raises((httpx.ConnectError, httpx.ConnectTimeout)):
                     await client.get(first_url)
         finally:
             await service.stop()
         assert not service.is_ready
-        with pytest.raises(httpx.ConnectError):
+        assert not psutil.pid_exists(second["pid"])
+        with pytest.raises((httpx.ConnectError, httpx.ConnectTimeout)):
             await client.get(second_url)
