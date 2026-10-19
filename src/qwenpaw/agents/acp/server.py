@@ -105,6 +105,18 @@ _GENERIC_PROMPT_ERROR = (
 )
 
 
+def _stop_reason_for_prompt_error(exc: BaseException) -> str:
+    """Return a normal ACP stop reason for an expected task failure."""
+    message = str(exc).lower()
+    if (
+        "inappropriate content" in message
+        or "data_inspection_failed" in message
+        or "datainspectionfailed" in message
+    ):
+        return f"refusal"
+    return f"end_turn"
+
+
 PromptBlocks = list[
     TextContentBlock
     | ImageContentBlock
@@ -143,6 +155,7 @@ class _EnvelopeTracker:
     def __init__(self) -> None:
         self._reasoning_msg_ids: set[str] = set()
         self._streamed_text_msg_ids: set[str] = set()
+        self._active_tool_calls: dict[str, str] = {}
 
     @staticmethod
     def _tool_raw_input(data: dict[str, Any]) -> Any:
@@ -206,16 +219,26 @@ class _EnvelopeTracker:
                     self._reasoning_msg_ids.add(msg_id)
                 return []
 
+            if msg_type == f"heartbeat":
+                return [
+                    update_tool_call(call_id, status=f"in_progress")
+                    for call_id in self._active_tool_calls
+                ]
+
             if msg_type == MessageType.PLUGIN_CALL.value:
                 if status == RunStatus.Completed:
                     for c in getattr(event, "content", []) or []:
                         data = getattr(c, "data", None)
                         if isinstance(data, dict):
+                            call_id = str(
+                                data.get("call_id") or uuid4().hex[:8],
+                            )
+                            self._active_tool_calls[call_id] = str(
+                                data.get("name") or "tool",
+                            )
                             return [
                                 start_tool_call(
-                                    str(
-                                        data.get("call_id") or uuid4().hex[:8],
-                                    ),
+                                    call_id,
                                     str(data.get("name") or "tool"),
                                     status="in_progress",
                                     raw_input=self._tool_raw_input(data),
@@ -228,11 +251,13 @@ class _EnvelopeTracker:
                     for c in getattr(event, "content", []) or []:
                         data = getattr(c, "data", None)
                         if isinstance(data, dict):
+                            call_id = str(
+                                data.get("call_id") or uuid4().hex[:8],
+                            )
+                            self._active_tool_calls.pop(call_id, None)
                             return [
                                 update_tool_call(
-                                    str(
-                                        data.get("call_id") or uuid4().hex[:8],
-                                    ),
+                                    call_id,
                                     status=self._tool_result_status(data),
                                     content=[
                                         tool_content(
@@ -676,9 +701,9 @@ class QwenPawACPAgent(Agent):
                 session_id,
             )
             await self._report_prompt_error(session_id, exc)
-            raise RequestError.internal_error(
-                {"details": "QwenPaw runtime failed"},
-            ) from None
+            return PromptResponse(
+                stop_reason=_stop_reason_for_prompt_error(exc),
+            )
         finally:
             await self._stop_approval_bridge(approval_bridge)
             self._cancel_events.pop(session_id, None)
@@ -1425,6 +1450,11 @@ class QwenPawACPAgent(Agent):
                     field_meta={ACP_ERROR_META_KEY: True},
                 ),
             )
+        except ConnectionError:
+            logger.info(
+                "ACP client disconnected before error report: session=%s",
+                session_id,
+            )
         except Exception:
             logger.exception(
                 "ACP: failed to report prompt error to client (session=%s)",
@@ -1583,6 +1613,9 @@ async def run_qwenpaw_agent(
     try:
         # pylint: disable=protected-access
         await agent._install_runtime_provider()
-        await run_agent(agent, use_unstable_protocol=True)
+        try:
+            await run_agent(agent, use_unstable_protocol=True)
+        except (ConnectionError, BrokenPipeError):
+            logger.info("ACP client disconnected; shutting down cleanly")
     finally:
         await agent._shutdown_workspace()  # pylint: disable=protected-access
