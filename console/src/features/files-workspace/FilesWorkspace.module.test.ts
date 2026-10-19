@@ -15,11 +15,11 @@ type MobileActivityGeometry = {
   buttonHeight: number;
   buttonWidth: number;
   gap: number;
-  paddingBottom: number;
   paddingLeft: number;
-  paddingRight: number;
   paddingTop: number;
-  railBorderRight: number;
+  railBoxSizing: string;
+  railContentWidth: number;
+  railOuterWidth: number;
   railWidth: number;
 };
 
@@ -82,14 +82,24 @@ const getMobileActivityGeometry = async (
   try {
     collect(style.sheet!.cssRules);
     const padding = expandBox(rail.get("padding") ?? "0");
+    const railWidth = readPixels(rail.get("width") ?? "0");
+    const railBorderRight = readPixels(
+      rail.get("border-right-width") ?? rail.get("border-right") ?? "0",
+    );
+    const horizontalInsets = padding.left + padding.right + railBorderRight;
+    const railBoxSizing = rail.get("box-sizing") ?? "content-box";
     return {
-      railWidth: readPixels(rail.get("width") ?? "0"),
-      railBorderRight: readPixels(
-        rail.get("border-right-width") ?? rail.get("border-right") ?? "0",
-      ),
+      railWidth,
+      railBoxSizing,
+      railContentWidth:
+        railBoxSizing === "border-box"
+          ? railWidth - horizontalInsets
+          : railWidth,
+      railOuterWidth:
+        railBoxSizing === "border-box"
+          ? railWidth
+          : railWidth + horizontalInsets,
       paddingTop: padding.top,
-      paddingRight: padding.right,
-      paddingBottom: padding.bottom,
       paddingLeft: padding.left,
       gap: readPixels(rail.get("gap") ?? "0"),
       buttonWidth: readPixels(button.get("width") ?? "0"),
@@ -168,15 +178,15 @@ describe("FilesWorkspace responsive layout", () => {
     "keeps both activity targets touch-sized and center-hittable at %ipx",
     async (viewportWidth) => {
       const geometry = await getMobileActivityGeometry(viewportWidth);
-      const railContentWidth =
-        geometry.railWidth -
-        geometry.paddingLeft -
-        geometry.paddingRight -
-        geometry.railBorderRight;
 
+      expect(geometry.railBoxSizing).toBe("border-box");
+      expect(geometry.railOuterWidth).toBe(57);
+      expect(geometry.railContentWidth).toBe(44);
       expect(geometry.buttonWidth).toBeGreaterThanOrEqual(44);
       expect(geometry.buttonHeight).toBeGreaterThanOrEqual(44);
-      expect(railContentWidth).toBeGreaterThanOrEqual(geometry.buttonWidth);
+      expect(geometry.railContentWidth).toBeGreaterThanOrEqual(
+        geometry.buttonWidth,
+      );
 
       const targets = ["files", "git"].map((name, index) => ({
         name,
@@ -209,7 +219,10 @@ describe("FilesWorkspace responsive layout", () => {
   it("keeps the desktop activity geometry unchanged above 768px", async () => {
     const geometry = await getMobileActivityGeometry(769);
 
+    expect(geometry.railBoxSizing).toBe("content-box");
     expect(geometry.railWidth).toBe(46);
+    expect(geometry.railOuterWidth).toBe(59);
+    expect(geometry.railContentWidth).toBe(46);
     expect(geometry.buttonWidth).toBe(34);
     expect(geometry.buttonHeight).toBe(34);
   });
