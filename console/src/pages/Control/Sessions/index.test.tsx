@@ -212,6 +212,7 @@ function mockSessionsState(
 ) {
   const sessions = overrides.sessions ?? [];
   mockUseSessions.mockReturnValue({
+    agentId: "agent-1",
     sessions,
     loading: overrides.loading ?? false,
     error: overrides.error ?? null,
