@@ -66,6 +66,11 @@ async def _capability_unavailable_message(
     )
 
 
+def _operation_message(exc: RuntimeError) -> str:
+    """Return a client-safe explanation without leaking a traceback."""
+    return str(exc).strip() or "This provider cannot perform the operation."
+
+
 @router.get("/{provider_id}/models")
 async def get_harness_models(
     provider_id: str,
@@ -172,7 +177,20 @@ async def post_harness_login(
         provider_id,
         body.settings,
     )
-    return await adapter.start_login(device_code=body.device_code)
+    try:
+        return await adapter.start_login(device_code=body.device_code)
+    except HarnessOperationNotSupportedError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=_operation_message(exc),
+        ) from exc
+    except RuntimeError as exc:
+        # Optional providers raise RuntimeError until their dependency is
+        # installed (e.g. "Install qwenpaw[codex] to enable Codex.").
+        raise HTTPException(
+            status_code=409,
+            detail=_operation_message(exc),
+        ) from exc
 
 
 @router.post("/{provider_id}/logout")
@@ -195,7 +213,17 @@ async def post_harness_logout(
             status_code=409,
             detail={
                 "code": "logout_not_supported",
-                "message": str(exc),
+                "message": _operation_message(exc),
+            },
+        ) from exc
+    except RuntimeError as exc:
+        # Missing optional dependencies surface as RuntimeError; map them
+        # to the same structured 409 shape instead of a bare 500.
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "logout_unavailable",
+                "message": _operation_message(exc),
             },
         ) from exc
     return {"ok": True}

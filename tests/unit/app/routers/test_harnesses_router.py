@@ -125,3 +125,93 @@ async def test_qoder_logout_returns_structured_conflict(
             "Qoder CLI does not expose a non-interactive logout command."
         ),
     }
+
+
+def _login_workspace(adapter: AsyncMock) -> SimpleNamespace:
+    """Build a monkeypatch workspace whose runtime returns ``adapter``."""
+    runtime = SimpleNamespace(adapter=AsyncMock(return_value=adapter))
+    return SimpleNamespace(harness_runtime=runtime)
+
+
+@pytest.mark.asyncio
+async def test_login_unsupported_returns_readable_conflict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A provider that cannot log in yields a 409 with a string detail."""
+    adapter = AsyncMock()
+    adapter.start_login.side_effect = HarnessOperationNotSupportedError(
+        "Qoder login is not supported in this environment.",
+    )
+    monkeypatch.setattr(
+        harnesses,
+        "get_agent_for_request",
+        AsyncMock(return_value=_login_workspace(adapter)),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await harnesses.post_harness_login(
+            "qoder",
+            harnesses.HarnessLoginRequest(),
+            cast(Request, object()),
+        )
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == (
+        "Qoder login is not supported in this environment."
+    )
+
+
+@pytest.mark.asyncio
+async def test_login_missing_dependency_returns_readable_conflict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing optional dependency maps to a readable 409, not a 500."""
+    adapter = AsyncMock()
+    adapter.start_login.side_effect = RuntimeError(
+        "Install qwenpaw[codex] to enable Codex.",
+    )
+    monkeypatch.setattr(
+        harnesses,
+        "get_agent_for_request",
+        AsyncMock(return_value=_login_workspace(adapter)),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await harnesses.post_harness_login(
+            "codex",
+            harnesses.HarnessLoginRequest(),
+            cast(Request, object()),
+        )
+
+    assert exc_info.value.status_code == 409
+    assert isinstance(exc_info.value.detail, str)
+    assert "Install qwenpaw[" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_logout_missing_dependency_returns_structured_conflict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep the structured 409 shape while mapping a missing dependency."""
+    adapter = AsyncMock()
+    adapter.logout.side_effect = RuntimeError(
+        "Install qwenpaw[codex] to enable Codex.",
+    )
+    monkeypatch.setattr(
+        harnesses,
+        "get_agent_for_request",
+        AsyncMock(return_value=_login_workspace(adapter)),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await harnesses.post_harness_logout(
+            "codex",
+            harnesses.HarnessStatusRequest(),
+            cast(Request, object()),
+        )
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == {
+        "code": "logout_unavailable",
+        "message": "Install qwenpaw[codex] to enable Codex.",
+    }

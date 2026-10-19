@@ -250,3 +250,96 @@ def test_harnesses_coming_soon_provider_409(app_server) -> None:
         timeout=_HARNESSES_TIMEOUT,
     )
     assert resp2.status_code == 409, app_server.logs_tail()
+
+
+# ------------------------------------------------------------------ #
+# Login / logout error tolerance
+# ------------------------------------------------------------------ #
+
+
+def _missing_dependency_provider(app_server):
+    """Return a provider whose optional dependency is not installed."""
+    resp = app_server.api_request(
+        "GET",
+        "/api/harnesses",
+        timeout=_HARNESSES_TIMEOUT,
+    )
+    assert resp.status_code == 200, app_server.logs_tail()
+    for provider in resp.json().get("providers", []):
+        if provider.get("installed"):
+            continue
+        error = str(provider.get("error") or "")
+        if "Install qwenpaw[" in error:
+            return provider
+    return None
+
+
+@pytest.mark.integration
+@pytest.mark.p1
+def test_harnesses_login_missing_dependency_409(app_server) -> None:
+    """Test purpose:
+    - Verify POST /api/harnesses/{id}/login returns a readable 409 (not a
+      bare 500 with a traceback) when the provider's optional dependency
+      is not installed.
+
+    Test flow:
+    1. GET /api/harnesses to find a provider with a missing optional
+       dependency (skip when every provider is installed).
+    2. POST /api/harnesses/{id}/login.
+    3. Assert 409 and a string ``detail`` containing "Install qwenpaw[".
+
+    API endpoints:
+    - GET /api/harnesses
+    - POST /api/harnesses/{provider_id}/login
+    """
+    provider = _missing_dependency_provider(app_server)
+    if provider is None:
+        pytest.skip("No provider with a missing optional dependency")
+    provider_id = provider["id"]
+
+    resp = app_server.api_request(
+        "POST",
+        f"/api/harnesses/{provider_id}/login",
+        json={"settings": {}, "device_code": False},
+        timeout=_HARNESSES_TIMEOUT,
+    )
+    assert resp.status_code == 409, app_server.logs_tail()
+    detail = resp.json().get("detail")
+    assert isinstance(detail, str)
+    assert "Install qwenpaw[" in detail
+
+
+@pytest.mark.integration
+@pytest.mark.p1
+def test_harnesses_logout_missing_dependency_409(app_server) -> None:
+    """Test purpose:
+    - Verify POST /api/harnesses/{id}/logout maps a missing optional
+      dependency to a structured 409 instead of a bare 500, keeping the
+      established ``{code, message}`` detail shape.
+
+    Test flow:
+    1. GET /api/harnesses to find a provider with a missing optional
+       dependency (skip when every provider is installed).
+    2. POST /api/harnesses/{id}/logout.
+    3. Assert 409 and a dict ``detail`` whose message contains the
+       install hint.
+
+    API endpoints:
+    - GET /api/harnesses
+    - POST /api/harnesses/{provider_id}/logout
+    """
+    provider = _missing_dependency_provider(app_server)
+    if provider is None:
+        pytest.skip("No provider with a missing optional dependency")
+    provider_id = provider["id"]
+
+    resp = app_server.api_request(
+        "POST",
+        f"/api/harnesses/{provider_id}/logout",
+        json={"settings": {}},
+        timeout=_HARNESSES_TIMEOUT,
+    )
+    assert resp.status_code == 409, app_server.logs_tail()
+    detail = resp.json().get("detail")
+    assert isinstance(detail, dict)
+    assert "Install qwenpaw[" in detail.get("message", "")
