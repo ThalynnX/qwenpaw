@@ -21,7 +21,11 @@ it("hides the SDK surface and welcome until hydration completes", async () => {
     createSession: async () => ({ session, sessions: [session] }),
   });
   render(
-    <ChatSessionTransition adapter={adapter} sessionId="target">
+    <ChatSessionTransition
+      adapter={adapter}
+      sessionId="target"
+      onRetry={vi.fn()}
+    >
       <div>Previous conversation</div>
       <ReadyChatWelcome adapter={adapter} sessionId="target">
         <div>Welcome</div>
@@ -42,13 +46,11 @@ it("hides the SDK surface and welcome until hydration completes", async () => {
   expect(screen.queryByRole("status")).toBeNull();
 });
 
-it("retries a failed hydration and restores the chat surface", async () => {
+it("delegates failed hydration retry without bypassing the SDK loader", async () => {
   const user = userEvent.setup();
   const session = { id: "target", name: "target", messages: [] };
-  const getSession = vi
-    .fn()
-    .mockRejectedValueOnce(new Error("offline"))
-    .mockResolvedValueOnce(session);
+  const getSession = vi.fn().mockRejectedValueOnce(new Error("offline"));
+  const onRetry = vi.fn();
   const adapter = createSdkSessionAdapter({
     getSession,
     getSessionList: async () => [],
@@ -57,7 +59,11 @@ it("retries a failed hydration and restores the chat surface", async () => {
     createSession: async () => ({ session, sessions: [session] }),
   });
   render(
-    <ChatSessionTransition adapter={adapter} sessionId="target">
+    <ChatSessionTransition
+      adapter={adapter}
+      sessionId="target"
+      onRetry={onRetry}
+    >
       <div>Recovered conversation</div>
     </ChatSessionTransition>,
   );
@@ -73,8 +79,9 @@ it("retries a failed hydration and restores the chat surface", async () => {
 
   await user.click(screen.getByRole("button", { name: "common.retry" }));
 
-  await waitFor(() => expect(getSession).toHaveBeenCalledTimes(2));
-  expect(surface.inert).toBe(false);
-  await waitFor(() => expect(surface).toBeVisible());
-  expect(screen.queryByRole("alert")).toBeNull();
+  expect(onRetry).toHaveBeenCalledOnce();
+  expect(getSession).toHaveBeenCalledOnce();
+  expect(surface.inert).toBe(true);
+  expect(surface).not.toBeVisible();
+  expect(screen.getByRole("alert")).toHaveTextContent("chat.historyLoadFailed");
 });

@@ -16,13 +16,17 @@ type Props = {
   children: ReactNode;
 };
 
+type TransitionProps = Props & {
+  onRetry: () => void;
+};
+
 function useSessionReady({ adapter, sessionId }: Props) {
   useSyncExternalStore(adapter.subscribe, adapter.getSnapshot);
   return adapter.isReady(sessionId);
 }
 
 /** Keep SDK identity and loading intact; only transition its presented surface. */
-export function ChatSessionTransition(props: Props) {
+export function ChatSessionTransition(props: TransitionProps) {
   const ready = useSessionReady(props);
   const failed = props.adapter.hasFailed(props.sessionId);
   const reduced = useReducedMotion();
@@ -31,10 +35,6 @@ export function ChatSessionTransition(props: Props) {
   useLayoutEffect(() => {
     if (surface.current) surface.current.inert = !ready;
   }, [ready]);
-  const retry = () => {
-    if (!props.sessionId) return;
-    void props.adapter.api.getSession(props.sessionId).catch(() => undefined);
-  };
   return (
     <div className={styles.container} aria-busy={!ready && !failed}>
       <motion.div
@@ -54,7 +54,7 @@ export function ChatSessionTransition(props: Props) {
         >
           <span>{t(failed ? "chat.historyLoadFailed" : "common.loading")}</span>
           {failed && (
-            <Button size="small" type="default" onClick={retry}>
+            <Button size="small" type="default" onClick={props.onRetry}>
               {t("common.retry")}
             </Button>
           )}
