@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppMessage } from "../../../hooks/useAppMessage";
 import api from "../../../api";
 import type { MCPAccessPolicy, MCPClientInfo } from "../../../api/types";
@@ -21,39 +21,70 @@ export function useMCP() {
   const [providerServers, setProviderServers] = useState<
     HarnessDiscoveredMCPServer[]
   >([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingAgent, setLoadingAgent] = useState<string | null>(null);
+  const [loadedAgent, setLoadedAgent] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<{
+    agentId: string;
+    message: string;
+  } | null>(null);
   const { message } = useAppMessage();
+  const requestGeneration = useRef(0);
+  const loadedAgentRef = useRef<string | null>(null);
+  const agentId = selectedAgent || "default";
+
+  const canMutate = useCallback(
+    () =>
+      loadedAgentRef.current === agentId &&
+      (useAgentStore.getState().selectedAgent || "default") === agentId,
+    [agentId],
+  );
 
   const loadClients = useCallback(async () => {
-    setLoading(true);
+    const generation = ++requestGeneration.current;
+    const requestedAgent = selectedAgent || "default";
+    const isCurrentRequest = () =>
+      generation === requestGeneration.current &&
+      (useAgentStore.getState().selectedAgent || "default") === requestedAgent;
+
+    if (!isCurrentRequest()) return;
+    setLoadingAgent(requestedAgent);
+    setLoadError(null);
     try {
-      const data = await api.listMCPClients();
-      setClients(data);
+      const data = await api.listMCPClients(requestedAgent);
+      let discoveredServers: HarnessDiscoveredMCPServer[] = [];
+      let discoveryWarning = "";
       if (selectedBackend !== "qwenpaw" && canDiscoverProviderMCP) {
         try {
           const discovered = await harnessApi.listMCP(selectedBackend);
-          setProviderServers(discovered.servers);
-          if (discovered.message) {
-            message.warning(discovered.message);
-          }
+          discoveredServers = discovered.servers;
+          discoveryWarning = discovered.message ?? "";
         } catch (error) {
           console.warn("Failed to discover Provider MCP servers:", error);
-          setProviderServers([]);
         }
-      } else {
-        setProviderServers([]);
       }
+      if (!isCurrentRequest()) return;
+      setClients(data);
+      setProviderServers(discoveredServers);
+      loadedAgentRef.current = requestedAgent;
+      setLoadedAgent(requestedAgent);
+      if (discoveryWarning) message.warning(discoveryWarning);
     } catch (error) {
+      if (!isCurrentRequest()) return;
       console.error("Failed to load MCP clients:", error);
-      message.error(t("mcp.loadError"));
+      const errorMessage = t("mcp.loadError");
+      setLoadError({ agentId: requestedAgent, message: errorMessage });
+      message.error(errorMessage);
     } finally {
-      setLoading(false);
+      if (isCurrentRequest()) setLoadingAgent(null);
     }
-  }, [canDiscoverProviderMCP, message, selectedBackend, t]);
+  }, [canDiscoverProviderMCP, message, selectedAgent, selectedBackend, t]);
 
   useEffect(() => {
-    loadClients();
-  }, [loadClients, selectedAgent]);
+    void loadClients();
+    return () => {
+      requestGeneration.current += 1;
+    };
+  }, [loadClients]);
 
   const createClient = useCallback(
     async (
@@ -72,6 +103,7 @@ export function useMCP() {
         http_timeout?: number;
       },
     ) => {
+      if (!canMutate()) return false;
       try {
         await api.createMCPClient({
           client_key: key,
@@ -87,7 +119,7 @@ export function useMCP() {
         return false;
       }
     },
-    [message, t, loadClients],
+    [canMutate, message, t, loadClients],
   );
 
   const updateClient = useCallback(
@@ -107,6 +139,7 @@ export function useMCP() {
         http_timeout?: number;
       },
     ) => {
+      if (!canMutate()) return false;
       try {
         await api.updateMCPClient(key, updates);
         setClients((current) =>
@@ -122,11 +155,12 @@ export function useMCP() {
         return false;
       }
     },
-    [message, t],
+    [canMutate, message, t],
   );
 
   const toggleEnabled = useCallback(
     async (client: MCPClientInfo) => {
+      if (!canMutate()) return;
       try {
         await api.toggleMCPClient(client.key);
         setClients((current) =>
@@ -140,11 +174,12 @@ export function useMCP() {
         message.error(t("mcp.toggleError"));
       }
     },
-    [message, t],
+    [canMutate, message, t],
   );
 
   const deleteClient = useCallback(
     async (client: MCPClientInfo) => {
+      if (!canMutate()) return;
       try {
         await api.deleteMCPClient(client.key);
         message.success(t("mcp.deleteSuccess"));
@@ -153,11 +188,12 @@ export function useMCP() {
         message.error(t("mcp.deleteError"));
       }
     },
-    [message, t, loadClients],
+    [canMutate, message, t, loadClients],
   );
 
   const updatePolicy = useCallback(
     async (clientKey: string, policy: MCPAccessPolicy) => {
+      if (!canMutate()) return false;
       try {
         await api.updateMCPPolicy(clientKey, policy);
         message.success(t("mcp.access.saveSuccess"));
@@ -170,13 +206,19 @@ export function useMCP() {
         return false;
       }
     },
-    [message, t, loadClients],
+    [canMutate, message, t, loadClients],
   );
+
+  const ready = loadedAgent === agentId;
+  const error = loadError?.agentId === agentId ? loadError.message : null;
+  const loading = loadingAgent === agentId || (!ready && !error);
 
   return {
     clients,
     providerServers,
     loading,
+    error,
+    ready,
     createClient,
     updateClient,
     updatePolicy,
