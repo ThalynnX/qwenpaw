@@ -26,6 +26,7 @@ from .events import (
     HarnessEvent,
     HarnessEventKind,
     HarnessProvider,
+    HarnessUsage,
 )
 from .registry import (
     PROVIDER_CATALOG,
@@ -223,6 +224,10 @@ class HarnessRuntime:
                     error_text = event.text
                 elif event.kind == HarnessEventKind.CANCELLED:
                     cancelled = True
+                elif event.kind == HarnessEventKind.USAGE:
+                    # Usage is side-channel metadata: it must never emit
+                    # text/tool envelopes or abort the running turn.
+                    self._stage_usage(session_id, backend, event.usage)
         except asyncio.CancelledError:
             cancelled = True
             task_cancelled = True
@@ -386,6 +391,79 @@ class HarnessRuntime:
     ) -> AsyncGenerator[Any, None]:
         for event in events:
             yield event
+
+    @staticmethod
+    def _usage_snapshot(
+        backend: str,
+        usage: HarnessUsage | None,
+    ) -> dict[str, Any] | None:
+        """Translate provider usage into the channel turn-usage shape."""
+        if usage is None:
+            return None
+        prompt_tokens = max(int(usage.input_tokens or 0), 0)
+        completion_tokens = max(int(usage.output_tokens or 0), 0)
+        total_tokens = max(int(usage.total_tokens or 0), 0)
+        if total_tokens <= 0:
+            total_tokens = prompt_tokens + completion_tokens
+        cached_tokens = max(int(usage.cached_tokens or 0), 0)
+        cache_observed = usage.cached_tokens is not None
+        snapshot: dict[str, Any] = {
+            "provider_id": backend,
+            "model_name": "",
+            "prompt_tokens": prompt_tokens,
+            "last_prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+            "cache_read_tokens": cached_tokens,
+            "cache_write_tokens": 0,
+            "cache_eligible_input_tokens": (
+                prompt_tokens if cache_observed else 0
+            ),
+            "cache_observed": cache_observed,
+            "cache_hit_rate": (
+                cached_tokens / prompt_tokens * 100
+                if cache_observed and prompt_tokens > 0
+                else None
+            ),
+            "context_size": max(int(usage.context_limit or 0), 0),
+            "compact_threshold": None,
+        }
+        if usage.context_tokens is not None:
+            snapshot["context_tokens"] = max(
+                int(usage.context_tokens),
+                0,
+            )
+        return snapshot
+
+    def _stage_usage(
+        self,
+        session_id: str,
+        backend: str,
+        usage: HarnessUsage | None,
+    ) -> None:
+        """Stage provider usage on the shared per-turn commit path.
+
+        Best-effort: third-party usage must never fail or pollute the
+        text/tool stream, so any staging error is logged and swallowed.
+        """
+        snapshot = self._usage_snapshot(backend, usage)
+        if snapshot is None:
+            return
+        try:
+            from ..token_usage.model_wrapper import (
+                TokenRecordingModelWrapper,
+            )
+
+            TokenRecordingModelWrapper.record_usage_for_session(
+                session_id,
+                snapshot,
+            )
+        except Exception:  # pylint: disable=broad-except
+            logger.warning(
+                "Failed to stage third-party usage for session %s",
+                session_id,
+                exc_info=True,
+            )
 
 
 __all__ = ["HarnessRuntime"]

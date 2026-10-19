@@ -33,9 +33,26 @@ class HarnessEventKind(str, Enum):
     TOOL_STARTED = "tool_started"
     TOOL_PROGRESS = "tool_progress"
     TOOL_COMPLETED = "tool_completed"
+    USAGE = "usage"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
     ERROR = "error"
+
+
+class HarnessUsage(BaseModel):
+    """Token/context usage reported by a third-party agent backend.
+
+    All counters default to zero so an adapter only needs to fill what
+    its provider exposes. Optional fields stay ``None`` when the provider
+    cannot report them.
+    """
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    cached_tokens: int | None = None
+    context_tokens: int | None = None
+    context_limit: int | None = None
 
 
 class HarnessHistoryKind(str, Enum):
@@ -56,6 +73,7 @@ class HarnessEvent(BaseModel):
     item_id: str = ""
     tool_name: str = ""
     data: dict[str, Any] = Field(default_factory=dict)
+    usage: HarnessUsage | None = None
 
 
 class HarnessHistoryItem(BaseModel):
@@ -180,4 +198,5 @@ __all__ = [
     "HarnessDiscoveredMCPServer",
     "HarnessModel",
     "HarnessProvider",
+    "HarnessUsage",
 ]

@@ -192,43 +192,73 @@ class TokenRecordingModelWrapper(ChatModelBase):
     def pop_usage_for_session(cls, session_id: str) -> dict[str, Any] | None:
         return cls._usage_by_session.pop(session_id, None)
 
+    @classmethod
+    def record_usage_for_session(
+        cls,
+        session_id: str,
+        usage: dict[str, Any],
+    ) -> None:
+        """Stage externally measured usage for one session turn.
+
+        Third-party agent backends do not run through the wrapped chat
+        model, so they cannot record usage via ``_record_usage``. This
+        entry point lets them feed the same per-session snapshot that the
+        channel turn-usage commit path consumes.
+        """
+        if not session_id or not usage:
+            return
+        cls._usage_by_session[session_id] = cls._merge_usage(
+            cls._usage_by_session.get(session_id),
+            usage,
+        )
+
+    @staticmethod
+    def _merge_usage(
+        previous: dict[str, Any] | None,
+        usage: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Accumulate counters while keeping the latest scalar fields."""
+        if previous is None:
+            return dict(usage)
+        merged = dict(usage)
+        for key in (
+            "prompt_tokens",
+            "completion_tokens",
+            "cache_read_tokens",
+            "cache_write_tokens",
+            "cache_eligible_input_tokens",
+        ):
+            merged[key] = int(previous.get(key, 0) or 0) + int(
+                usage.get(key, 0) or 0,
+            )
+        merged["total_tokens"] = (
+            merged["prompt_tokens"] + merged["completion_tokens"]
+        )
+        merged["cache_observed"] = bool(
+            previous.get("cache_observed", False)
+            or usage.get("cache_observed", False),
+        )
+        cache_eligible = merged["cache_eligible_input_tokens"]
+        merged["cache_hit_rate"] = (
+            merged["cache_read_tokens"] / cache_eligible * 100
+            if cache_eligible > 0
+            else None
+        )
+        return merged
+
     def _store_usage(self, usage: dict[str, Any] | None) -> None:
         from ..app.agent_context import get_current_session_id
 
         session_id = get_current_session_id()
         if session_id and usage:
-            previous = TokenRecordingModelWrapper._usage_by_session.get(
-                session_id,
+            TokenRecordingModelWrapper._usage_by_session[
+                session_id
+            ] = self._merge_usage(
+                TokenRecordingModelWrapper._usage_by_session.get(
+                    session_id,
+                ),
+                usage,
             )
-            if previous is None:
-                TokenRecordingModelWrapper._usage_by_session[
-                    session_id
-                ] = usage
-                return
-            for key in (
-                "prompt_tokens",
-                "completion_tokens",
-                "cache_read_tokens",
-                "cache_write_tokens",
-                "cache_eligible_input_tokens",
-            ):
-                usage[key] = int(previous.get(key, 0) or 0) + int(
-                    usage.get(key, 0) or 0,
-                )
-            usage["total_tokens"] = (
-                usage["prompt_tokens"] + usage["completion_tokens"]
-            )
-            usage["cache_observed"] = bool(
-                previous.get("cache_observed", False)
-                or usage.get("cache_observed", False),
-            )
-            cache_eligible = usage["cache_eligible_input_tokens"]
-            usage["cache_hit_rate"] = (
-                usage["cache_read_tokens"] / cache_eligible * 100
-                if cache_eligible > 0
-                else None
-            )
-            TokenRecordingModelWrapper._usage_by_session[session_id] = usage
 
     async def generate_structured_output(
         self,

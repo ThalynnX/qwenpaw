@@ -18,6 +18,7 @@ from qwenpaw.harnesses.events import (
     HarnessEvent,
     HarnessEventKind,
     HarnessProvider,
+    HarnessUsage,
 )
 from qwenpaw.harnesses.runtime import HarnessRuntime
 from qwenpaw.schemas import (
@@ -29,6 +30,7 @@ from qwenpaw.schemas import (
     Role,
     TextContent,
 )
+from qwenpaw.token_usage.model_wrapper import TokenRecordingModelWrapper
 
 
 class FakeAdapter(HarnessAdapter):
@@ -396,3 +398,192 @@ async def test_runtime_handles_host_clear_for_every_backend(
 
     assert adapter.reset_session_id == "chat-1"
     assert output[-1].output[-1].metadata["clear_history"] is True
+
+
+class UsageAdapter(FakeAdapter):
+    """Emit usage interleaved with text and tool traffic."""
+
+    async def run_turn(  # pylint: disable=invalid-overridden-method
+        self,
+        *,
+        session_id: str,
+        prompt: str,
+        cwd: Path,
+        settings: dict,
+        attachments: list[HarnessAttachment] | None = None,
+    ) -> AsyncIterator[HarnessEvent]:
+        del session_id, prompt, cwd, settings, attachments
+        yield HarnessEvent(
+            kind=HarnessEventKind.TEXT_DELTA,
+            text="Before",
+        )
+        yield HarnessEvent(
+            kind=HarnessEventKind.USAGE,
+            usage=HarnessUsage(
+                input_tokens=120,
+                output_tokens=8,
+                total_tokens=128,
+                cached_tokens=40,
+                context_tokens=900,
+                context_limit=8000,
+            ),
+        )
+        yield HarnessEvent(
+            kind=HarnessEventKind.TOOL_STARTED,
+            item_id="tool-1",
+            tool_name="shell",
+            data={"arguments": {"command": "ls"}},
+        )
+        yield HarnessEvent(
+            kind=HarnessEventKind.TOOL_COMPLETED,
+            item_id="tool-1",
+            tool_name="shell",
+            text="ok",
+            data={"arguments": {"command": "ls"}, "exit_code": 0},
+        )
+        yield HarnessEvent(
+            kind=HarnessEventKind.TEXT_DELTA,
+            text="After",
+        )
+        yield HarnessEvent(kind=HarnessEventKind.COMPLETED)
+
+
+class UsageOnlyAdapter(FakeAdapter):
+    """Emit only a usage event before completing the turn."""
+
+    async def run_turn(  # pylint: disable=invalid-overridden-method
+        self,
+        *,
+        session_id: str,
+        prompt: str,
+        cwd: Path,
+        settings: dict,
+        attachments: list[HarnessAttachment] | None = None,
+    ) -> AsyncIterator[HarnessEvent]:
+        del session_id, prompt, cwd, settings, attachments
+        yield HarnessEvent(
+            kind=HarnessEventKind.USAGE,
+            usage=HarnessUsage(input_tokens=10, output_tokens=5),
+        )
+        yield HarnessEvent(kind=HarnessEventKind.COMPLETED)
+
+
+def _turn_request() -> AgentRequest:
+    return AgentRequest(
+        session_id="chat-1",
+        input=[
+            Message(
+                role=Role.USER,
+                content=[TextContent(text="Fix it")],
+            ),
+        ],
+    )
+
+
+@pytest.mark.asyncio
+async def test_runtime_consumes_usage_without_polluting_stream(
+    tmp_path: Path,
+) -> None:
+    """USAGE is staged as metadata and leaves text/tool flow untouched."""
+    TokenRecordingModelWrapper._usage_by_session.clear()
+    runtime = HarnessRuntime(tmp_path)
+    runtime._adapters["codex"] = UsageAdapter()
+
+    output = [
+        item
+        async for item in runtime.stream(
+            backend="codex",
+            request=_turn_request(),
+            cwd=tmp_path.resolve(),
+        )
+    ]
+
+    final_response = output[-1]
+    assert final_response.status == "completed"
+    assert [message.type for message in final_response.output] == [
+        MessageType.MESSAGE,
+        MessageType.PLUGIN_CALL,
+        MessageType.PLUGIN_CALL_OUTPUT,
+        MessageType.MESSAGE,
+    ]
+    assert final_response.output[0].content[0].text == "Before"
+    assert final_response.output[-1].content[0].text == "After"
+
+    staged = TokenRecordingModelWrapper.pop_usage_for_session("chat-1")
+    assert staged is not None
+    assert staged["prompt_tokens"] == 120
+    assert staged["completion_tokens"] == 8
+    assert staged["total_tokens"] == 128
+    assert staged["cache_read_tokens"] == 40
+    assert staged["cache_observed"] is True
+    assert staged["context_size"] == 8000
+    assert staged["context_tokens"] == 900
+    TokenRecordingModelWrapper._usage_by_session.clear()
+
+
+@pytest.mark.asyncio
+async def test_runtime_usage_only_turn_emits_no_text_or_tool(
+    tmp_path: Path,
+) -> None:
+    """A usage-only turn completes without emitting text/tool envelopes."""
+    TokenRecordingModelWrapper._usage_by_session.clear()
+    runtime = HarnessRuntime(tmp_path)
+    runtime._adapters["codex"] = UsageOnlyAdapter()
+
+    output = [
+        item
+        async for item in runtime.stream(
+            backend="codex",
+            request=_turn_request(),
+            cwd=tmp_path.resolve(),
+        )
+    ]
+
+    assert output[-1].status == "completed"
+    assert output[-1].output == []
+    staged = TokenRecordingModelWrapper.pop_usage_for_session("chat-1")
+    assert staged is not None
+    assert staged["total_tokens"] == 15
+    assert staged["cache_observed"] is False
+    assert staged["cache_hit_rate"] is None
+    TokenRecordingModelWrapper._usage_by_session.clear()
+
+
+def test_usage_snapshot_defaults_total_and_cache() -> None:
+    """The snapshot sums a missing total and marks cache as unobserved."""
+    snapshot = HarnessRuntime._usage_snapshot(
+        "codex",
+        HarnessUsage(input_tokens=10, output_tokens=5),
+    )
+
+    assert snapshot is not None
+    assert snapshot["total_tokens"] == 15
+    assert snapshot["cache_read_tokens"] == 0
+    assert snapshot["cache_observed"] is False
+    assert snapshot["cache_hit_rate"] is None
+    assert HarnessRuntime._usage_snapshot("codex", None) is None
+
+
+def test_stage_usage_accumulates_across_events(tmp_path: Path) -> None:
+    """Repeated USAGE events accumulate counters for one session turn."""
+    TokenRecordingModelWrapper._usage_by_session.clear()
+    runtime = HarnessRuntime(tmp_path)
+
+    runtime._stage_usage(
+        "chat-1",
+        "codex",
+        HarnessUsage(input_tokens=10, output_tokens=1),
+    )
+    runtime._stage_usage(
+        "chat-1",
+        "codex",
+        HarnessUsage(input_tokens=20, output_tokens=2),
+    )
+
+    staged = TokenRecordingModelWrapper.pop_usage_for_session("chat-1")
+    assert staged is not None
+    assert staged["prompt_tokens"] == 30
+    assert staged["completion_tokens"] == 3
+    assert staged["total_tokens"] == 33
+    assert staged["last_prompt_tokens"] == 20
+    TokenRecordingModelWrapper._usage_by_session.clear()
