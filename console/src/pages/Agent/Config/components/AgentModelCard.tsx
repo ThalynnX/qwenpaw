@@ -66,6 +66,10 @@ export function AgentModelCard() {
     () => buildEligibleProviders(providers),
     [providers],
   );
+  const decisionProviders = useMemo(
+    () => buildEligibleProviders(providers, "decision"),
+    [providers],
+  );
 
   if (!selectedAgent || (agent?.backend && agent.backend !== "qwenpaw")) {
     return null;
@@ -148,6 +152,7 @@ export function AgentModelCard() {
             key={`${agent.id}:${agent.active_model?.provider_id}:${agent.active_model?.model}`}
             agentId={agent.id}
             providers={eligibleProviders}
+            decisionProviders={decisionProviders}
             activeProviderId={
               agent.active_model?.provider_id ??
               activeModels?.active_llm?.provider_id

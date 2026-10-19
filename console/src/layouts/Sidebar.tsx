@@ -353,15 +353,26 @@ export default function Sidebar({
   }, [collapsed]);
 
   useEffect(() => {
+    let inFlight = false;
     const loadUnreadState = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
-        const [inboxRes, pushRes] = await Promise.all([
+        const [inboxResult, pushResult] = await Promise.allSettled([
           api.getInboxEvents({
             unread_only: true,
             limit: 1,
           }),
           api.getPushMessages(),
         ]);
+        if (
+          inboxResult.status === "rejected" ||
+          pushResult.status === "rejected"
+        ) {
+          return;
+        }
+        const inboxRes = inboxResult.value;
+        const pushRes = pushResult.value;
         const hasUnreadEvents = (inboxRes?.events?.length || 0) > 0;
         const approvals = pushRes?.pending_approvals || [];
         const currentIds = new Set(
@@ -380,6 +391,8 @@ export default function Sidebar({
         setHasPendingApprovals(currentIds.size > 0);
       } catch {
         // Keep previous state when polling fails.
+      } finally {
+        inFlight = false;
       }
     };
     void loadUnreadState();
@@ -652,7 +665,8 @@ export default function Sidebar({
       <Tooltip
         key={entry.key}
         title={toolsMode === 2 ? null : entry.label}
-        placement="right"
+        placement="top"
+        trigger={["hover", "focus"]}
       >
         <button
           aria-label={typeof entry.label === "string" ? entry.label : undefined}
@@ -957,18 +971,28 @@ export default function Sidebar({
                         </motion.div>
                       ))}
 
-                      <button
-                        type="button"
-                        className={skin.moreSettings}
-                        data-press
-                        aria-label={t("nav.moreSettings", "More settings")}
-                        onClick={handleOpenSettings}
+                      <Tooltip
+                        title={
+                          toolsMode === 2
+                            ? null
+                            : t("nav.moreSettings", "More settings")
+                        }
+                        placement="top"
+                        trigger={["hover", "focus"]}
                       >
-                        <Settings size={18} />
-                        <span className={skin.navLabel}>
-                          {t("nav.moreSettings", "More settings")}
-                        </span>
-                      </button>
+                        <button
+                          type="button"
+                          className={skin.moreSettings}
+                          data-press
+                          aria-label={t("nav.moreSettings", "More settings")}
+                          onClick={handleOpenSettings}
+                        >
+                          <Settings size={18} />
+                          <span className={skin.navLabel}>
+                            {t("nav.moreSettings", "More settings")}
+                          </span>
+                        </button>
+                      </Tooltip>
                     </motion.div>
                   </motion.div>
                 )}

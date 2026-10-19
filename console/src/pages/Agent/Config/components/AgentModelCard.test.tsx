@@ -37,11 +37,19 @@ vi.mock("@/pages/Chat/ModelSelector/AgentModelSettings", () => ({
   AgentModelSettings: ({
     agentId,
     autoSave,
+    decisionProviders,
   }: {
     agentId: string;
     autoSave?: boolean;
+    decisionProviders?: { models: unknown[] }[];
   }) => (
-    <div data-testid="agent-model-settings" data-auto-save={autoSave}>
+    <div
+      data-testid="agent-model-settings"
+      data-auto-save={autoSave}
+      data-decision-models={
+        decisionProviders?.flatMap((item) => item.models).length
+      }
+    >
       {agentId}
     </div>
   ),
@@ -74,6 +82,22 @@ describe("AgentModelCard", () => {
   });
 
   it("renders the selected agent model settings in the work environment", async () => {
+    apiMocks.listProviders.mockResolvedValue([
+      {
+        id: "openai",
+        name: "OpenAI",
+        api_key: "sk-x",
+        models: [
+          { id: "gpt-4", name: "GPT-4" },
+          {
+            id: "decision-v1",
+            name: "Decision V1",
+            model_type: "decision",
+          },
+        ],
+        extra_models: [],
+      },
+    ]);
     renderWithProviders(<AgentModelCard />);
 
     expect(
@@ -85,6 +109,10 @@ describe("AgentModelCard", () => {
     expect(await screen.findByTestId("agent-model-settings")).toHaveAttribute(
       "data-auto-save",
       "true",
+    );
+    expect(await screen.findByTestId("agent-model-settings")).toHaveAttribute(
+      "data-decision-models",
+      "1",
     );
     expect(
       screen.getAllByRole("button", {

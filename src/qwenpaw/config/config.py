@@ -36,6 +36,7 @@ from qwenpaw.exceptions import (
     ConfigurationException,
 )
 
+from .history_path import normalize_history_db_filename
 from .timezone import detect_system_timezone
 from ..constant import (
     HEARTBEAT_DEFAULT_EVERY,
@@ -196,6 +197,9 @@ def _assert_agent_config_unchanged(
 # ============================================================================
 
 
+ModelType = Literal["chat", "decision"]
+
+
 class ModelSlotConfig(BaseModel):
     """Model slot configuration for LLM routing."""
 
@@ -207,6 +211,9 @@ class ActiveModelsInfo(BaseModel):
     """Active models information for provider manager."""
 
     active_llm: ModelSlotConfig | None
+    default_models: Dict[ModelType, ModelSlotConfig | None] = Field(
+        default_factory=dict,
+    )
     effective_max_input_length: int | None = None
 
 
@@ -1216,17 +1223,25 @@ class ScrollContextConfig(BaseModel):
     """Scroll (retrieval-driven) context manager configuration.
 
     Only consulted when ``LightContextConfig.strategy == "scroll"``. The
-    durable history lives at ``{working_dir}/{db_filename}``; evicted turns
-    fold into an in-context eviction index recallable from the sandboxed
-    ``recall_history_python`` REPL.
+    durable history uses ``db_filename`` (relative to the workspace unless
+    absolute). Evicted turns fold into an in-context eviction index,
+    recallable from the sandboxed ``recall_history_python`` REPL.
     """
 
     model_config = ConfigDict(extra="ignore")
 
     db_filename: str = Field(
         default="history.db",
-        description="SQLite history store filename, relative to working_dir.",
+        description=(
+            f"SQLite history path, absolute or relative to the workspace."
+        ),
     )
+
+    @field_validator("db_filename")
+    @classmethod
+    def validate_db_filename(cls, value: str) -> str:
+        """Normalize the configured durable history filename."""
+        return normalize_history_db_filename(value)
 
     tool_output_token_cap: int = Field(
         default=3000,
@@ -2359,13 +2374,19 @@ class AgentProfileConfig(BaseModel):
         default=None,
         description="Active model for this agent (provider_id + model)",
     )
+    decision_model: Optional["ModelSlotConfig"] = Field(
+        default=None,
+        description=(
+            "Decision model for this agent; None disables it by default"
+        ),
+    )
     fallback_models: List["ModelSlotConfig"] = Field(
         default_factory=list,
-        description="Ordered model fallback chain for transient failures",
+        description="Ordered chat model fallback chain for transient failures",
     )
     fallback_policy: FallbackPolicyConfig = Field(
         default_factory=FallbackPolicyConfig,
-        description="Cross-model fallback policy",
+        description="Chat model fallback policy",
     )
     subagent_model: Optional["ModelSlotConfig"] = Field(
         default=None,

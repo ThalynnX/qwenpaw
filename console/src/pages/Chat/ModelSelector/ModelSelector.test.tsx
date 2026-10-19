@@ -1558,6 +1558,63 @@ describe("ModelSelector", () => {
     );
   });
 
+  it("auto-saves the decision model in the work environment", async () => {
+    const decisionModel = {
+      ...mockProvider.models[0],
+      id: "decision-v1",
+      name: "Decision V1",
+      model_type: "decision" as const,
+    };
+    vi.mocked(providerApi.listProviders).mockResolvedValue([
+      {
+        ...mockProvider,
+        models: [...mockProvider.models, decisionModel],
+      },
+    ]);
+    const user = userEvent.setup();
+    renderWithProviders(
+      <AgentModelSettings
+        expanded
+        autoSave
+        surface="settings"
+        agentId="default"
+        providers={await providerApi.listProviders()}
+        decisionProviders={[
+          {
+            id: mockProvider.id,
+            name: mockProvider.name,
+            models: [decisionModel],
+          },
+        ]}
+        activeProviderId="openai"
+        activeModelId="gpt-4"
+      />,
+    );
+
+    const choice = await screen.findByRole("button", {
+      name: "models.defaultDecisionModel",
+    });
+    await user.click(choice);
+    const popover = Array.from(document.querySelectorAll(".ant-popover")).at(
+      -1,
+    ) as HTMLElement;
+    await user.click(await within(popover).findByText("Decision V1"));
+
+    await waitFor(
+      () => expect(agentsApi.updateModelSettings).toHaveBeenCalledOnce(),
+      { timeout: 2000 },
+    );
+    expect(agentsApi.updateModelSettings).toHaveBeenCalledWith(
+      "default",
+      expect.objectContaining({
+        decision_model: {
+          provider_id: "openai",
+          model: "decision-v1",
+        },
+      }),
+    );
+  });
+
   it("enables fallback before the user opens model selection", async () => {
     vi.mocked(agentsApi.getAgent).mockResolvedValue({
       id: "default",

@@ -1,4 +1,5 @@
 import { ModelChoice } from "./ModelChoice";
+import { modelSlotLabel } from "./modelSelectorModels";
 import { ThinkingControl } from "@/features/thinking/ThinkingControl";
 import type {
   ThinkingPreference,
@@ -37,6 +38,7 @@ interface AgentModelSettingsProps {
   expanded?: boolean;
   agentId?: string;
   providers: SettingsProvider[];
+  decisionProviders?: SettingsProvider[];
   activeProviderId?: string;
   activeModelId?: string;
   showThinking?: boolean;
@@ -86,6 +88,7 @@ export function AgentModelSettings({
   agentId,
   expanded = false,
   providers,
+  decisionProviders,
   activeProviderId,
   activeModelId,
   showThinking = true,
@@ -105,6 +108,9 @@ export function AgentModelSettings({
   const [fallbackEnabled, setFallbackEnabled] = useState(true);
   const [fallbackKeys, setFallbackKeys] = useState<string[]>([]);
   const [subagentKey, setSubagentKey] = useState(EMPTY_KEY);
+  const [decisionModel, setDecisionModel] = useState<ModelSlotConfig | null>(
+    null,
+  );
   const [thinking, setThinking] = useState<ThinkingPreference>({
     level: "inherit",
   });
@@ -160,6 +166,7 @@ export function AgentModelSettings({
   function applyConfig(next: AgentProfileConfig, targetAgentId: string): void {
     configAgentId.current = targetAgentId;
     setConfig(next);
+    setDecisionModel(next.decision_model ?? null);
     setFallbackEnabled(next.fallback_policy?.enabled ?? true);
     setFallbackKeys(
       (next.fallback_models ?? []).map((slot) =>
@@ -296,6 +303,7 @@ export function AgentModelSettings({
       });
       const subagentSlot = slotByKey.get(subagentKey);
       const settings = {
+        ...(decisionProviders ? { decision_model: decisionModel } : {}),
         fallback_models: fallbackModels,
         fallback_policy: {
           enabled: fallbackEnabled,
@@ -464,6 +472,32 @@ export function AgentModelSettings({
                   <RotateCcw size={15} />
                 </button>
               </div>
+              {decisionProviders && (
+                <div className={styles.settingLine}>
+                  <span>{t("models.defaultDecisionModel")}</span>
+                  <ModelChoice
+                    ariaLabel={t("models.defaultDecisionModel")}
+                    modelType="decision"
+                    value={decisionModel}
+                    label={
+                      modelSlotLabel(decisionProviders, decisionModel) ??
+                      t("modelSelector.noFallback")
+                    }
+                    disabled={saving}
+                    resetOption={{
+                      label: t("modelSelector.noFallback"),
+                      onReset: () => {
+                        setDecisionModel(null);
+                        schedulePersistence();
+                      },
+                    }}
+                    onChange={(slot) => {
+                      setDecisionModel(slot);
+                      schedulePersistence();
+                    }}
+                  />
+                </div>
+              )}
               <div className={styles.settingLine}>
                 <span>{t("modelSelector.enableFallback")}</span>
                 <Switch
