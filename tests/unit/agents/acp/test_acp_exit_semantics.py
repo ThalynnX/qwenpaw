@@ -56,9 +56,12 @@ def test_heartbeat_keeps_active_tool_call_alive():
 def test_heartbeat_is_silent_without_active_tool():
     tracker = _EnvelopeTracker()
 
-    assert tracker.process(
-        SimpleNamespace(object="message", type="heartbeat"),
-    ) == []
+    assert (
+        tracker.process(
+            SimpleNamespace(object="message", type="heartbeat"),
+        )
+        == []
+    )
 
 
 def test_completed_tool_stops_heartbeats():
@@ -66,15 +69,17 @@ def test_completed_tool_stops_heartbeats():
     tracker.process(_tool_start())
     tracker.process(_tool_output())
 
-    assert tracker.process(
-        SimpleNamespace(object="message", type="heartbeat"),
-    ) == []
+    assert (
+        tracker.process(
+            SimpleNamespace(object="message", type="heartbeat"),
+        )
+        == []
+    )
 
 
 def test_content_moderation_returns_refusal():
     error = RuntimeError(
-        "400 data_inspection_failed: Input data may contain "
-        "inappropriate content",
+        "400 data_inspection_failed: inappropriate content",
     )
 
     assert _stop_reason_for_prompt_error(error) == "refusal"
