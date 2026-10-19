@@ -42,6 +42,7 @@ const hoisted = vi.hoisted(() => {
   const handleScanErrorMock = vi.fn().mockReturnValue(false);
   const checkScanWarningsMock = vi.fn().mockResolvedValue(undefined);
   const showScanErrorModalMock = vi.fn();
+  const cancelConflictRenameModalMock = vi.fn();
   const harnessMocks = { listSkills: vi.fn() };
   const agentState = {
     selectedAgent: "agent-1",
@@ -57,6 +58,7 @@ const hoisted = vi.hoisted(() => {
     handleScanErrorMock,
     checkScanWarningsMock,
     showScanErrorModalMock,
+    cancelConflictRenameModalMock,
     harnessMocks,
     agentState,
     stableT,
@@ -135,6 +137,7 @@ vi.mock("./components", async () => {
     parseFrontmatter: vi.fn(),
     useConflictRenameModal: () => ({
       showConflictRenameModal: vi.fn().mockResolvedValue(null),
+      cancelConflictRenameModal: hoisted.cancelConflictRenameModalMock,
       conflictRenameModal: React.createElement("div", null, "conflict-modal"),
     }),
   };

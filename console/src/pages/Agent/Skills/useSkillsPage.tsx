@@ -81,8 +81,11 @@ export function useSkillsPage() {
     filteredSkills,
   } = useSkillFilter(skills);
 
-  const { showConflictRenameModal, conflictRenameModal } =
-    useConflictRenameModal();
+  const {
+    showConflictRenameModal,
+    cancelConflictRenameModal,
+    conflictRenameModal,
+  } = useConflictRenameModal();
 
   // ── Local state ─────────────────────────────────────────────────────────
 
@@ -93,6 +96,7 @@ export function useSkillsPage() {
   const [editingSkillName, setEditingSkillName] = useState("");
   const [drawerLoading, setDrawerLoading] = useState(false);
   const detailRequestIdRef = useRef(0);
+  const pageGenerationRef = useRef(0);
   const selectedAgentRef = useRef(selectedAgent || "default");
   selectedAgentRef.current = selectedAgent || "default";
   const [form] = Form.useForm<SkillDrawerFormValues>();
@@ -150,6 +154,8 @@ export function useSkillsPage() {
   }, []);
 
   useEffect(() => {
+    pageGenerationRef.current += 1;
+    cancelConflictRenameModal();
     setChannelTypes([]);
     setChannelSchemas({});
     setChannelsLoaded(false);
@@ -157,7 +163,7 @@ export function useSkillsPage() {
     return () => {
       channelRequestIdRef.current += 1;
     };
-  }, [selectedAgent, refreshChannelOptions]);
+  }, [cancelConflictRenameModal, selectedAgent, refreshChannelOptions]);
 
   useEffect(() => {
     detailRequestIdRef.current += 1;
@@ -174,7 +180,7 @@ export function useSkillsPage() {
     selectionOwnerRef.current = selectedAgent || "default";
     setSelectedSkills(new Set());
     setBatchModeEnabled(false);
-  }, [selectedAgent]);
+  }, [cancelConflictRenameModal, selectedAgent]);
 
   useEffect(() => {
     if (drawerOpen) refreshChannelOptions();
@@ -301,6 +307,13 @@ export function useSkillsPage() {
   // ── File upload ─────────────────────────────────────────────────────────
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const operation = {
+      agentId: selectedAgent || "default",
+      generation: pageGenerationRef.current,
+    };
+    const isCurrentOperation = () =>
+      operation.generation === pageGenerationRef.current &&
+      operation.agentId === selectedAgentRef.current;
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
@@ -321,7 +334,9 @@ export function useSkillsPage() {
     }
     let renameMap: Record<string, string> | undefined;
     while (true) {
+      if (!isCurrentOperation()) return;
       const result = await uploadSkill(file, undefined, renameMap);
+      if (!isCurrentOperation()) return;
       if (result.success || !result.conflict) break;
       const conflicts = Array.isArray(result.conflict.conflicts)
         ? result.conflict.conflicts
@@ -338,6 +353,7 @@ export function useSkillsPage() {
             suggested_name: c.suggested_name,
           })),
       );
+      if (!isCurrentOperation()) return;
       if (!newRenames) break;
       renameMap = { ...renameMap, ...newRenames };
     }
@@ -365,8 +381,20 @@ export function useSkillsPage() {
     setImportModalOpen(false);
   };
 
-  const handleConfirmImport = async (url: string, targetName?: string) => {
+  const handleConfirmImport = async (
+    url: string,
+    targetName?: string,
+    operation = {
+      agentId: selectedAgent || "default",
+      generation: pageGenerationRef.current,
+    },
+  ): Promise<void> => {
+    const isCurrentOperation = () =>
+      operation.generation === pageGenerationRef.current &&
+      operation.agentId === selectedAgentRef.current;
+    if (!isCurrentOperation()) return;
     const result = await importFromHub(url, targetName);
+    if (!isCurrentOperation()) return;
     if (result.success) {
       closeImportModal();
     } else if (result.conflict) {
@@ -383,9 +411,13 @@ export function useSkillsPage() {
             suggested_name: String(suggested),
           },
         ]);
+        if (!isCurrentOperation()) return;
         if (renameMap) {
           const newName = Object.values(renameMap)[0];
-          if (newName) await handleConfirmImport(url, newName);
+          if (newName) {
+            await handleConfirmImport(url, newName, operation);
+            if (!isCurrentOperation()) return;
+          }
         }
       }
     }

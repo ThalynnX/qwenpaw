@@ -40,6 +40,7 @@ const mocks = vi.hoisted(() => ({
   captureMutationOwner: vi.fn(),
   ownsMutationOwner: vi.fn(),
   showConflictRenameModal: vi.fn(),
+  cancelConflictRenameModal: vi.fn(),
   // design surface
   modalConfirm: vi.fn(),
   message: {
@@ -160,6 +161,7 @@ vi.mock("./components", () => ({
   useConflictRenameModal: () => ({
     showConflictRenameModal: (...a: unknown[]) =>
       mocks.showConflictRenameModal(...a),
+    cancelConflictRenameModal: mocks.cancelConflictRenameModal,
     conflictRenameModal: null,
   }),
 }));
@@ -635,6 +637,49 @@ describe("file upload", () => {
     );
   });
 
+  it.each([
+    ["A to B", false],
+    ["A to B to A", true],
+  ] as const)(
+    "does not retry a stale upload conflict after %s",
+    async (_label, switchBackToA) => {
+      mocks.uploadSkill.mockResolvedValueOnce({
+        success: false,
+        conflict: {
+          conflicts: [{ skill_name: "dup", suggested_name: "dup-2" }],
+        },
+      });
+      const rename = deferred<Record<string, string> | null>();
+      mocks.showConflictRenameModal.mockReturnValue(rename.promise);
+      const { result, rerender } = renderHook(() => useSkillsPage());
+
+      let pending!: Promise<void>;
+      act(() => {
+        pending = result.current.handleFileChange(
+          makeEvent({ name: "agent-a.zip", size: 1024 }),
+        );
+      });
+      await waitFor(() =>
+        expect(mocks.showConflictRenameModal).toHaveBeenCalledTimes(1),
+      );
+      mocks.cancelConflictRenameModal.mockClear();
+      mocks.selectedAgent = "agent-2";
+      rerender();
+      expect(mocks.cancelConflictRenameModal).toHaveBeenCalled();
+      if (switchBackToA) {
+        mocks.selectedAgent = "agent-1";
+        rerender();
+      }
+
+      await act(async () => {
+        rename.resolve({ dup: "dup-2" });
+        await pending;
+      });
+
+      expect(mocks.uploadSkill).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it("stops when there are no conflicts to rename", async () => {
     mocks.uploadSkill.mockResolvedValue({
       success: false,
@@ -681,6 +726,45 @@ describe("hub import", () => {
     );
     expect(result.current.importModalOpen).toBe(false);
   });
+
+  it.each([
+    ["A to B", false],
+    ["A to B to A", true],
+  ] as const)(
+    "does not retry a stale hub conflict after %s",
+    async (_label, switchBackToA) => {
+      mocks.importFromHub.mockResolvedValueOnce({
+        success: false,
+        conflict: { skill_name: "s", suggested_name: "s-2" },
+      });
+      const rename = deferred<Record<string, string> | null>();
+      mocks.showConflictRenameModal.mockReturnValue(rename.promise);
+      const { result, rerender } = renderHook(() => useSkillsPage());
+
+      let pending!: Promise<void>;
+      act(() => {
+        pending = result.current.handleConfirmImport("https://hub/agent-a");
+      });
+      await waitFor(() =>
+        expect(mocks.showConflictRenameModal).toHaveBeenCalledTimes(1),
+      );
+      mocks.cancelConflictRenameModal.mockClear();
+      mocks.selectedAgent = "agent-2";
+      rerender();
+      expect(mocks.cancelConflictRenameModal).toHaveBeenCalled();
+      if (switchBackToA) {
+        mocks.selectedAgent = "agent-1";
+        rerender();
+      }
+
+      await act(async () => {
+        rename.resolve({ s: "s-2" });
+        await pending;
+      });
+
+      expect(mocks.importFromHub).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("keeps the modal open while an import is running", async () => {
     const { result } = renderHook(() => useSkillsPage());
