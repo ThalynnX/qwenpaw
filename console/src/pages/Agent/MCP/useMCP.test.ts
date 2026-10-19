@@ -237,6 +237,89 @@ describe("useMCP", () => {
     expect(result.current.clients[0].name).toBe("Agent B");
   });
 
+  it.each(
+    (["create", "update", "toggle", "delete", "policy"] as const).flatMap(
+      (operation) =>
+        (["resolve", "reject"] as const).map((settlement) => ({
+          operation,
+          settlement,
+        })),
+    ),
+  )(
+    "ignores a late $settlement from agent A's $operation mutation",
+    async ({ operation, settlement }) => {
+      const pendingMutation = deferred<unknown>();
+      const agentAClient = makeClient({ name: "Agent A", enabled: false });
+      const agentBClient = makeClient({ name: "Agent B", enabled: false });
+      apiMocks.listMCPClients.mockImplementation((agentId: string) =>
+        Promise.resolve(
+          agentId === "agent-a" ? [agentAClient] : [agentBClient],
+        ),
+      );
+      agentState.selectedAgent = "agent-a";
+      const { result, rerender } = renderHook(() => useMCP());
+      await waitFor(() => expect(result.current.ready).toBe(true));
+
+      let mutation: Promise<unknown>;
+      if (operation === "create") {
+        apiMocks.createMCPClient.mockReturnValueOnce(pendingMutation.promise);
+        mutation = result.current.createClient("client-2", {
+          name: "Created by Agent A",
+          command: "run",
+        });
+      } else if (operation === "update") {
+        apiMocks.updateMCPClient.mockReturnValueOnce(pendingMutation.promise);
+        mutation = result.current.updateClient("client-1", {
+          name: "Renamed by Agent A",
+        });
+      } else if (operation === "toggle") {
+        apiMocks.toggleMCPClient.mockReturnValueOnce(pendingMutation.promise);
+        mutation = result.current.toggleEnabled(agentAClient);
+      } else if (operation === "delete") {
+        apiMocks.deleteMCPClient.mockReturnValueOnce(pendingMutation.promise);
+        mutation = result.current.deleteClient(agentAClient);
+      } else {
+        apiMocks.updateMCPPolicy.mockReturnValueOnce(pendingMutation.promise);
+        mutation = result.current.updatePolicy("client-1", {
+          default_effect: "allow",
+          rules: [],
+          tool_defaults: [],
+          tool_rules: [],
+        });
+      }
+
+      agentState.selectedAgent = "agent-b";
+      rerender();
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      expect(result.current.clients).toEqual([agentBClient]);
+      expect(apiMocks.listMCPClients).toHaveBeenCalledTimes(2);
+      vi.clearAllMocks();
+
+      let mutationResult: unknown;
+      await act(async () => {
+        if (settlement === "resolve") {
+          pendingMutation.resolve(undefined);
+        } else {
+          pendingMutation.reject(new Error("late Agent A mutation failure"));
+        }
+        mutationResult = await mutation;
+      });
+
+      expect(result.current.clients).toEqual([agentBClient]);
+      expect(result.current.error).toBeNull();
+      expect(messageMock.success).not.toHaveBeenCalled();
+      expect(messageMock.error).not.toHaveBeenCalled();
+      expect(apiMocks.listMCPClients).not.toHaveBeenCalled();
+      if (
+        operation === "create" ||
+        operation === "update" ||
+        operation === "policy"
+      ) {
+        expect(mutationResult).toBe(false);
+      }
+    },
+  );
+
   it("createClient success: calls createMCPClient with client_key + client, message.success, returns true", async () => {
     apiMocks.createMCPClient.mockResolvedValue(undefined);
     const { result } = renderHook(() => useMCP());
