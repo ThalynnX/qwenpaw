@@ -3111,6 +3111,7 @@
     "createSuccess": "Panen berhasil dibuat",
     "emptyApprovals": "Tidak ada persetujuan yang tertunda",
     "emptyPush": "Tidak ada pesan push",
+    "loadFailed": "Gagal memuat pesan push. Silakan coba lagi.",
     "wobbleEnable": "Aktifkan notifikasi getar persetujuan",
     "wobbleDisable": "Nonaktifkan notifikasi getar persetujuan",
     "emptyHarvests": "Belum ada panen",

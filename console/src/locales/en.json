@@ -583,6 +583,7 @@
     "createSuccess": "Harvest created successfully",
     "emptyApprovals": "No pending approvals",
     "emptyPush": "No push messages",
+    "loadFailed": "Unable to load push messages. Try again.",
     "wobbleEnable": "Enable approval wobble notification",
     "wobbleDisable": "Disable approval wobble notification",
     "emptyHarvests": "No harvests yet",

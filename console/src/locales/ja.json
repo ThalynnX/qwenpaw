@@ -4649,6 +4649,7 @@
     "createSuccess": "Harvest を作成しました",
     "emptyApprovals": "保留中の承認はありません",
     "emptyPush": "通知はありません",
+    "loadFailed": "プッシュ通知を読み込めませんでした。もう一度お試しください。",
     "wobbleEnable": "承認の揺れ通知を有効にする",
     "wobbleDisable": "承認の揺れ通知を無効にする",
     "emptyHarvests": "Harvest はまだありません",
