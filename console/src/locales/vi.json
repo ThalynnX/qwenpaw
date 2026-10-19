@@ -1330,6 +1330,7 @@
     "createSuccess": "Tạo thu hoạch thành công",
     "emptyApprovals": "Không có phê duyệt nào đang chờ",
     "emptyPush": "Không có tin nhắn đẩy",
+    "loadFailed": "Không thể tải tin nhắn đẩy. Vui lòng thử lại.",
     "wobbleEnable": "Bật thông báo rung phê duyệt",
     "wobbleDisable": "Tắt thông báo rung phê duyệt",
     "emptyHarvests": "Chưa có thu hoạch nào",

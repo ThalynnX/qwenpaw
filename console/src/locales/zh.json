@@ -583,6 +583,7 @@
     "createSuccess": "Harvest 创建成功",
     "emptyApprovals": "暂无待审批项",
     "emptyPush": "暂无推送消息",
+    "loadFailed": "无法加载推送消息，请重试。",
     "wobbleEnable": "开启审批震动提醒",
     "wobbleDisable": "关闭审批震动提醒",
     "emptyHarvests": "暂无 Harvest 任务",

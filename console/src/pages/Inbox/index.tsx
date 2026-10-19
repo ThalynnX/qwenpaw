@@ -21,7 +21,10 @@ import {
   Lightbulb as BulbOutlined,
   Copy as CopyOutlined,
   ChevronDown as DownOutlined,
+  LoaderCircle,
+  RefreshCcw,
   ShieldCheck as SafetyOutlined,
+  TriangleAlert,
   Wrench as ToolOutlined,
 } from "lucide-react";
 import { PackageOpen, Bell, BellRing } from "lucide-react";
@@ -175,10 +178,13 @@ export default function InboxPage() {
   const {
     summary,
     pushMessages,
+    pushMessagesLoading,
+    pushMessagesError,
     markMessageAsRead,
     markAllMessagesAsRead,
     deleteMessage,
     deleteMessages,
+    refreshPushMessages,
   } = useInboxData();
   const agentDisplayNameById = useMemo(
     () =>
@@ -490,7 +496,31 @@ export default function InboxPage() {
               )}
             </div>
           </div>
-          {filteredPushMessages.length > 0 ? (
+          {pushMessagesError ? (
+            <div className={styles.messagesError} role="alert">
+              <TriangleAlert size={18} aria-hidden="true" />
+              <span>{t("inbox.loadFailed")}</span>
+              <Button
+                icon={<RefreshCcw size={16} />}
+                loading={pushMessagesLoading}
+                onClick={() => void refreshPushMessages()}
+              >
+                {t("common.retry")}
+              </Button>
+            </div>
+          ) : null}
+          {pushMessagesLoading && pushMessages.length === 0 ? (
+            <div className={styles.messagesLoading} role="status">
+              <LoaderCircle
+                className={styles.messagesLoadingIcon}
+                size={20}
+                aria-hidden="true"
+              />
+              <span>{t("common.loading")}</span>
+            </div>
+          ) : pushMessagesError &&
+            pushMessages.length === 0 ? null : filteredPushMessages.length >
+            0 ? (
             <div className={styles.cardList}>
               {pagedPushMessages.map((item) => (
                 <PushMessageCard
