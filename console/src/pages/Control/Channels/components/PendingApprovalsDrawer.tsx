@@ -68,7 +68,9 @@ export function PendingApprovalsDrawer({
   const { message } = useAppMessage();
   const [pending, setPending] = useState<PendingEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionLoadingKeys, setActionLoadingKeys] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [batchLoading, setBatchLoading] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
@@ -89,7 +91,7 @@ export function PendingApprovalsDrawer({
     setSelectedRowKeys([]);
     setSelectedChannels([]);
     setLoading(false);
-    setActionLoading(null);
+    setActionLoadingKeys(new Set());
     setBatchLoading(false);
   }, [open, ownerAgentId]);
 
@@ -208,7 +210,7 @@ export function PendingApprovalsDrawer({
     const key = `${entry.channel}:${entry.user_id}`;
     const actionOwner = beginAction(key);
     if (!actionOwner) return;
-    setActionLoading(key);
+    setActionLoadingKeys((current) => new Set(current).add(key));
     try {
       await ACTION_API_MAP[action]([
         { channel: entry.channel, user_id: entry.user_id },
@@ -221,7 +223,13 @@ export function PendingApprovalsDrawer({
         message.error(t("channels.operationFailed"));
       }
     } finally {
-      if (finishAction(actionOwner)) setActionLoading(null);
+      if (finishAction(actionOwner)) {
+        setActionLoadingKeys((current) => {
+          const next = new Set(current);
+          next.delete(key);
+          return next;
+        });
+      }
     }
   };
 
@@ -335,7 +343,7 @@ export function PendingApprovalsDrawer({
       fixed: "right" as const,
       render: (_: unknown, record: PendingEntry) => {
         const key = `${record.channel}:${record.user_id}`;
-        const isLoading = actionLoading === key;
+        const isLoading = actionLoadingKeys.has(key);
         return (
           <Space size={0}>
             <Button

@@ -152,4 +152,75 @@ describe("PendingApprovalsDrawer owner guard", () => {
       expect(agentBApprove).not.toHaveClass("ant-btn-loading"),
     );
   });
+
+  it("keeps each row loading until that row's action settles", async () => {
+    mocks.getPending.mockResolvedValue([
+      {
+        channel: "dingtalk",
+        user_id: "user-a",
+        username: "Alice",
+        remark: "",
+        first_message: "hello",
+        timestamp: 1,
+      },
+      {
+        channel: "dingtalk",
+        user_id: "user-b",
+        username: "Bob",
+        remark: "",
+        first_message: "hello",
+        timestamp: 2,
+      },
+    ]);
+    let resolveAlice!: () => void;
+    let resolveBob!: () => void;
+    const aliceAction = new Promise<void>((resolve) => {
+      resolveAlice = resolve;
+    });
+    const bobAction = new Promise<void>((resolve) => {
+      resolveBob = resolve;
+    });
+    mocks.approve
+      .mockReturnValueOnce(aliceAction)
+      .mockReturnValueOnce(bobAction);
+
+    render(
+      <App>
+        <PendingApprovalsDrawer
+          open
+          ownerAgentId="agent-a"
+          canMutate={(owner) => owner === "agent-a"}
+          onStale={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </App>,
+    );
+    await screen.findByText("Bob");
+    const approveButtons = screen.getAllByRole("button", {
+      name: "channels.approve",
+    });
+    fireEvent.click(approveButtons[0]);
+    fireEvent.click(approveButtons[1]);
+
+    expect(mocks.approve).toHaveBeenCalledTimes(2);
+    expect(approveButtons[0]).toHaveClass("ant-btn-loading");
+    expect(approveButtons[1]).toHaveClass("ant-btn-loading");
+
+    await act(async () => {
+      resolveAlice();
+      await aliceAction;
+    });
+    await waitFor(() =>
+      expect(approveButtons[0]).not.toHaveClass("ant-btn-loading"),
+    );
+    expect(approveButtons[1]).toHaveClass("ant-btn-loading");
+
+    await act(async () => {
+      resolveBob();
+      await bobAction;
+    });
+    await waitFor(() =>
+      expect(approveButtons[1]).not.toHaveClass("ant-btn-loading"),
+    );
+  });
 });
