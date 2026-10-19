@@ -185,6 +185,15 @@ _MEDIA_PAYLOAD_REJECTION_SIGNALS = (
     "image too large",
     "image is too large",
     "image dimensions",
+    # OpenAI-compatible gateways (LM Studio, issue #8171) report a zero
+    # per-prompt media budget as "At most 0 video(s) may be provided ...".
+    "at most 0 image",
+    "at most 0 video",
+    "at most 0 audio",
+    # "Message content supports text content only. Images, audio and files
+    # are not enabled." (issue #8290). The media-noun gate above keeps
+    # unrelated "not enabled" errors out.
+    "are not enabled",
 )
 
 # A payload rejection only counts when the provider actually names the media
