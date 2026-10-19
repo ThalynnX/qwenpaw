@@ -3152,6 +3152,7 @@
     "title": "Kênh",
     "description": "Quản lý và cấu hình các kênh nhắn tin",
     "loading": "Đang tải kênh...",
+    "loadFailed": "Không thể tải kênh. Vui lòng thử lại.",
     "configSaved": "Đã lưu cấu hình",
     "configFailed": "Lưu cấu hình thất bại",
     "botConflictTitle": "Bot đang được sử dụng",

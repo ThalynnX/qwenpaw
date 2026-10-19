@@ -1,12 +1,19 @@
-import { useAgentStore } from "@/stores/agentStore";
 import { useAppMessage } from "../../../hooks/useAppMessage";
 import { Cascade } from "@/components/interaction/Cascade";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+} from "react";
 import { Form } from "@agentscope-ai/design";
 import { Badge, Button, Space } from "antd";
 import {
   ShieldCheck as SafetyOutlined,
   ClipboardCheck as AuditOutlined,
+  RefreshCcw,
+  TriangleAlert,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import api from "../../../api";
@@ -28,19 +35,24 @@ type FilterType = "all" | "builtin" | "custom";
 
 function ChannelsPage() {
   const { t } = useTranslation();
-  const { selectedAgent } = useAgentStore();
   const { modal } = useAppMessage();
   const {
+    agentId,
     channels,
     orderedKeys,
     channelSchemas,
     isBuiltin,
     loading,
+    error,
+    ready,
+    canMutate,
+    fetchChannels,
     setChannels,
   } = useChannels();
   const [filter, setFilter] = useState<FilterType>("all");
   const [saving, setSaving] = useState(false);
   const [activeKey, setActiveKey] = useState<ChannelKey | null>(null);
+  const [drawerAgentId, setDrawerAgentId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [aclDrawerOpen, setAclDrawerOpen] = useState(false);
   const [pendingDrawerOpen, setPendingDrawerOpen] = useState(false);
@@ -60,6 +72,13 @@ function ChannelsPage() {
   useEffect(() => {
     fetchPendingCount();
   }, [fetchPendingCount]);
+
+  useLayoutEffect(() => {
+    setDrawerOpen(false);
+    setActiveKey(null);
+    setDrawerAgentId(null);
+    setSaving(false);
+  }, [agentId]);
 
   // Sort cards: enabled first, then disabled (preserve orderedKeys order within each group)
   const { enabledCards, disabledCards } = useMemo(() => {
@@ -87,7 +106,9 @@ function ChannelsPage() {
 
   const handleCardClick = useCallback(
     (key: ChannelKey) => {
+      if (!ready) return;
       setActiveKey(key);
+      setDrawerAgentId(agentId);
       setDrawerOpen(true);
       const channelConfig = keepConsoleEnabled(
         key,
@@ -111,16 +132,21 @@ function ChannelsPage() {
         show_thinking: channelConfig.show_thinking ?? true,
       });
     },
-    [channels, form],
+    [agentId, channels, form, ready],
   );
 
   const handleDrawerClose = () => {
     setDrawerOpen(false);
     setActiveKey(null);
+    setDrawerAgentId(null);
   };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
-    if (!activeKey) return;
+    if (!activeKey || !drawerAgentId || !canMutate(drawerAgentId)) {
+      void fetchChannels();
+      return;
+    }
+    const ownerAgentId = drawerAgentId;
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { isBuiltin: _isBuiltin, ...savedConfig } = channels[activeKey] || {};
@@ -139,7 +165,7 @@ function ChannelsPage() {
           const result = await api.checkChannelConflict(
             activeKey,
             proposedConfig,
-            selectedAgent || "default",
+            ownerAgentId,
           );
           if (result.conflict) {
             const agentNames = result.agents
@@ -178,12 +204,13 @@ function ChannelsPage() {
         }
       }
 
-      await api.updateChannelConfig(
-        activeKey,
-        proposedConfig,
-        selectedAgent || "default",
-      );
-      setChannels((current) => ({
+      if (!canMutate(ownerAgentId)) {
+        void fetchChannels();
+        return;
+      }
+
+      await api.updateChannelConfig(activeKey, proposedConfig, ownerAgentId);
+      setChannels(ownerAgentId, (current) => ({
         ...current,
         [activeKey]: { ...current[activeKey], ...updatedChannel },
       }));
@@ -231,6 +258,7 @@ function ChannelsPage() {
             <Badge dot={pendingCount > 0} offset={[-4, 4]}>
               <Button
                 icon={<AuditOutlined size="1em" />}
+                disabled={!ready}
                 onClick={() => setPendingDrawerOpen(true)}
               >
                 {t("channels.pendingApprovals")}
@@ -238,6 +266,7 @@ function ChannelsPage() {
             </Badge>
             <Button
               icon={<SafetyOutlined size="1em" />}
+              disabled={!ready}
               onClick={() => setAclDrawerOpen(true)}
             >
               {t("channels.manageAccessControl")}
@@ -249,6 +278,17 @@ function ChannelsPage() {
         {loading ? (
           <div className={styles.loading}>
             <span className={styles.loadingText}>{t("channels.loading")}</span>
+          </div>
+        ) : error ? (
+          <div className={styles.loadError} role="alert">
+            <TriangleAlert size={24} aria-hidden="true" />
+            <span>{t("channels.loadFailed")}</span>
+            <Button
+              icon={<RefreshCcw size={16} />}
+              onClick={() => void fetchChannels()}
+            >
+              {t("common.retry")}
+            </Button>
           </div>
         ) : (
           <>
