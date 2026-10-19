@@ -2,9 +2,8 @@ import { NumberSlider } from "@/components/interaction/NumberSlider";
 import { useAutoSave } from "@/hooks/useAutoSave";
 import { InteractiveCard } from "@/components/interaction/InteractiveCard";
 import { useEffect, useState } from "react";
-import { Form, Switch } from "@agentscope-ai/design";
-import { useAppMessage } from "../../../hooks/useAppMessage";
-import { TimePicker, Segmented, Spin } from "antd";
+import { Button, Form, Switch } from "@agentscope-ai/design";
+import { Alert, TimePicker, Segmented, Spin } from "antd";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { useTranslation } from "react-i18next";
@@ -66,14 +65,15 @@ function HeartbeatPage() {
   const { t } = useTranslation();
   const { selectedAgent } = useAgentStore();
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [form] = Form.useForm<HeartbeatFormValues>();
-  const { message } = useAppMessage();
   const intervalMinutes = Form.useWatch("intervalMinutes", form) ?? 360;
   const enabled = Form.useWatch("enabled", form) ?? false;
   const target = Form.useWatch("target", form) ?? "main";
 
   const fetchConfig = async () => {
     setLoading(true);
+    setLoadFailed(false);
     try {
       const data = await api.getHeartbeatConfig();
       const everyParts = parseEvery(data.every ?? "6h");
@@ -88,7 +88,7 @@ function HeartbeatPage() {
       });
     } catch (e) {
       console.error("Failed to load heartbeat config:", e);
-      message.error(t("heartbeat.loadFailed"));
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -138,6 +138,26 @@ function HeartbeatPage() {
         <PageHeader items={[{ title: t("heartbeat.title") }]} />
         <div className={styles.loading}>
           <Spin aria-label={t("common.loading")} />
+        </div>
+      </div>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <div className={styles.heartbeatPage}>
+        <PageHeader items={[{ title: t("heartbeat.title") }]} />
+        <div className={styles.loadError}>
+          <Alert
+            type="error"
+            showIcon
+            message={t("heartbeat.loadFailed")}
+            action={
+              <Button type="primary" onClick={() => void fetchConfig()}>
+                {t("common.retry")}
+              </Button>
+            }
+          />
         </div>
       </div>
     );

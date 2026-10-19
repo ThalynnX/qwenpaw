@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
   loadFile: vi.fn().mockResolvedValue({ content: "" }),
@@ -38,6 +38,57 @@ describe("Heartbeat schedule", () => {
       activeHours: { start: "08:00", end: "22:00" },
     });
     api.updateHeartbeatConfig.mockResolvedValue({});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+  it("blocks autosave controls until retry restores persisted config", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    let loadFails = true;
+    api.getHeartbeatConfig.mockImplementation(async () => {
+      if (loadFails) throw new Error("network down");
+      return {
+        enabled: true,
+        every: "12h",
+        target: "inbox",
+        timeoutSeconds: 900,
+        activeHours: { start: "09:00", end: "21:00" },
+      };
+    });
+
+    render(<HeartbeatPage />);
+
+    const retry = await screen.findByRole("button", { name: "common.retry" });
+    expect(screen.getByRole("alert")).toHaveTextContent("heartbeat.loadFailed");
+    expect(
+      screen.queryByRole("switch", { name: "heartbeat.enabled" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("radio", { name: "heartbeat.targetInbox" }),
+    ).toBeNull();
+    expect(api.updateHeartbeatConfig).not.toHaveBeenCalled();
+
+    loadFails = false;
+    fireEvent.click(retry);
+
+    expect(
+      await screen.findByRole("switch", { name: "heartbeat.enabled" }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("button", { name: "12 heartbeat.unitHours" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByRole("radio", { name: "heartbeat.targetInbox" }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("switch", { name: "heartbeat.activeHours" }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("slider", { name: "heartbeat.timeoutSeconds" }),
+    ).toHaveAttribute("aria-valuenow", "900");
+    expect(screen.getByDisplayValue("09:00")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("21:00")).toBeInTheDocument();
+    expect(api.updateHeartbeatConfig).not.toHaveBeenCalled();
   });
   it.each(["24h", "48h"])(
     "preserves %s when disabling an existing heartbeat",
