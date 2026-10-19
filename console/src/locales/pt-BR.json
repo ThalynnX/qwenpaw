@@ -1612,6 +1612,7 @@
     "title": "Canais",
     "description": "Manage and configure message channels",
     "loading": "Carregando channels...",
+    "loadFailed": "Não foi possível carregar os canais. Tente novamente.",
     "configSaved": "Configuracao saved successfully",
     "configFailed": "Falhou to Salvar Configuracao",
     "botConflictTitle": "Bot já está em uso",

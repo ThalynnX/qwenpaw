@@ -1809,7 +1809,8 @@ export function ChannelDrawer({
   // ── Render ───────────────────────────────────────────────────────────────
 
   const { schedule, flush } = useAutoSave(async () => {
-    const values = form.getFieldsValue(true);
+    // Only currently registered fields belong to this channel's payload.
+    const values = form.getFieldsValue();
     try {
       await form.validateFields();
     } catch {

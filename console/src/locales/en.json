@@ -1960,6 +1960,7 @@
     "title": "Channels",
     "description": "Manage and configure message channels",
     "loading": "Loading channels...",
+    "loadFailed": "Failed to load channels. Try again.",
     "configSaved": "Configuration saved successfully",
     "configFailed": "Failed to save configuration",
     "botConflictTitle": "Bot already in use",
