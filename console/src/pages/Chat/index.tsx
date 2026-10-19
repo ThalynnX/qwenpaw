@@ -4597,6 +4597,7 @@ export default function ChatPage() {
                   <ChatSessionTransition
                     adapter={sdkSessionAdapter}
                     sessionId={chatId}
+                    onRetry={() => setRefreshKey((prev) => prev + 1)}
                   >
                     <AgentScopeRuntimeWebUI
                       ref={chatRef}

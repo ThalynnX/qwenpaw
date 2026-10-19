@@ -5,6 +5,7 @@ import {
   type ReactNode,
 } from "react";
 import { motion, useReducedMotion } from "motion/react";
+import { Button } from "antd";
 import { useTranslation } from "react-i18next";
 import type { createSdkSessionAdapter } from "../sdkSessionAdapter";
 import styles from "./ChatSessionTransition.module.less";
@@ -15,13 +16,17 @@ type Props = {
   children: ReactNode;
 };
 
+type TransitionProps = Props & {
+  onRetry: () => void;
+};
+
 function useSessionReady({ adapter, sessionId }: Props) {
   useSyncExternalStore(adapter.subscribe, adapter.getSnapshot);
   return adapter.isReady(sessionId);
 }
 
 /** Keep SDK identity and loading intact; only transition its presented surface. */
-export function ChatSessionTransition(props: Props) {
+export function ChatSessionTransition(props: TransitionProps) {
   const ready = useSessionReady(props);
   const failed = props.adapter.hasFailed(props.sessionId);
   const reduced = useReducedMotion();
@@ -43,8 +48,16 @@ export function ChatSessionTransition(props: Props) {
         {props.children}
       </motion.div>
       {!ready && (
-        <div className={styles.status} role={failed ? "alert" : "status"}>
-          {t(failed ? "chat.historyLoadFailed" : "common.loading")}
+        <div
+          className={`${styles.status} ${failed ? styles.statusFailed : ""}`}
+          role={failed ? "alert" : "status"}
+        >
+          <span>{t(failed ? "chat.historyLoadFailed" : "common.loading")}</span>
+          {failed && (
+            <Button size="small" type="default" onClick={props.onRetry}>
+              {t("common.retry")}
+            </Button>
+          )}
         </div>
       )}
     </div>

@@ -4017,7 +4017,7 @@
       "asFile": "Attach as file",
       "characters": "{{count}} characters"
     },
-    "historyLoadFailed": "Could not load this conversation. Please reopen it.",
+    "historyLoadFailed": "Could not load this conversation. Try again.",
     "switchSession": "Switch conversation",
     "lastActive": "Last active · {{time}}",
     "fileReference": {
