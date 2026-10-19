@@ -348,10 +348,24 @@ const modelsItem = {
 
 describe("Sidebar", () => {
   it("shows a local identity capsule when authentication is disabled", () => {
-    renderWithProviders(<Sidebar selectedKey="core.chat" />);
-    const label = screen.getByText("sidebar.localWorkspace");
-    expect(label.closest("button")).toHaveAttribute("aria-haspopup", "menu");
-    expect(screen.getByText("sidebar.localMode")).toBeInTheDocument();
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    try {
+      renderWithProviders(<Sidebar selectedKey="core.chat" />);
+      const label = screen.getByText("sidebar.localWorkspace");
+      expect(label.closest("button")).toHaveAttribute("aria-haspopup", "menu");
+      expect(screen.getByText("sidebar.localMode")).toBeInTheDocument();
+      expect(
+        consoleError.mock.calls.filter(([message]) =>
+          String(message).includes(
+            "[antd: Tooltip] `overlayClassName` is deprecated",
+          ),
+        ),
+      ).toHaveLength(0);
+    } finally {
+      consoleError.mockRestore();
+    }
   });
   beforeEach(() => {
     mockMobileViewport(false);

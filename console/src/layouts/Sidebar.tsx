@@ -1047,7 +1047,7 @@ export default function Sidebar({
             onOpenChange={setSettingsOpen}
             placement={collapsed ? "rightBottom" : "topRight"}
             trigger="click"
-            overlayClassName={styles.quickSettingsPopover}
+            classNames={{ root: styles.quickSettingsPopover }}
             destroyOnHidden
             content={
               <SidebarSettingsPanel
