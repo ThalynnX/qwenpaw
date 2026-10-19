@@ -61,7 +61,10 @@ export function useSkills() {
   const [loadedAgent, setLoadedAgent] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [importing, setImporting] = useState(false);
-  const importTaskIdRef = useRef<string | null>(null);
+  const importTaskRef = useRef<{
+    taskId: string;
+    mutation: SkillMutationToken;
+  } | null>(null);
   const importCancelReasonRef = useRef<"manual" | "timeout" | null>(null);
   const requestGenerationRef = useRef(0);
   const mutationGenerationRef = useRef(0);
@@ -237,6 +240,8 @@ export function useSkills() {
     activeMutationTokensRef.current.clear();
     uploadTokenRef.current = null;
     importTokenRef.current = null;
+    importTaskRef.current = null;
+    importCancelReasonRef.current = null;
     setUploading(false);
     setImporting(false);
     invalidateSkillCache({ agentId: selectedAgent });
@@ -377,12 +382,18 @@ export function useSkills() {
         enable: true,
         target_name: targetName,
       };
-      const task = await api.startHubSkillInstall(payload);
+      const task = await api.startHubSkillInstall(payload, mutation.agentId);
       if (!ownsMutation(mutation)) return { success: false };
-      importTaskIdRef.current = task.task_id;
+      importTaskRef.current = { taskId: task.task_id, mutation };
 
-      while (importTaskIdRef.current) {
-        const status = await api.getHubSkillInstallStatus(task.task_id);
+      while (
+        importTaskRef.current?.taskId === task.task_id &&
+        importTaskRef.current.mutation.token === mutation.token
+      ) {
+        const status = await api.getHubSkillInstallStatus(
+          task.task_id,
+          mutation.agentId,
+        );
         if (!ownsMutation(mutation)) return { success: false };
 
         if (status.status === "completed" && status.result?.installed) {
@@ -430,7 +441,7 @@ export function useSkills() {
 
         if (Date.now() - startedAt >= timeoutMs) {
           importCancelReasonRef.current = "timeout";
-          await api.cancelHubSkillInstall(task.task_id);
+          await api.cancelHubSkillInstall(task.task_id, mutation.agentId);
           if (!ownsMutation(mutation)) return { success: false };
         }
 
@@ -446,7 +457,7 @@ export function useSkills() {
     } finally {
       if (importTokenRef.current === mutation.token && ownsMutation(mutation)) {
         importTokenRef.current = null;
-        importTaskIdRef.current = null;
+        importTaskRef.current = null;
         importCancelReasonRef.current = null;
         setImporting(false);
       }
@@ -456,11 +467,11 @@ export function useSkills() {
 
   const cancelImport = useCallback(() => {
     if (!importing) return;
+    const task = importTaskRef.current;
+    if (!task || !ownsMutation(task.mutation)) return;
     importCancelReasonRef.current = "manual";
-    const taskId = importTaskIdRef.current;
-    if (!taskId) return;
-    void api.cancelHubSkillInstall(taskId);
-  }, [importing]);
+    void api.cancelHubSkillInstall(task.taskId, task.mutation.agentId);
+  }, [importing, ownsMutation]);
 
   const toggleEnabled = async (skill: SkillSpec) => {
     const mutation = beginMutation();

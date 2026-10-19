@@ -698,11 +698,18 @@ describe("useSkills", () => {
       ret = await result.current.importFromHub("http://example.com/x");
     });
 
-    expect(apiMocks.startHubSkillInstall).toHaveBeenCalledWith({
-      bundle_url: "http://example.com/x",
-      enable: true,
-      target_name: undefined,
-    });
+    expect(apiMocks.startHubSkillInstall).toHaveBeenCalledWith(
+      {
+        bundle_url: "http://example.com/x",
+        enable: true,
+        target_name: undefined,
+      },
+      "agent-1",
+    );
+    expect(apiMocks.getHubSkillInstallStatus).toHaveBeenCalledWith(
+      "task-1",
+      "agent-1",
+    );
     expect(messageMock.success).toHaveBeenCalled();
     expect(ret).toEqual({ success: true, name: "imported-skill" });
   });
@@ -744,6 +751,82 @@ describe("useSkills", () => {
     });
 
     expect(ret).toEqual({ success: false, conflict: conflictResult });
+  });
+
+  it("does not poll agent B when agent A hub start resolves late", async () => {
+    agentState.agents = [
+      { id: "agent-1", backend: "qwenpaw" },
+      { id: "agent-2", backend: "qwenpaw" },
+    ];
+    apiMocks.listSkills.mockResolvedValue([]);
+    const start = deferred<Record<string, unknown>>();
+    apiMocks.startHubSkillInstall.mockReturnValue(start.promise);
+    const { result, rerender } = renderSkillsHook();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+
+    let pending!: Promise<unknown>;
+    act(() => {
+      pending = result.current.importFromHub("https://example.com/a.zip");
+    });
+    agentState.selectedAgent = "agent-2";
+    rerender();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    await act(async () => {
+      start.resolve({ task_id: "agent-a-task" });
+      await pending;
+    });
+
+    expect(apiMocks.startHubSkillInstall).toHaveBeenCalledWith(
+      expect.anything(),
+      "agent-1",
+    );
+    expect(apiMocks.getHubSkillInstallStatus).not.toHaveBeenCalled();
+    expect(result.current.importing).toBe(false);
+  });
+
+  it("keeps agent A hub polling and cancellation out of agent B", async () => {
+    agentState.agents = [
+      { id: "agent-1", backend: "qwenpaw" },
+      { id: "agent-2", backend: "qwenpaw" },
+    ];
+    apiMocks.listSkills.mockResolvedValue([]);
+    apiMocks.startHubSkillInstall.mockResolvedValue({
+      task_id: "agent-a-task",
+    });
+    const status = deferred<Record<string, unknown>>();
+    apiMocks.getHubSkillInstallStatus.mockReturnValue(status.promise);
+    apiMocks.cancelHubSkillInstall.mockResolvedValue(undefined);
+    const { result, rerender } = renderSkillsHook();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+
+    let pending!: Promise<unknown>;
+    act(() => {
+      pending = result.current.importFromHub("https://example.com/a.zip");
+    });
+    await waitFor(() =>
+      expect(apiMocks.getHubSkillInstallStatus).toHaveBeenCalledWith(
+        "agent-a-task",
+        "agent-1",
+      ),
+    );
+    act(() => result.current.cancelImport());
+    expect(apiMocks.cancelHubSkillInstall).toHaveBeenCalledWith(
+      "agent-a-task",
+      "agent-1",
+    );
+
+    agentState.selectedAgent = "agent-2";
+    rerender();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    vi.clearAllMocks();
+    await act(async () => {
+      status.resolve({ status: "cancelled", result: null });
+      await pending;
+    });
+
+    expect(messageMock.warning).not.toHaveBeenCalled();
+    expect(apiMocks.cancelHubSkillInstall).not.toHaveBeenCalled();
+    expect(result.current.importing).toBe(false);
   });
 
   it("toggleEnabled disabling an enabled skill: disableSkill + enabled:false + message.success", async () => {
