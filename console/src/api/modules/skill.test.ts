@@ -223,8 +223,9 @@ describe("skillApi.deleteSkill", () => {
 
   it("sends DELETE to /skills/<encoded>", async () => {
     vi.mocked(request).mockResolvedValue({ deleted: true });
-    const result = await skillApi.deleteSkill("rm-me");
+    const result = await skillApi.deleteSkill("rm-me", "agent-1");
     expect(request).toHaveBeenCalledWith("/skills/rm-me", {
+      headers: new Headers({ "X-Agent-Id": "agent-1" }),
       method: "DELETE",
     });
     expect(result).toEqual({ deleted: true });
@@ -290,8 +291,9 @@ describe("skillApi.batchDeleteSkills", () => {
     vi.mocked(request).mockResolvedValue({
       results: { "skill-a": { success: true } },
     });
-    const result = await skillApi.batchDeleteSkills(["skill-a"]);
+    const result = await skillApi.batchDeleteSkills(["skill-a"], "agent-1");
     expect(request).toHaveBeenCalledWith("/skills/batch-delete", {
+      headers: new Headers({ "X-Agent-Id": "agent-1" }),
       method: "POST",
       body: JSON.stringify(["skill-a"]),
     });

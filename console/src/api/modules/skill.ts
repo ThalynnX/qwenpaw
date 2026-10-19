@@ -304,10 +304,11 @@ export const skillApi = {
       body: JSON.stringify(skillNames),
     }),
 
-  batchDeleteSkills: (skillNames: string[]) =>
+  batchDeleteSkills: (skillNames: string[], agentId?: string) =>
     request<{
       results: Record<string, { success: boolean; reason?: string }>;
     }>("/skills/batch-delete", {
+      headers: agentId ? new Headers({ "X-Agent-Id": agentId }) : undefined,
       method: "POST",
       body: JSON.stringify(skillNames),
     }),
@@ -320,8 +321,9 @@ export const skillApi = {
       body: JSON.stringify(skillNames),
     }),
 
-  deleteSkill: (skillName: string) =>
+  deleteSkill: (skillName: string, agentId?: string) =>
     request<{ deleted: boolean }>(`/skills/${encodeURIComponent(skillName)}`, {
+      headers: agentId ? new Headers({ "X-Agent-Id": agentId }) : undefined,
       method: "DELETE",
     }),
 

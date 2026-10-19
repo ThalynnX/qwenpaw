@@ -715,7 +715,7 @@ describe("useSkills", () => {
     });
 
     expect(modalConfirmMock).toHaveBeenCalledTimes(1);
-    expect(apiMocks.deleteSkill).toHaveBeenCalledWith("to-delete");
+    expect(apiMocks.deleteSkill).toHaveBeenCalledWith("to-delete", "agent-1");
     expect(messageMock.success).toHaveBeenCalledWith("skills.deleteSuccess");
     expect(ret).toBe(true);
   });
@@ -736,5 +736,32 @@ describe("useSkills", () => {
 
     expect(apiMocks.deleteSkill).not.toHaveBeenCalled();
     expect(ret).toBe(false);
+  });
+
+  it("does not delete agent B from an agent A confirmation", async () => {
+    agentState.agents = [
+      { id: "agent-1", backend: "qwenpaw" },
+      { id: "agent-2", backend: "qwenpaw" },
+    ];
+    let confirm: { onOk: () => void } | undefined;
+    modalConfirmMock.mockImplementation((options) => {
+      confirm = options as { onOk: () => void };
+    });
+    const { result, rerender } = renderSkillsHook();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+
+    let pending!: Promise<boolean>;
+    act(() => {
+      pending = result.current.deleteSkill(makeSkill({ name: "same-name" }));
+    });
+    await waitFor(() => expect(confirm).toBeDefined());
+
+    agentState.selectedAgent = "agent-2";
+    rerender();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    act(() => confirm?.onOk());
+    await act(async () => pending);
+
+    expect(apiMocks.deleteSkill).not.toHaveBeenCalled();
   });
 });

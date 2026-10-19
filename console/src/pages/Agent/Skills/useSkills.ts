@@ -30,6 +30,11 @@ type SkillActionResult =
       };
     };
 
+export type SkillMutationOwner = {
+  agentId: string;
+  generation: number;
+};
+
 function currentAgentId() {
   return useAgentStore.getState().selectedAgent || "default";
 }
@@ -57,6 +62,7 @@ export function useSkills() {
   const importTaskIdRef = useRef<string | null>(null);
   const importCancelReasonRef = useRef<"manual" | "timeout" | null>(null);
   const requestGenerationRef = useRef(0);
+  const mutationGenerationRef = useRef(0);
   const loadedAgentRef = useRef<string | null>(null);
   const { message } = useAppMessage();
 
@@ -67,6 +73,26 @@ export function useSkills() {
       currentAgentId() === loadedAgent,
     [loadedAgent],
   );
+
+  const captureMutationOwner = useCallback((): SkillMutationOwner | null => {
+    const agentId = currentAgentId();
+    if (
+      loadedAgent === null ||
+      loadedAgent !== agentId ||
+      loadedAgentRef.current !== agentId
+    ) {
+      return null;
+    }
+    return { agentId, generation: mutationGenerationRef.current };
+  }, [loadedAgent]);
+
+  const ownsMutationOwner = useCallback((owner: SkillMutationOwner) => {
+    return (
+      owner.generation === mutationGenerationRef.current &&
+      owner.agentId === currentAgentId() &&
+      loadedAgentRef.current === owner.agentId
+    );
+  }, []);
 
   const handleError = useCallback(
     (error: unknown, defaultMsg: string): boolean => {
@@ -190,6 +216,7 @@ export function useSkills() {
 
   // Invalidate cache when agent changes
   useEffect(() => {
+    mutationGenerationRef.current += 1;
     invalidateSkillCache({ agentId: selectedAgent });
     void fetchSkills();
     return () => {
@@ -407,7 +434,8 @@ export function useSkills() {
   };
 
   const deleteSkill = async (skill: SkillSpec) => {
-    if (!ownsCurrentAgent()) return false;
+    const owner = captureMutationOwner();
+    if (!owner) return false;
     const confirmed = await new Promise<boolean>((resolve) => {
       Modal.confirm({
         title: t("common.confirm"),
@@ -415,22 +443,24 @@ export function useSkills() {
         okText: t("common.delete"),
         okType: "danger",
         cancelText: t("common.cancel"),
-        onOk: () => resolve(true),
+        onOk: () => resolve(ownsMutationOwner(owner)),
         onCancel: () => resolve(false),
       });
     });
 
-    if (!confirmed) return false;
+    if (!confirmed || !ownsMutationOwner(owner)) return false;
 
     try {
-      const result = await api.deleteSkill(skill.name);
+      const result = await api.deleteSkill(skill.name, owner.agentId);
+      if (!ownsMutationOwner(owner)) return false;
       if (result.deleted) {
         message.success(t("skills.deleteSuccess"));
-        invalidateSkillCache({ agentId: selectedAgent }); // Clear cache after mutation
+        invalidateSkillCache({ agentId: owner.agentId });
         await fetchSkills();
-        return true;
+        return ownsMutationOwner(owner);
       }
     } catch (error) {
+      if (!ownsMutationOwner(owner)) return false;
       console.error(t("skills.deleteFailed"), error);
       message.error(t("skills.deleteFailed"));
     }
@@ -454,6 +484,8 @@ export function useSkills() {
     cancelImport,
     toggleEnabled,
     deleteSkill,
+    captureMutationOwner,
+    ownsMutationOwner,
     refreshSkills: fetchSkills,
     hardRefresh,
   };

@@ -37,6 +37,8 @@ const mocks = vi.hoisted(() => ({
   refreshSkills: vi.fn(),
   hardRefresh: vi.fn(),
   cancelImport: vi.fn(),
+  captureMutationOwner: vi.fn(),
+  ownsMutationOwner: vi.fn(),
   showConflictRenameModal: vi.fn(),
   // design surface
   modalConfirm: vi.fn(),
@@ -134,6 +136,8 @@ vi.mock("./useSkills", () => ({
     uploadSkill: (...a: unknown[]) => mocks.uploadSkill(...a),
     importFromHub: (...a: unknown[]) => mocks.importFromHub(...a),
     cancelImport: mocks.cancelImport,
+    captureMutationOwner: (...a: unknown[]) => mocks.captureMutationOwner(...a),
+    ownsMutationOwner: (...a: unknown[]) => mocks.ownsMutationOwner(...a),
     toggleEnabled: (...a: unknown[]) => mocks.toggleEnabled(...a),
     deleteSkill: (...a: unknown[]) => mocks.deleteSkill(...a),
     refreshSkills: (...a: unknown[]) => mocks.refreshSkills(...a),
@@ -193,6 +197,13 @@ function autoCancel() {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.selectedAgent = "agent-1";
+  mocks.captureMutationOwner.mockImplementation(() => ({
+    agentId: mocks.selectedAgent,
+    generation: 1,
+  }));
+  mocks.ownsMutationOwner.mockImplementation(
+    (owner: { agentId: string }) => owner.agentId === mocks.selectedAgent,
+  );
   mocks.listChannelTypes.mockReset().mockResolvedValue([]);
   mocks.listChannelSchemas.mockReset().mockResolvedValue({});
   mocks.refreshSkills.mockResolvedValue(undefined);
@@ -906,6 +917,29 @@ describe("batch enable/disable/delete", () => {
       await result.current.handleBatchDelete();
     });
     expect(mocks.batchDeleteSkills).not.toHaveBeenCalled();
+  });
+
+  it("does not batch-delete agent B from an agent A confirmation", async () => {
+    let confirm: { onOk?: () => void } | undefined;
+    mocks.modalConfirm.mockImplementation((cfg) => {
+      confirm = cfg as { onOk?: () => void };
+    });
+    const { result, rerender } = renderHook(() => useSkillsPage());
+    act(() => result.current.toggleSelect("alpha"));
+
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current.handleBatchDelete();
+    });
+    await waitFor(() => expect(confirm).toBeDefined());
+
+    mocks.selectedAgent = "agent-2";
+    rerender();
+    act(() => confirm?.onOk?.());
+    await act(async () => pending);
+
+    expect(mocks.batchDeleteSkills).not.toHaveBeenCalled();
+    expect(result.current.selectedSkills.size).toBe(0);
   });
 
   it("is a no-op for batch delete without selection", async () => {

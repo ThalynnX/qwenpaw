@@ -66,6 +66,8 @@ export function useSkillsPage() {
     cancelImport,
     toggleEnabled,
     deleteSkill,
+    captureMutationOwner,
+    ownsMutationOwner,
     refreshSkills,
     hardRefresh,
   } = useSkills();
@@ -99,6 +101,7 @@ export function useSkillsPage() {
   );
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
   const [batchModeEnabled, setBatchModeEnabled] = useState(false);
+  const selectionOwnerRef = useRef(selectedAgent || "default");
   const [viewMode, setViewMode] = useState<"card" | "list">("card");
   const [filterOpen, setFilterOpen] = useState(false);
 
@@ -151,6 +154,12 @@ export function useSkillsPage() {
       channelRequestIdRef.current += 1;
     };
   }, [selectedAgent, refreshChannelOptions]);
+
+  useEffect(() => {
+    selectionOwnerRef.current = selectedAgent || "default";
+    setSelectedSkills(new Set());
+    setBatchModeEnabled(false);
+  }, [selectedAgent]);
 
   useEffect(() => {
     if (drawerOpen) refreshChannelOptions();
@@ -760,6 +769,14 @@ export function useSkillsPage() {
   // ── Batch delete ────────────────────────────────────────────────────────
 
   const handleBatchDelete = async () => {
+    const owner = captureMutationOwner();
+    if (
+      !owner ||
+      selectionOwnerRef.current !== owner.agentId ||
+      owner.agentId !== (selectedAgent || "default")
+    ) {
+      return;
+    }
     const names = Array.from(selectedSkills);
     if (names.length === 0) return;
     const confirmed = await new Promise<boolean>((resolve) => {
@@ -775,13 +792,14 @@ export function useSkillsPage() {
         okText: t("common.delete"),
         okType: "danger",
         cancelText: t("common.cancel"),
-        onOk: () => resolve(true),
+        onOk: () => resolve(ownsMutationOwner(owner)),
         onCancel: () => resolve(false),
       });
     });
-    if (!confirmed) return;
+    if (!confirmed || !ownsMutationOwner(owner)) return;
     try {
-      const { results } = await api.batchDeleteSkills(names);
+      const { results } = await api.batchDeleteSkills(names, owner.agentId);
+      if (!ownsMutationOwner(owner)) return;
       const failed = Object.entries(results).filter(([, r]) => !r.success);
       if (failed.length > 0) {
         message.warning(
@@ -796,9 +814,11 @@ export function useSkillsPage() {
         );
       }
       clearSelection();
-      invalidateSkillCache({ agentId: selectedAgent });
+      invalidateSkillCache({ agentId: owner.agentId });
       await refreshSkills();
+      if (!ownsMutationOwner(owner)) return;
     } catch (error) {
+      if (!ownsMutationOwner(owner)) return;
       message.error(
         error instanceof Error ? error.message : t("skills.batchDeleteFailed"),
       );
