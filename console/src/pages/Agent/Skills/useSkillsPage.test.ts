@@ -94,7 +94,9 @@ vi.mock("../../../api", () => ({
 }));
 
 vi.mock("../../../stores/agentStore", () => ({
-  useAgentStore: () => hoisted.agentState,
+  useAgentStore: Object.assign(() => hoisted.agentState, {
+    getState: () => hoisted.agentState,
+  }),
 }));
 
 vi.mock("../../../api/modules/harness", () => ({

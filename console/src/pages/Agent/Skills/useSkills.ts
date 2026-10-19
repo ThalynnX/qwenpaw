@@ -30,6 +30,10 @@ type SkillActionResult =
       };
     };
 
+function currentAgentId() {
+  return useAgentStore.getState().selectedAgent || "default";
+}
+
 export function useSkills() {
   const { t } = useTranslation();
   const { selectedAgent, agents } = useAgentStore();
@@ -42,12 +46,27 @@ export function useSkills() {
   const [providerSkills, setProviderSkills] = useState<
     HarnessDiscoveredSkill[]
   >([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<{
+    agentId: string;
+    value: unknown;
+  } | null>(null);
+  const [loadedAgent, setLoadedAgent] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [importing, setImporting] = useState(false);
   const importTaskIdRef = useRef<string | null>(null);
   const importCancelReasonRef = useRef<"manual" | "timeout" | null>(null);
+  const requestGenerationRef = useRef(0);
+  const loadedAgentRef = useRef<string | null>(null);
   const { message } = useAppMessage();
+
+  const ownsCurrentAgent = useCallback(
+    () =>
+      loadedAgent !== null &&
+      loadedAgentRef.current === loadedAgent &&
+      currentAgentId() === loadedAgent,
+    [loadedAgent],
+  );
 
   const handleError = useCallback(
     (error: unknown, defaultMsg: string): boolean => {
@@ -72,56 +91,111 @@ export function useSkills() {
     [t],
   );
 
-  const loadProviderSkills = useCallback(async () => {
-    if (selectedBackend === "qwenpaw" || !canDiscoverProviderSkills) {
+  const loadSkillsForAgent = useCallback(
+    async (
+      requestedAgent: string,
+      requestedBackend: string,
+      discoverProviderSkills: boolean,
+      hardRefresh = false,
+    ) => {
+      if (currentAgentId() !== requestedAgent) return;
+      const generation = ++requestGenerationRef.current;
+      const isCurrentRequest = () =>
+        generation === requestGenerationRef.current &&
+        currentAgentId() === requestedAgent;
+
+      loadedAgentRef.current = null;
+      setLoadedAgent(null);
+      setLoading(true);
+      setLoadError(null);
       setProviderSkills([]);
-      return;
-    }
-    try {
-      const result = await harnessApi.listSkills(selectedBackend);
-      setProviderSkills(result.skills);
-      if (result.message) {
-        message.warning(result.message);
+      try {
+        if (hardRefresh) invalidateSkillCache({ agentId: requestedAgent });
+        const data = hardRefresh
+          ? await api.refreshSkills(requestedAgent)
+          : await api.listSkills(requestedAgent);
+        if (!isCurrentRequest()) return;
+
+        let discoveredSkills: HarnessDiscoveredSkill[] = [];
+        if (requestedBackend !== "qwenpaw" && discoverProviderSkills) {
+          try {
+            const result = await harnessApi.listSkills(requestedBackend);
+            if (!isCurrentRequest()) return;
+            discoveredSkills = result.skills;
+            if (result.message) message.warning(result.message);
+          } catch (providerError) {
+            if (!isCurrentRequest()) return;
+            console.warn("Failed to discover Provider Skills:", providerError);
+          }
+        }
+
+        if (!isCurrentRequest()) return;
+        setSkills(data || []);
+        setProviderSkills(discoveredSkills);
+        loadedAgentRef.current = requestedAgent;
+        setLoadedAgent(requestedAgent);
+      } catch (loadError) {
+        if (!isCurrentRequest()) return;
+        console.error(
+          t(hardRefresh ? "skills.refreshFailed" : "skills.loadFailed"),
+          loadError,
+        );
+        setLoadError({
+          agentId: requestedAgent,
+          value:
+            loadError instanceof Error
+              ? loadError
+              : new Error(t("skills.loadFailed")),
+        });
+        message.error(
+          t(hardRefresh ? "skills.refreshFailed" : "skills.loadFailed"),
+        );
+      } finally {
+        if (isCurrentRequest()) setLoading(false);
       }
-    } catch (error) {
-      console.warn("Failed to discover Provider Skills:", error);
-      setProviderSkills([]);
-    }
-  }, [canDiscoverProviderSkills, message, selectedBackend]);
+    },
+    [message, t],
+  );
 
-  const fetchSkills = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await api.listSkills(selectedAgent);
-      setSkills(data || []);
-    } catch (error) {
-      console.error(t("skills.loadFailed"), error);
-      message.error(t("skills.loadFailed"));
-    } finally {
-      await loadProviderSkills();
-      setLoading(false);
-    }
-  }, [loadProviderSkills, message, selectedAgent, t]);
+  const fetchSkills = useCallback(
+    () =>
+      loadSkillsForAgent(
+        selectedAgent || "default",
+        selectedBackend,
+        canDiscoverProviderSkills,
+      ),
+    [
+      canDiscoverProviderSkills,
+      loadSkillsForAgent,
+      selectedAgent,
+      selectedBackend,
+    ],
+  );
 
-  const hardRefresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      invalidateSkillCache({ agentId: selectedAgent });
-      const data = await api.refreshSkills(selectedAgent);
-      setSkills(data || []);
-      await loadProviderSkills();
-    } catch (error) {
-      console.error(t("skills.refreshFailed"), error);
-      message.error(t("skills.refreshFailed"));
-    } finally {
-      setLoading(false);
-    }
-  }, [loadProviderSkills, message, selectedAgent, t]);
+  const hardRefresh = useCallback(
+    () =>
+      loadSkillsForAgent(
+        selectedAgent || "default",
+        selectedBackend,
+        canDiscoverProviderSkills,
+        true,
+      ),
+    [
+      canDiscoverProviderSkills,
+      loadSkillsForAgent,
+      selectedAgent,
+      selectedBackend,
+    ],
+  );
 
   // Invalidate cache when agent changes
   useEffect(() => {
     invalidateSkillCache({ agentId: selectedAgent });
     void fetchSkills();
+    return () => {
+      requestGenerationRef.current += 1;
+      loadedAgentRef.current = null;
+    };
   }, [selectedAgent, fetchSkills]);
 
   useEffect(
@@ -140,6 +214,9 @@ export function useSkills() {
     config?: Record<string, unknown>,
     enable?: boolean,
   ): Promise<SkillActionResult> => {
+    if (!ownsCurrentAgent()) {
+      return { success: false };
+    }
     try {
       const result = await api.createSkill(name, content, config, enable);
       message.success(t("skills.createdSuccessfully"));
@@ -162,6 +239,9 @@ export function useSkills() {
     targetName?: string,
     renameMap?: Record<string, string>,
   ): Promise<SkillActionResult> => {
+    if (!ownsCurrentAgent()) {
+      return { success: false };
+    }
     try {
       setUploading(true);
       const result = await api.uploadSkill(file, {
@@ -200,6 +280,9 @@ export function useSkills() {
     input: string,
     targetName?: string,
   ): Promise<SkillActionResult> => {
+    if (!ownsCurrentAgent()) {
+      return { success: false };
+    }
     const text = (input || "").trim();
     if (!text) {
       message.warning(t("skills.provideUrl"));
@@ -295,6 +378,7 @@ export function useSkills() {
   }, [importing]);
 
   const toggleEnabled = async (skill: SkillSpec) => {
+    if (!ownsCurrentAgent()) return false;
     try {
       if (skill.enabled) {
         await api.disableSkill(skill.name);
@@ -323,6 +407,7 @@ export function useSkills() {
   };
 
   const deleteSkill = async (skill: SkillSpec) => {
+    if (!ownsCurrentAgent()) return false;
     const confirmed = await new Promise<boolean>((resolve) => {
       Modal.confirm({
         title: t("common.confirm"),
@@ -352,10 +437,15 @@ export function useSkills() {
     return false;
   };
 
+  const currentAgent = selectedAgent || "default";
+  const error = loadError?.agentId === currentAgent ? loadError.value : null;
+
   return {
     skills,
     providerSkills,
     loading,
+    error,
+    ready: !loading && error === null && loadedAgent === currentAgent,
     uploading,
     importing,
     createSkill,
