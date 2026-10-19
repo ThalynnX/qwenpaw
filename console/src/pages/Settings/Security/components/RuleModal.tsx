@@ -121,6 +121,7 @@ export function RuleModal({
             options={toolOptions}
             placeholder={t("security.rules.toolsPlaceholder")}
             allowClear
+            style={{ width: "100%" }}
           />
         </SettingsField>
         <SettingsField label={t("security.rules.params")} name="params">
@@ -128,6 +129,7 @@ export function RuleModal({
             mode="tags"
             placeholder={t("security.rules.paramsPlaceholder")}
             allowClear
+            style={{ width: "100%" }}
           />
         </SettingsField>
         <SettingsField
@@ -136,6 +138,7 @@ export function RuleModal({
         >
           <Select
             options={SEVERITY_OPTIONS.map((s) => ({ label: s, value: s }))}
+            style={{ width: "100%" }}
           />
         </SettingsField>
         <SettingsField
@@ -147,6 +150,7 @@ export function RuleModal({
               label: t(`security.rules.categories.${c}`, { defaultValue: c }),
               value: c,
             }))}
+            style={{ width: "100%" }}
           />
         </SettingsField>
         <SettingsField
