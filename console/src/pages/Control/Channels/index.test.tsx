@@ -376,6 +376,50 @@ describe("ChannelsPage load recovery", () => {
     );
   });
 
+  it("removes persisted LiveKit fields from the final dev SIP PUT", async () => {
+    mocks.useChannels.mockReturnValue(
+      channelsState({
+        channels: {
+          sip: {
+            enabled: false,
+            isBuiltin: true,
+            sip_mode: "livekit",
+            sip_transport: "TLS",
+            livekit_url: "wss://persisted.example.test",
+            livekit_api_key: "persisted-key",
+            livekit_api_secret: "persisted-secret",
+            livekit_sip_trunk_id: "persisted-trunk",
+            livekit_room_name: "persisted-room",
+            livekit_output_sample_rate: 16000,
+          },
+        },
+        orderedKeys: ["sip"],
+      }),
+    );
+    renderWithProviders(<ChannelsPage />);
+    fireEvent.click(screen.getByRole("button", { name: "available-sip" }));
+
+    await mocks.channelDrawerProps?.onSubmit({
+      sip_mode: "dev",
+      sip_transport: "TCP",
+      bot_prefix: "adjacent-sentinel",
+    });
+
+    expect(mocks.updateChannelConfig).toHaveBeenCalledWith(
+      "sip",
+      expect.objectContaining({
+        sip_mode: "dev",
+        sip_transport: "TCP",
+        bot_prefix: "adjacent-sentinel",
+      }),
+      "agent-a",
+    );
+    const payload = mocks.updateChannelConfig.mock.calls[0][1];
+    expect(
+      Object.keys(payload).filter((key) => key.startsWith("livekit_")),
+    ).toEqual([]);
+  });
+
   it.each(["agent-b", "agent-a"])(
     "invalidates agent A's pending conflict proposal after switching through %s",
     async (finalAgent) => {
