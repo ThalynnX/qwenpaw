@@ -35,6 +35,8 @@ export type SkillMutationOwner = {
   generation: number;
 };
 
+type SkillMutationToken = SkillMutationOwner & { token: number };
+
 function currentAgentId() {
   return useAgentStore.getState().selectedAgent || "default";
 }
@@ -63,16 +65,12 @@ export function useSkills() {
   const importCancelReasonRef = useRef<"manual" | "timeout" | null>(null);
   const requestGenerationRef = useRef(0);
   const mutationGenerationRef = useRef(0);
+  const mutationTokenRef = useRef(0);
+  const activeMutationTokensRef = useRef(new Set<number>());
+  const uploadTokenRef = useRef<number | null>(null);
+  const importTokenRef = useRef<number | null>(null);
   const loadedAgentRef = useRef<string | null>(null);
   const { message } = useAppMessage();
-
-  const ownsCurrentAgent = useCallback(
-    () =>
-      loadedAgent !== null &&
-      loadedAgentRef.current === loadedAgent &&
-      currentAgentId() === loadedAgent,
-    [loadedAgent],
-  );
 
   const captureMutationOwner = useCallback((): SkillMutationOwner | null => {
     const agentId = currentAgentId();
@@ -92,6 +90,25 @@ export function useSkills() {
       owner.agentId === currentAgentId() &&
       loadedAgentRef.current === owner.agentId
     );
+  }, []);
+
+  const beginMutation = useCallback((): SkillMutationToken | null => {
+    const owner = captureMutationOwner();
+    if (!owner) return null;
+    const token = ++mutationTokenRef.current;
+    activeMutationTokensRef.current.add(token);
+    return { ...owner, token };
+  }, [captureMutationOwner]);
+
+  const ownsMutation = useCallback(
+    (mutation: SkillMutationToken) =>
+      activeMutationTokensRef.current.has(mutation.token) &&
+      ownsMutationOwner(mutation),
+    [ownsMutationOwner],
+  );
+
+  const finishMutation = useCallback((mutation: SkillMutationToken) => {
+    activeMutationTokensRef.current.delete(mutation.token);
   }, []);
 
   const handleError = useCallback(
@@ -217,6 +234,11 @@ export function useSkills() {
   // Invalidate cache when agent changes
   useEffect(() => {
     mutationGenerationRef.current += 1;
+    activeMutationTokensRef.current.clear();
+    uploadTokenRef.current = null;
+    importTokenRef.current = null;
+    setUploading(false);
+    setImporting(false);
     invalidateSkillCache({ agentId: selectedAgent });
     void fetchSkills();
     return () => {
@@ -241,23 +263,34 @@ export function useSkills() {
     config?: Record<string, unknown>,
     enable?: boolean,
   ): Promise<SkillActionResult> => {
-    if (!ownsCurrentAgent()) {
-      return { success: false };
-    }
+    const mutation = beginMutation();
+    if (!mutation) return { success: false };
     try {
-      const result = await api.createSkill(name, content, config, enable);
+      const result = await api.createSkill(
+        name,
+        content,
+        config,
+        enable,
+        mutation.agentId,
+      );
+      if (!ownsMutation(mutation)) return { success: false };
       message.success(t("skills.createdSuccessfully"));
-      invalidateSkillCache({ agentId: selectedAgent }); // Clear cache after mutation
+      invalidateSkillCache({ agentId: mutation.agentId });
       await fetchSkills();
+      if (!ownsMutation(mutation)) return { success: false };
       await checkScanWarnings(result.name);
+      if (!ownsMutation(mutation)) return { success: false };
       return { success: true, name: result.name };
     } catch (error) {
+      if (!ownsMutation(mutation)) return { success: false };
       const detail = parseErrorDetail(error);
       if (detail?.suggested_name) {
         return { success: false, conflict: detail };
       }
       handleError(error, t("skills.saveFailed"));
       return { success: false };
+    } finally {
+      finishMutation(mutation);
     }
   };
 
@@ -266,32 +299,41 @@ export function useSkills() {
     targetName?: string,
     renameMap?: Record<string, string>,
   ): Promise<SkillActionResult> => {
-    if (!ownsCurrentAgent()) {
-      return { success: false };
-    }
+    const mutation = beginMutation();
+    if (!mutation) return { success: false };
     try {
+      uploadTokenRef.current = mutation.token;
       setUploading(true);
-      const result = await api.uploadSkill(file, {
-        enable: true,
-        target_name: targetName,
-        rename_map: renameMap,
-      });
+      const result = await api.uploadSkill(
+        file,
+        {
+          enable: true,
+          target_name: targetName,
+          rename_map: renameMap,
+        },
+        mutation.agentId,
+      );
+      if (!ownsMutation(mutation)) return { success: false };
       if (result?.count > 0) {
         message.success(
           t("skills.uploadSuccess") + `: ${result.imported.join(", ")}`,
         );
-        invalidateSkillCache({ agentId: selectedAgent }); // Clear cache after mutation
+        invalidateSkillCache({ agentId: mutation.agentId });
         await fetchSkills();
+        if (!ownsMutation(mutation)) return { success: false };
         for (const name of result.imported) {
           await checkScanWarnings(name);
+          if (!ownsMutation(mutation)) return { success: false };
         }
       }
       if (!result?.count) {
         message.warning(t("skills.uploadNoChange"));
       }
       await fetchSkills();
+      if (!ownsMutation(mutation)) return { success: false };
       return { success: true, imported: result?.imported || [] };
     } catch (error) {
+      if (!ownsMutation(mutation)) return { success: false };
       const detail = parseErrorDetail(error);
       if (Array.isArray(detail?.conflicts) && detail.conflicts.length > 0) {
         return { success: false, conflict: detail };
@@ -299,7 +341,11 @@ export function useSkills() {
       handleError(error, t("skills.uploadFailed"));
       return { success: false };
     } finally {
-      setUploading(false);
+      if (uploadTokenRef.current === mutation.token && ownsMutation(mutation)) {
+        uploadTokenRef.current = null;
+        setUploading(false);
+      }
+      finishMutation(mutation);
     }
   };
 
@@ -307,9 +353,7 @@ export function useSkills() {
     input: string,
     targetName?: string,
   ): Promise<SkillActionResult> => {
-    if (!ownsCurrentAgent()) {
-      return { success: false };
-    }
+    if (!captureMutationOwner()) return { success: false };
     const text = (input || "").trim();
     if (!text) {
       message.warning(t("skills.provideUrl"));
@@ -319,10 +363,13 @@ export function useSkills() {
       message.warning(t("skills.validUrl"));
       return { success: false };
     }
+    const mutation = beginMutation();
+    if (!mutation) return { success: false };
     const timeoutMs = 90_000;
     const pollMs = 1_000;
     const startedAt = Date.now();
     try {
+      importTokenRef.current = mutation.token;
       setImporting(true);
       importCancelReasonRef.current = null;
       const payload = {
@@ -331,10 +378,12 @@ export function useSkills() {
         target_name: targetName,
       };
       const task = await api.startHubSkillInstall(payload);
+      if (!ownsMutation(mutation)) return { success: false };
       importTaskIdRef.current = task.task_id;
 
       while (importTaskIdRef.current) {
         const status = await api.getHubSkillInstallStatus(task.task_id);
+        if (!ownsMutation(mutation)) return { success: false };
 
         if (status.status === "completed" && status.result?.installed) {
           message.success(
@@ -342,8 +391,10 @@ export function useSkills() {
           );
           invalidateSkillCache({ agentId: selectedAgent }); // Clear cache after mutation
           await fetchSkills();
+          if (!ownsMutation(mutation)) return { success: false };
           if (status.result.name) {
             await checkScanWarnings(status.result.name);
+            if (!ownsMutation(mutation)) return { success: false };
           }
           return { success: true, name: String(status.result.name || "") };
         }
@@ -380,19 +431,26 @@ export function useSkills() {
         if (Date.now() - startedAt >= timeoutMs) {
           importCancelReasonRef.current = "timeout";
           await api.cancelHubSkillInstall(task.task_id);
+          if (!ownsMutation(mutation)) return { success: false };
         }
 
         await new Promise((resolve) => window.setTimeout(resolve, pollMs));
+        if (!ownsMutation(mutation)) return { success: false };
       }
 
       return { success: false };
     } catch (error) {
+      if (!ownsMutation(mutation)) return { success: false };
       handleError(error, t("skills.importFailed"));
       return { success: false };
     } finally {
-      importTaskIdRef.current = null;
-      importCancelReasonRef.current = null;
-      setImporting(false);
+      if (importTokenRef.current === mutation.token && ownsMutation(mutation)) {
+        importTokenRef.current = null;
+        importTaskIdRef.current = null;
+        importCancelReasonRef.current = null;
+        setImporting(false);
+      }
+      finishMutation(mutation);
     }
   };
 
@@ -405,10 +463,12 @@ export function useSkills() {
   }, [importing]);
 
   const toggleEnabled = async (skill: SkillSpec) => {
-    if (!ownsCurrentAgent()) return false;
+    const mutation = beginMutation();
+    if (!mutation) return false;
     try {
       if (skill.enabled) {
-        await api.disableSkill(skill.name);
+        await api.disableSkill(skill.name, mutation.agentId);
+        if (!ownsMutation(mutation)) return false;
         setSkills((prev) =>
           prev.map((s) =>
             s.name === skill.name ? { ...s, enabled: false } : s,
@@ -416,7 +476,8 @@ export function useSkills() {
         );
         message.success(t("skills.disabledSuccessfully"));
       } else {
-        await api.enableSkill(skill.name);
+        await api.enableSkill(skill.name, mutation.agentId);
+        if (!ownsMutation(mutation)) return false;
         setSkills((prev) =>
           prev.map((s) =>
             s.name === skill.name ? { ...s, enabled: true } : s,
@@ -424,12 +485,16 @@ export function useSkills() {
         );
         message.success(t("skills.enabledSuccessfully"));
         await checkScanWarnings(skill.name);
+        if (!ownsMutation(mutation)) return false;
       }
-      invalidateSkillCache({ agentId: selectedAgent }); // Clear cache after mutation
+      invalidateSkillCache({ agentId: mutation.agentId });
       return true;
     } catch (error) {
+      if (!ownsMutation(mutation)) return false;
       handleError(error, t("skills.operationFailed"));
       return false;
+    } finally {
+      finishMutation(mutation);
     }
   };
 
@@ -449,20 +514,24 @@ export function useSkills() {
     });
 
     if (!confirmed || !ownsMutationOwner(owner)) return false;
+    const mutation = beginMutation();
+    if (!mutation) return false;
 
     try {
       const result = await api.deleteSkill(skill.name, owner.agentId);
-      if (!ownsMutationOwner(owner)) return false;
+      if (!ownsMutation(mutation)) return false;
       if (result.deleted) {
         message.success(t("skills.deleteSuccess"));
         invalidateSkillCache({ agentId: owner.agentId });
         await fetchSkills();
-        return ownsMutationOwner(owner);
+        return ownsMutation(mutation);
       }
     } catch (error) {
-      if (!ownsMutationOwner(owner)) return false;
+      if (!ownsMutation(mutation)) return false;
       console.error(t("skills.deleteFailed"), error);
       message.error(t("skills.deleteFailed"));
+    } finally {
+      finishMutation(mutation);
     }
     return false;
   };

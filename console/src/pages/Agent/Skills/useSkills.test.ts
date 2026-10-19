@@ -411,6 +411,100 @@ describe("useSkills", () => {
     expect(modalConfirmMock).not.toHaveBeenCalled();
   });
 
+  it.each(["create", "upload", "toggle", "delete"] as const)(
+    "does not publish a late agent A %s result into agent B",
+    async (actionName) => {
+      agentState.agents = [
+        { id: "agent-1", backend: "qwenpaw" },
+        { id: "agent-2", backend: "qwenpaw" },
+      ];
+      apiMocks.listSkills.mockResolvedValue([]);
+      const operation = deferred<unknown>();
+      if (actionName === "create") {
+        apiMocks.createSkill.mockReturnValue(operation.promise);
+      } else if (actionName === "upload") {
+        apiMocks.uploadSkill.mockReturnValue(operation.promise);
+      } else if (actionName === "toggle") {
+        apiMocks.enableSkill.mockReturnValue(operation.promise);
+      } else {
+        apiMocks.deleteSkill.mockReturnValue(operation.promise);
+        modalConfirmMock.mockImplementation((options: { onOk: () => void }) =>
+          options.onOk(),
+        );
+      }
+      const { result, rerender } = renderSkillsHook();
+      await waitFor(() => expect(result.current.ready).toBe(true));
+
+      let pending: Promise<unknown>;
+      act(() => {
+        if (actionName === "create") {
+          pending = result.current.createSkill("same-name", "content");
+        } else if (actionName === "upload") {
+          pending = result.current.uploadSkill(new File([], "skill.zip"));
+        } else if (actionName === "toggle") {
+          pending = result.current.toggleEnabled(
+            makeSkill({ name: "same-name", enabled: false }),
+          );
+        } else {
+          pending = result.current.deleteSkill(
+            makeSkill({ name: "same-name" }),
+          );
+        }
+      });
+
+      agentState.selectedAgent = "agent-2";
+      rerender();
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      vi.clearAllMocks();
+      await act(async () => {
+        if (actionName === "create") {
+          operation.resolve({ created: true, name: "same-name" });
+        } else if (actionName === "upload") {
+          operation.resolve({ imported: ["same-name"], count: 1 });
+        } else if (actionName === "delete") {
+          operation.resolve({ deleted: true });
+        } else {
+          operation.resolve(undefined);
+        }
+        await pending!;
+      });
+
+      expect(messageMock.success).not.toHaveBeenCalled();
+      expect(messageMock.error).not.toHaveBeenCalled();
+      expect(result.current.uploading).toBe(false);
+      expect(result.current.ready).toBe(true);
+    },
+  );
+
+  it("does not publish a late agent A mutation rejection into agent B", async () => {
+    agentState.agents = [
+      { id: "agent-1", backend: "qwenpaw" },
+      { id: "agent-2", backend: "qwenpaw" },
+    ];
+    apiMocks.listSkills.mockResolvedValue([]);
+    const operation = deferred<unknown>();
+    apiMocks.uploadSkill.mockReturnValue(operation.promise);
+    const { result, rerender } = renderSkillsHook();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+
+    let pending!: Promise<unknown>;
+    act(() => {
+      pending = result.current.uploadSkill(new File([], "skill.zip"));
+    });
+    agentState.selectedAgent = "agent-2";
+    rerender();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    vi.clearAllMocks();
+    await act(async () => {
+      operation.reject(new Error("late A failure"));
+      await pending;
+    });
+
+    expect(messageMock.error).not.toHaveBeenCalled();
+    expect(result.current.uploading).toBe(false);
+    expect(result.current.ready).toBe(true);
+  });
+
   it("createSkill success: message.success + api.createSkill called + returns {success:true, name}", async () => {
     apiMocks.createSkill.mockResolvedValue({
       created: true,
@@ -431,6 +525,7 @@ describe("useSkills", () => {
       "content",
       undefined,
       undefined,
+      "agent-1",
     );
     expect(messageMock.success).toHaveBeenCalledWith(
       "skills.createdSuccessfully",
@@ -665,7 +760,7 @@ describe("useSkills", () => {
       ok = await result.current.toggleEnabled(skill);
     });
 
-    expect(apiMocks.disableSkill).toHaveBeenCalledWith("s1");
+    expect(apiMocks.disableSkill).toHaveBeenCalledWith("s1", "agent-1");
     expect(messageMock.success).toHaveBeenCalledWith(
       "skills.disabledSuccessfully",
     );
@@ -691,7 +786,7 @@ describe("useSkills", () => {
       );
     });
 
-    expect(apiMocks.enableSkill).toHaveBeenCalledWith("s2");
+    expect(apiMocks.enableSkill).toHaveBeenCalledWith("s2", "agent-1");
     expect(messageMock.success).toHaveBeenCalledWith(
       "skills.enabledSuccessfully",
     );

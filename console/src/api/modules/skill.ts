@@ -86,6 +86,7 @@ async function _uploadZip(
     target_name?: string;
     rename_map?: Record<string, string>;
   },
+  agentId?: string,
 ): Promise<Record<string, unknown>> {
   const formData = new FormData();
   formData.append("file", file);
@@ -104,6 +105,7 @@ async function _uploadZip(
   const url = getApiUrl(`${endpoint}${qs ? `?${qs}` : ""}`);
 
   const headers = buildAuthHeaders();
+  if (agentId) headers.set("X-Agent-Id", agentId);
 
   const response = await fetch(url, {
     method: "POST",
@@ -214,8 +216,10 @@ export const skillApi = {
     content: string,
     config?: Record<string, unknown>,
     enable?: boolean,
+    agentId?: string,
   ) =>
     request<{ created: boolean; name: string }>("/skills", {
+      headers: agentId ? new Headers({ "X-Agent-Id": agentId }) : undefined,
       method: "POST",
       body: JSON.stringify({
         name: skillName,
@@ -271,13 +275,15 @@ export const skillApi = {
       body: JSON.stringify(payload),
     }),
 
-  enableSkill: (skillName: string) =>
+  enableSkill: (skillName: string, agentId?: string) =>
     request<void>(`/skills/${encodeURIComponent(skillName)}/enable`, {
+      headers: agentId ? new Headers({ "X-Agent-Id": agentId }) : undefined,
       method: "POST",
     }),
 
-  disableSkill: (skillName: string) =>
+  disableSkill: (skillName: string, agentId?: string) =>
     request<void>(`/skills/${encodeURIComponent(skillName)}/disable`, {
+      headers: agentId ? new Headers({ "X-Agent-Id": agentId }) : undefined,
       method: "POST",
     }),
 
@@ -614,8 +620,9 @@ export const skillApi = {
       target_name?: string;
       rename_map?: Record<string, string>;
     },
+    agentId?: string,
   ) =>
-    _uploadZip("/skills/upload", file, options) as Promise<{
+    _uploadZip("/skills/upload", file, options, agentId) as Promise<{
       imported: string[];
       count: number;
       enabled: boolean;

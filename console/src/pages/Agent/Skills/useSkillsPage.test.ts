@@ -364,7 +364,7 @@ describe("useSkillsPage — toggle event bubbling (#3504)", () => {
     // stopPropagation must be called to prevent event bubbling to card click
     expect(stopPropagation).toHaveBeenCalledTimes(1);
     // The underlying toggleEnabled should have been called (disableSkill for enabled skill)
-    expect(apiMocks.disableSkill).toHaveBeenCalledWith("toggle-me");
+    expect(apiMocks.disableSkill).toHaveBeenCalledWith("toggle-me", "agent-1");
   });
 
   it("handleDelete calls e?.stopPropagation() when event is provided", async () => {

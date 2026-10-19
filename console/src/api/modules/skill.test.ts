@@ -175,8 +175,15 @@ describe("skillApi.createSkill", () => {
 
   it("sends POST with name, content, config and enable", async () => {
     vi.mocked(request).mockResolvedValue({ created: true, name: "myskill" });
-    await skillApi.createSkill("myskill", "# content", { key: "val" }, true);
+    await skillApi.createSkill(
+      "myskill",
+      "# content",
+      { key: "val" },
+      true,
+      "agent-1",
+    );
     expect(request).toHaveBeenCalledWith("/skills", {
+      headers: new Headers({ "X-Agent-Id": "agent-1" }),
       method: "POST",
       body: JSON.stringify({
         name: "myskill",
@@ -196,8 +203,9 @@ describe("skillApi.enableSkill", () => {
 
   it("sends POST to /skills/<encoded>/enable", async () => {
     vi.mocked(request).mockResolvedValue(undefined);
-    await skillApi.enableSkill("my skill");
+    await skillApi.enableSkill("my skill", "agent-1");
     expect(request).toHaveBeenCalledWith("/skills/my%20skill/enable", {
+      headers: new Headers({ "X-Agent-Id": "agent-1" }),
       method: "POST",
     });
   });
@@ -208,8 +216,9 @@ describe("skillApi.disableSkill", () => {
 
   it("sends POST to /skills/<encoded>/disable", async () => {
     vi.mocked(request).mockResolvedValue(undefined);
-    await skillApi.disableSkill("special/skill");
+    await skillApi.disableSkill("special/skill", "agent-1");
     expect(request).toHaveBeenCalledWith("/skills/special%2Fskill/disable", {
+      headers: new Headers({ "X-Agent-Id": "agent-1" }),
       method: "POST",
     });
   });
