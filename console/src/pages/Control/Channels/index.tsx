@@ -90,6 +90,7 @@ function ChannelsPage() {
 
   useLayoutEffect(() => {
     pendingCountRequestIdRef.current += 1;
+    form.resetFields();
     setDrawerOpen(false);
     setActiveKey(null);
     setDrawerAgentId(null);
@@ -135,6 +136,7 @@ function ChannelsPage() {
         key,
         channels[key] || { enabled: false, bot_prefix: "" },
       );
+      form.resetFields();
       // Migrate legacy allowlist policy to new access control fields
       const accessControlDm =
         channelConfig.access_control_dm ||
@@ -157,6 +159,7 @@ function ChannelsPage() {
   );
 
   const handleDrawerClose = () => {
+    form.resetFields();
     setDrawerOpen(false);
     setActiveKey(null);
     setDrawerAgentId(null);

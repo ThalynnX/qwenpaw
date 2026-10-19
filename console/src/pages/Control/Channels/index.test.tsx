@@ -4,25 +4,48 @@ import { fireEvent, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders } from "@/test/common_setup";
 
-const mocks = vi.hoisted(() => ({
-  fetchChannels: vi.fn(),
-  getAclAllPending: vi.fn(),
-  setChannels: vi.fn(),
-  updateChannelConfig: vi.fn(),
-  useChannels: vi.fn(),
-  aclDrawerProps: null as null | {
-    open: boolean;
-    ownerAgentId: string | null;
-    canMutate: (ownerAgentId: string) => boolean;
-    onStale: () => void;
-  },
-  pendingDrawerProps: null as null | {
-    open: boolean;
-    ownerAgentId: string | null;
-    canMutate: (ownerAgentId: string) => boolean;
-    onStale: () => void;
-  },
-}));
+const mocks = vi.hoisted(() => {
+  const formValues: Record<string, unknown> = {};
+  const formReset = vi.fn();
+  const formSet = vi.fn();
+  const formApi = {
+    resetFields: () => {
+      for (const key of Object.keys(formValues)) delete formValues[key];
+      formReset();
+    },
+    setFieldsValue: (values: Record<string, unknown>) => {
+      Object.assign(formValues, values);
+      formSet(values);
+    },
+  };
+  return {
+    fetchChannels: vi.fn(),
+    getAclAllPending: vi.fn(),
+    setChannels: vi.fn(),
+    updateChannelConfig: vi.fn(),
+    useChannels: vi.fn(),
+    formValues,
+    formReset,
+    formSet,
+    formApi,
+    channelDrawerProps: null as null | {
+      open: boolean;
+      onSubmit: (values: Record<string, unknown>) => Promise<void>;
+    },
+    aclDrawerProps: null as null | {
+      open: boolean;
+      ownerAgentId: string | null;
+      canMutate: (ownerAgentId: string) => boolean;
+      onStale: () => void;
+    },
+    pendingDrawerProps: null as null | {
+      open: boolean;
+      ownerAgentId: string | null;
+      canMutate: (ownerAgentId: string) => boolean;
+      onStale: () => void;
+    },
+  };
+});
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -30,7 +53,7 @@ vi.mock("react-i18next", () => ({
 
 vi.mock("../../../api", () => ({
   default: {
-    checkChannelConflict: vi.fn(),
+    checkChannelConflict: vi.fn(() => Promise.resolve({ conflict: false })),
     getAclAllPending: (...args: unknown[]) => mocks.getAclAllPending(...args),
     updateChannelConfig: (...args: unknown[]) =>
       mocks.updateChannelConfig(...args),
@@ -61,7 +84,9 @@ vi.mock("@/components/interaction/Cascade", () => ({
 }));
 
 vi.mock("@agentscope-ai/design", () => ({
-  Form: { useForm: () => [{ setFieldsValue: vi.fn() }] },
+  Form: {
+    useForm: () => [mocks.formApi],
+  },
 }));
 
 vi.mock("antd", () => ({
@@ -95,8 +120,10 @@ vi.mock("./components", () => ({
     channelKey: string;
     onClick: () => void;
   }) => <button onClick={onClick}>{`channel-${channelKey}`}</button>,
-  ChannelDrawer: ({ open }: { open: boolean }) =>
-    open ? <div data-testid="channel-drawer" /> : null,
+  ChannelDrawer: (props: NonNullable<typeof mocks.channelDrawerProps>) => {
+    mocks.channelDrawerProps = props;
+    return props.open ? <div data-testid="channel-drawer" /> : null;
+  },
   PendingApprovalsDrawer: (
     props: NonNullable<typeof mocks.pendingDrawerProps>,
   ) => {
@@ -130,6 +157,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.aclDrawerProps = null;
   mocks.pendingDrawerProps = null;
+  mocks.channelDrawerProps = null;
+  for (const key of Object.keys(mocks.formValues)) {
+    delete mocks.formValues[key];
+  }
   mocks.getAclAllPending.mockResolvedValue([]);
   mocks.useChannels.mockReturnValue(channelsState());
 });
@@ -246,5 +277,84 @@ describe("ChannelsPage load recovery", () => {
     expect(mocks.pendingDrawerProps?.ownerAgentId).toBe("agent-b");
     expect(screen.getByTestId("acl-drawer")).toBeInTheDocument();
     expect(screen.getByTestId("pending-drawer")).toBeInTheDocument();
+  });
+
+  it("replaces channel drafts when switching agents without leaking secrets", async () => {
+    let currentAgent = "agent-a";
+    mocks.useChannels.mockReturnValue(
+      channelsState({
+        agentId: currentAgent,
+        channels: {
+          dingtalk: {
+            enabled: true,
+            isBuiltin: true,
+            client_id: "agent-a-client",
+            client_secret: "agent-a-secret",
+            app_secret: "agent-a-app-secret",
+            bot_token: "agent-a-bot-token",
+            password: "agent-a-password",
+          },
+        },
+        orderedKeys: ["dingtalk"],
+        canMutate: (ownerAgentId: string) => ownerAgentId === currentAgent,
+      }),
+    );
+    const view = renderWithProviders(<ChannelsPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "channel-dingtalk" }));
+    expect(mocks.formValues).toMatchObject({
+      client_secret: "agent-a-secret",
+      app_secret: "agent-a-app-secret",
+      bot_token: "agent-a-bot-token",
+      password: "agent-a-password",
+    });
+
+    currentAgent = "agent-b";
+    mocks.useChannels.mockReturnValue(
+      channelsState({
+        agentId: currentAgent,
+        loading: true,
+        ready: false,
+        canMutate: (ownerAgentId: string) => ownerAgentId === currentAgent,
+      }),
+    );
+    view.rerender(<ChannelsPage />);
+    expect(mocks.formValues).toEqual({});
+
+    mocks.useChannels.mockReturnValue(
+      channelsState({
+        agentId: currentAgent,
+        channels: {
+          dingtalk: {
+            enabled: true,
+            isBuiltin: true,
+            client_id: "agent-b-client",
+          },
+        },
+        orderedKeys: ["dingtalk"],
+        canMutate: (ownerAgentId: string) => ownerAgentId === currentAgent,
+      }),
+    );
+    view.rerender(<ChannelsPage />);
+    fireEvent.click(screen.getByRole("button", { name: "channel-dingtalk" }));
+
+    expect(mocks.formValues).toMatchObject({ client_id: "agent-b-client" });
+    expect(mocks.formValues).not.toHaveProperty("client_secret");
+    expect(mocks.formValues).not.toHaveProperty("app_secret");
+    expect(mocks.formValues).not.toHaveProperty("bot_token");
+    expect(mocks.formValues).not.toHaveProperty("password");
+
+    await mocks.channelDrawerProps?.onSubmit({ ...mocks.formValues });
+    expect(mocks.updateChannelConfig).toHaveBeenCalledOnce();
+    expect(mocks.updateChannelConfig).toHaveBeenCalledWith(
+      "dingtalk",
+      expect.not.objectContaining({
+        client_secret: expect.anything(),
+        app_secret: expect.anything(),
+        bot_token: expect.anything(),
+        password: expect.anything(),
+      }),
+      "agent-b",
+    );
   });
 });
