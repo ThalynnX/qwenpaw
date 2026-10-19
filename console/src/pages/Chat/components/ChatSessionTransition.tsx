@@ -5,6 +5,7 @@ import {
   type ReactNode,
 } from "react";
 import { motion, useReducedMotion } from "motion/react";
+import { Button } from "antd";
 import { useTranslation } from "react-i18next";
 import type { createSdkSessionAdapter } from "../sdkSessionAdapter";
 import styles from "./ChatSessionTransition.module.less";
@@ -30,6 +31,10 @@ export function ChatSessionTransition(props: Props) {
   useLayoutEffect(() => {
     if (surface.current) surface.current.inert = !ready;
   }, [ready]);
+  const retry = () => {
+    if (!props.sessionId) return;
+    void props.adapter.api.getSession(props.sessionId).catch(() => undefined);
+  };
   return (
     <div className={styles.container} aria-busy={!ready && !failed}>
       <motion.div
@@ -43,8 +48,16 @@ export function ChatSessionTransition(props: Props) {
         {props.children}
       </motion.div>
       {!ready && (
-        <div className={styles.status} role={failed ? "alert" : "status"}>
-          {t(failed ? "chat.historyLoadFailed" : "common.loading")}
+        <div
+          className={`${styles.status} ${failed ? styles.statusFailed : ""}`}
+          role={failed ? "alert" : "status"}
+        >
+          <span>{t(failed ? "chat.historyLoadFailed" : "common.loading")}</span>
+          {failed && (
+            <Button size="small" type="default" onClick={retry}>
+              {t("common.retry")}
+            </Button>
+          )}
         </div>
       )}
     </div>

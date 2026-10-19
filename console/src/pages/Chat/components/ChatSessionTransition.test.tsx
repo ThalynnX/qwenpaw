@@ -1,4 +1,5 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import { createSdkSessionAdapter } from "../sdkSessionAdapter";
 import {
@@ -39,4 +40,41 @@ it("hides the SDK surface and welcome until hydration completes", async () => {
   await waitFor(() => expect(surface).toBeVisible());
   expect(screen.getByText("Welcome")).toBeVisible();
   expect(screen.queryByRole("status")).toBeNull();
+});
+
+it("retries a failed hydration and restores the chat surface", async () => {
+  const user = userEvent.setup();
+  const session = { id: "target", name: "target", messages: [] };
+  const getSession = vi
+    .fn()
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockResolvedValueOnce(session);
+  const adapter = createSdkSessionAdapter({
+    getSession,
+    getSessionList: async () => [],
+    updateSession: async () => [],
+    removeSession: async () => [],
+    createSession: async () => ({ session, sessions: [session] }),
+  });
+  render(
+    <ChatSessionTransition adapter={adapter} sessionId="target">
+      <div>Recovered conversation</div>
+    </ChatSessionTransition>,
+  );
+
+  await act(async () => {
+    await expect(adapter.api.getSession("target")).rejects.toThrow("offline");
+  });
+
+  const surface = screen.getByText("Recovered conversation").parentElement!;
+  expect(surface.inert).toBe(true);
+  expect(surface).not.toBeVisible();
+  expect(screen.getByRole("alert")).toHaveTextContent("chat.historyLoadFailed");
+
+  await user.click(screen.getByRole("button", { name: "common.retry" }));
+
+  await waitFor(() => expect(getSession).toHaveBeenCalledTimes(2));
+  expect(surface.inert).toBe(false);
+  await waitFor(() => expect(surface).toBeVisible());
+  expect(screen.queryByRole("alert")).toBeNull();
 });
