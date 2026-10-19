@@ -64,6 +64,7 @@ describe("useImportJob", () => {
       }),
     );
     vi.mocked(portabilityImportApi.current).mockResolvedValue(null);
+    vi.mocked(portabilityImportApi.sources).mockResolvedValue([]);
     vi.mocked(portabilityImportApi.streamEvents).mockReturnValue(
       new Promise(() => undefined),
     );
@@ -164,6 +165,70 @@ describe("useImportJob", () => {
     expect(result.current.error).toBe("");
     expect(result.current.loading).toBe(false);
   });
+
+  it.each(["success", "failure"])(
+    "keeps Agent B detection authoritative after late Agent A %s",
+    async (lateOutcome) => {
+      const agentA =
+        deferred<Awaited<ReturnType<typeof portabilityImportApi.sources>>>();
+      let agentBAttempts = 0;
+      vi.mocked(portabilityImportApi.sources).mockImplementation((agentId) => {
+        if (agentId === "agent-a") return agentA.promise;
+        agentBAttempts += 1;
+        return agentBAttempts === 1
+          ? Promise.reject(new Error("Agent B unavailable"))
+          : Promise.resolve([
+              { source: "qoder", name: "Agent B Qoder", detected: true },
+            ]);
+      });
+      const { result, rerender } = renderHook(() => useImportJob());
+
+      let agentARequest!: ReturnType<typeof result.current.detect>;
+      await act(async () => {
+        agentARequest = result.current.detect();
+        await Promise.resolve();
+      });
+      selectedAgent = "agent-b";
+      rerender();
+
+      expect(result.current.sources).toEqual([]);
+      expect(result.current.loading).toBe(true);
+      expect(result.current.error).toBe("");
+      expect(result.current.detectError).toBe("");
+      await act(async () => {
+        await result.current.detect().catch(() => undefined);
+      });
+      expect(result.current.sources).toEqual([]);
+      expect(result.current.detectError).toBe("Agent B unavailable");
+      expect(result.current.loading).toBe(false);
+      expect(portabilityImportApi.create).not.toHaveBeenCalled();
+
+      await act(async () => {
+        await result.current.detect();
+      });
+      expect(result.current.sources).toEqual([
+        { source: "qoder", name: "Agent B Qoder", detected: true },
+      ]);
+      expect(result.current.detectError).toBe("");
+
+      await act(async () => {
+        if (lateOutcome === "success") {
+          agentA.resolve([
+            { source: "codex", name: "Late Agent A", detected: true },
+          ]);
+          await agentARequest;
+        } else {
+          agentA.reject(new Error("Late Agent A failure"));
+          await agentARequest.catch(() => undefined);
+        }
+      });
+      expect(result.current.sources).toEqual([
+        { source: "qoder", name: "Agent B Qoder", detected: true },
+      ]);
+      expect(result.current.detectError).toBe("");
+      expect(portabilityImportApi.create).not.toHaveBeenCalled();
+    },
+  );
 
   it("starts and retries only the currently selected agent's job", async () => {
     vi.mocked(portabilityImportApi.retry).mockImplementation(

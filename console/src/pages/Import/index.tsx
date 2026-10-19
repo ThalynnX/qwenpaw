@@ -195,6 +195,7 @@ function ImportWorkflow() {
     selectedAgent,
     loading,
     error,
+    detectError,
     detect,
     scan,
     start,
@@ -243,14 +244,28 @@ function ImportWorkflow() {
     void detect().catch(() => undefined);
   }, [detect]);
   useEffect(() => {
-    if (!job && sources.length && !sourceSelections[selectedAgent]) {
+    if (
+      !job &&
+      !loading &&
+      !detectError &&
+      sources.length &&
+      !sourceSelections[selectedAgent]
+    ) {
       updateSources(() =>
         sources
           .filter((source) => source.detected)
           .map((source) => source.source),
       );
     }
-  }, [job, selectedAgent, sourceSelections, sources, updateSources]);
+  }, [
+    detectError,
+    job,
+    loading,
+    selectedAgent,
+    sourceSelections,
+    sources,
+    updateSources,
+  ]);
   useEffect(() => {
     if (
       job?.state !== "awaiting_selection" ||
@@ -286,8 +301,7 @@ function ImportWorkflow() {
       ),
   );
   const isCancelling = job?.state === "cancelling";
-  const sourceDetectionFailed =
-    !job && !loading && Boolean(error) && !sources.length;
+  const sourceDetectionFailed = !job && Boolean(detectError);
   const percent = useMemo(() => completion(job?.providers ?? []), [job]);
 
   const updateSelection = (
@@ -521,7 +535,7 @@ function ImportWorkflow() {
           <Alert
             type="error"
             showIcon
-            message={error}
+            message={sourceDetectionFailed ? detectError : error}
             action={
               sourceDetectionFailed ? (
                 <Button onClick={() => void detect().catch(() => undefined)}>
