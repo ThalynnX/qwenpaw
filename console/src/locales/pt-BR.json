@@ -3509,7 +3509,7 @@
       "asFile": "Anexar como arquivo",
       "characters": "{{count}} caracteres"
     },
-    "historyLoadFailed": "Não foi possível carregar a conversa. Abra-a novamente.",
+    "historyLoadFailed": "Não foi possível carregar a conversa. Tente novamente.",
     "newTask": "Nova tarefa",
     "newChat": "Novo chat",
     "groups": {

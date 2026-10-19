@@ -1122,7 +1122,7 @@
       "asFile": "Lampirkan sebagai file",
       "characters": "{{count}} karakter"
     },
-    "historyLoadFailed": "Percakapan tidak dapat dimuat. Silakan buka kembali.",
+    "historyLoadFailed": "Percakapan tidak dapat dimuat. Coba lagi.",
     "newTask": "Tugas baru",
     "newChat": "Chat baru",
     "groups": {

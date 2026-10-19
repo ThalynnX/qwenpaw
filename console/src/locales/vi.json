@@ -1138,7 +1138,7 @@
       "asFile": "Đính kèm tệp",
       "characters": "{{count}} ký tự"
     },
-    "historyLoadFailed": "Không thể tải cuộc trò chuyện. Vui lòng mở lại.",
+    "historyLoadFailed": "Không thể tải cuộc trò chuyện. Vui lòng thử lại.",
     "newTask": "Tác vụ mới",
     "newChat": "Cuộc trò chuyện mới",
     "groups": {

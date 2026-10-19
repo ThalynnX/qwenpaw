@@ -3250,7 +3250,7 @@
       "asFile": "ファイルとして添付",
       "characters": "{{count}} 文字"
     },
-    "historyLoadFailed": "会話を読み込めませんでした。もう一度開いてください。",
+    "historyLoadFailed": "会話を読み込めませんでした。もう一度お試しください。",
     "newTask": "新しいタスク",
     "newChat": "新しいチャット",
     "groups": {
