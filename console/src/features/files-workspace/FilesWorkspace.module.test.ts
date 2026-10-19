@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import less from "less";
 import { describe, expect, it } from "vitest";
 
 const stylesSource = readFileSync(
@@ -37,5 +38,31 @@ describe("FilesWorkspace responsive layout", () => {
     expect(desktopRule).toMatch(
       /\.documentSurface\s*\{[\s\S]*?flex:\s*1;[\s\S]*?min-width:\s*360px;/,
     );
+  });
+
+  it("keeps mobile pane controls at least 44px at the default font scale", async () => {
+    const { css } = await less.render(stylesSource, {
+      filename: join(
+        process.cwd(),
+        "src/features/files-workspace/FilesWorkspace.module.less",
+      ),
+    });
+    const controlHeight =
+      /min-height:\s*max\((\d+)px,\s*calc\(\1px \* var\(--app-font-scale\)\)\);/g;
+    const sourcePanelRule = css.match(/\.sourcePanel > header \{[^}]+\}/)?.[0];
+    const mobileSwitchRule = Array.from(
+      css.matchAll(/\.mobilePaneSwitch \{[^}]+\}/g),
+      (match) => match[0],
+    ).find((rule) => rule.includes("min-height"));
+
+    expect(sourcePanelRule).toBeDefined();
+    expect(mobileSwitchRule).toBeDefined();
+    for (const rule of [sourcePanelRule!, mobileSwitchRule!]) {
+      const baseline = Number(controlHeight.exec(rule)?.[1]);
+      controlHeight.lastIndex = 0;
+      const defaultFontScale = 1;
+      const computedMinHeight = Math.max(baseline, baseline * defaultFontScale);
+      expect(computedMinHeight).toBeGreaterThanOrEqual(44);
+    }
   });
 });
