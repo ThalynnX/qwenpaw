@@ -31,6 +31,16 @@ const job = (agentId: string, jobId = `import-${agentId}`) => ({
   logs: [],
 });
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return { promise, reject, resolve };
+}
+
 describe("useImportJob", () => {
   beforeEach(() => {
     selectedAgent = "agent-a";
@@ -96,6 +106,63 @@ describe("useImportJob", () => {
     await act(() => result.current.scan(["codex"]));
 
     expect(result.current.job?.job_id).toBe("import-agent-a");
+  });
+
+  it("ignores an older source detection response for the same agent", async () => {
+    const oldDetection =
+      deferred<Awaited<ReturnType<typeof portabilityImportApi.sources>>>();
+    vi.mocked(portabilityImportApi.sources)
+      .mockReturnValueOnce(oldDetection.promise)
+      .mockResolvedValueOnce([
+        { source: "qoder", name: "Qoder", detected: true },
+      ]);
+    const { result } = renderHook(() => useImportJob());
+
+    let oldRequest!: ReturnType<typeof result.current.detect>;
+    await act(async () => {
+      oldRequest = result.current.detect();
+      await result.current.detect();
+    });
+    expect(result.current.sources).toEqual([
+      { source: "qoder", name: "Qoder", detected: true },
+    ]);
+
+    await act(async () => {
+      oldDetection.resolve([
+        { source: "codex", name: "Codex", detected: true },
+      ]);
+      await oldRequest;
+    });
+    expect(result.current.sources).toEqual([
+      { source: "qoder", name: "Qoder", detected: true },
+    ]);
+  });
+
+  it("ignores an older source detection rejection after recovery", async () => {
+    const oldDetection =
+      deferred<Awaited<ReturnType<typeof portabilityImportApi.sources>>>();
+    vi.mocked(portabilityImportApi.sources)
+      .mockReturnValueOnce(oldDetection.promise)
+      .mockResolvedValueOnce([
+        { source: "qoder", name: "Qoder", detected: true },
+      ]);
+    const { result } = renderHook(() => useImportJob());
+
+    let oldRequest!: ReturnType<typeof result.current.detect>;
+    await act(async () => {
+      oldRequest = result.current.detect();
+      await result.current.detect();
+    });
+    await act(async () => {
+      oldDetection.reject(new Error("stale failure"));
+      await oldRequest.catch(() => undefined);
+    });
+
+    expect(result.current.sources).toEqual([
+      { source: "qoder", name: "Qoder", detected: true },
+    ]);
+    expect(result.current.error).toBe("");
+    expect(result.current.loading).toBe(false);
   });
 
   it("starts and retries only the currently selected agent's job", async () => {

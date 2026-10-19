@@ -286,6 +286,8 @@ function ImportWorkflow() {
       ),
   );
   const isCancelling = job?.state === "cancelling";
+  const sourceDetectionFailed =
+    !job && !loading && Boolean(error) && !sources.length;
   const percent = useMemo(() => completion(job?.providers ?? []), [job]);
 
   const updateSelection = (
@@ -515,7 +517,20 @@ function ImportWorkflow() {
             </span>
           </div>
         </section>
-        {error && <Alert type="error" showIcon message={error} />}
+        {error && (
+          <Alert
+            type="error"
+            showIcon
+            message={error}
+            action={
+              sourceDetectionFailed ? (
+                <Button onClick={() => void detect().catch(() => undefined)}>
+                  {t("common.retry")}
+                </Button>
+              ) : undefined
+            }
+          />
+        )}
         {job && !isDone && (
           <div className={styles.actions}>
             <Button
@@ -531,7 +546,7 @@ function ImportWorkflow() {
           </div>
         )}
 
-        {!job && (
+        {!job && !sourceDetectionFailed && (
           <section className={styles.section}>
             <div className={styles.sectionHeading}>
               <h3>

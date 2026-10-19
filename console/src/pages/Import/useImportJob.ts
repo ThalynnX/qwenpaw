@@ -78,6 +78,7 @@ export function useImportJob() {
   const selectedRef = useRef(selectedAgent);
   const mounted = useRef(true);
   const latest = useRef<ImportJobSnapshot | null>(null);
+  const detectGeneration = useRef(0);
   const view = useRef({ agentId: selectedAgent, jobId: "" });
   const controller = useRef<AbortController | null>(null);
   selectedRef.current = selectedAgent;
@@ -159,34 +160,29 @@ export function useImportJob() {
 
   const detect = useCallback(async () => {
     const agentId = selectedAgent;
+    const generation = ++detectGeneration.current;
     const idle = !view.current.jobId;
+    const isLatestDetection = () =>
+      mounted.current &&
+      selectedRef.current === agentId &&
+      detectGeneration.current === generation;
     if (idle) {
       setLoading(true);
       setError("");
     }
     try {
       const result = await portabilityImportApi.sources(agentId);
-      if (mounted.current && selectedRef.current === agentId) {
+      if (isLatestDetection()) {
         setSources(result);
       }
       return result;
     } catch (reason) {
-      if (
-        mounted.current &&
-        idle &&
-        selectedRef.current === agentId &&
-        !view.current.jobId
-      ) {
+      if (isLatestDetection() && idle && !view.current.jobId) {
         setError(message(reason));
       }
       throw reason;
     } finally {
-      if (
-        mounted.current &&
-        idle &&
-        selectedRef.current === agentId &&
-        !view.current.jobId
-      ) {
+      if (isLatestDetection() && idle && !view.current.jobId) {
         setLoading(false);
       }
     }
