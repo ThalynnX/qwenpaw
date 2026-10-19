@@ -8,8 +8,9 @@ from types import SimpleNamespace
 
 from qwenpaw.agents.acp.server import (
     _EnvelopeTracker,
-    _stop_reason_for_prompt_error,
+    _prompt_failure_stop_reason,
 )
+from qwenpaw.providers.retry_chat_model import StreamIdleTimeoutError
 from qwenpaw.schemas import MessageType, RunStatus
 
 
@@ -82,8 +83,20 @@ def test_content_moderation_returns_refusal():
         "400 data_inspection_failed: inappropriate content",
     )
 
-    assert _stop_reason_for_prompt_error(error) == "refusal"
+    assert _prompt_failure_stop_reason(error) == "refusal"
 
 
-def test_generic_prompt_error_returns_end_turn():
-    assert _stop_reason_for_prompt_error(RuntimeError("boom")) == "end_turn"
+def test_stream_idle_timeout_returns_end_turn():
+    error = StreamIdleTimeoutError("policy", 600.0)
+
+    assert _prompt_failure_stop_reason(error) == "end_turn"
+
+
+def test_client_disconnect_returns_end_turn():
+    error = ConnectionError("Connection closed")
+
+    assert _prompt_failure_stop_reason(error) == "end_turn"
+
+
+def test_generic_prompt_error_is_not_normalized():
+    assert _prompt_failure_stop_reason(RuntimeError("boom")) is None

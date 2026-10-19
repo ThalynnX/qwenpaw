@@ -1,0 +1,79 @@
+# -*- coding: utf-8 -*-
+"""Minimal ACP agent subprocess used by the fault-injection tests.
+
+The scenario is selected with ``QWENPAW_FAULT_SCENARIO``.  The module
+patches only the workspace boundary so the real ACP server, prompt loop
+and process shutdown path are exercised.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+from types import SimpleNamespace
+
+from qwenpaw.agents.acp import server
+from qwenpaw.providers.retry_chat_model import StreamIdleTimeoutError
+
+_SCENARIO = os.environ.get("QWENPAW_FAULT_SCENARIO", "ok")
+
+
+class _FaultWorkspace:
+    async def stream_query(self, request):
+        del request
+        if _SCENARIO == "moderation":
+            raise RuntimeError(
+                "400 data_inspection_failed: inappropriate content",
+            )
+        if _SCENARIO == "idle":
+            raise StreamIdleTimeoutError("policy", 600.0)
+        if _SCENARIO == "disconnect":
+            await asyncio.sleep(30)
+        yield SimpleNamespace(
+            object="content",
+            text="ok",
+            delta=False,
+            msg_id="m1",
+        )
+
+
+async def _ensure_workspace(self):
+    return _FaultWorkspace()
+
+
+async def _advertise_commands(self, session_id):
+    return None
+
+
+async def _bridge_approval_requests(
+    self,
+    session_id,
+    *,
+    poll_interval=0.25,
+):
+    del poll_interval
+    await asyncio.sleep(3600)
+
+
+async def _build_model_state(self):
+    return None
+
+
+async def _sync_session_mcp(self, session_id, mcp_servers):
+    return None
+
+
+async def _shutdown_workspace(self):
+    return None
+
+
+server.QwenPawACPAgent._ensure_workspace = _ensure_workspace
+server.QwenPawACPAgent._advertise_commands = _advertise_commands
+server.QwenPawACPAgent._bridge_approval_requests = _bridge_approval_requests
+server.QwenPawACPAgent._build_model_state = _build_model_state
+server.QwenPawACPAgent._sync_session_mcp = _sync_session_mcp
+server.QwenPawACPAgent._shutdown_workspace = _shutdown_workspace
+
+
+if __name__ == "__main__":
+    asyncio.run(server.run_qwenpaw_agent())

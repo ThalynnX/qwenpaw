@@ -17,7 +17,6 @@ from qwenpaw.agents.acp.runtime_provider import (
     OpenAIRuntimeProviderConfig,
 )
 from qwenpaw.agents.acp.server import (
-    ACP_ERROR_META_KEY,
     ACP_KEEPALIVE_META_KEY,
     QwenPawACPAgent,
 )
@@ -137,9 +136,7 @@ def test_runtime_provider_applies_model_info():
     assert model.max_input_length_configured is True
     assert model.generate_kwargs["max_tokens"] == 4096
     assert provider.get_context_size("policy") == 32768
-    assert (
-        provider.get_effective_generate_kwargs("policy")["max_tokens"] == 4096
-    )
+    assert provider.get_effective_generate_kwargs("policy")["max_tokens"] == 4096
 
 
 @pytest.mark.parametrize(
@@ -316,10 +313,8 @@ async def test_runtime_provider_rejects_other_model():
     }
 
 
-async def test_runtime_failure_ends_prompt_without_leaking_secrets(
-    monkeypatch,
-):
-    """Task-level failures end normally and never expose raw errors."""
+async def test_runtime_failure_is_an_acp_request_error(monkeypatch):
+    """Unexpected internal errors keep the JSON-RPC error contract."""
 
     async def _raise_runtime_error():
         raise RuntimeError("upstream returned secret-token")
@@ -342,17 +337,17 @@ async def test_runtime_failure_ends_prompt_without_leaking_secrets(
     monkeypatch.setattr(agent, "_ensure_workspace", _fake_workspace)
     response = await agent.new_session(cwd="/task")
 
-    prompt_response = await agent.prompt(
-        prompt=[text_block("hello")],
-        session_id=response.session_id,
-    )
+    with pytest.raises(RequestError) as exc_info:
+        await agent.prompt(
+            prompt=[text_block("hello")],
+            session_id=response.session_id,
+        )
 
-    assert prompt_response.stop_reason == "end_turn"
+    assert exc_info.value.code == -32603
+    assert exc_info.value.data == {
+        "details": "QwenPaw runtime failed",
+    }
     assert "secret-token" not in str(conn.updates)
-    assert any(
-        getattr(update, "field_meta", {}).get(ACP_ERROR_META_KEY)
-        for _, update in conn.updates
-    )
 
 
 @pytest.mark.parametrize(

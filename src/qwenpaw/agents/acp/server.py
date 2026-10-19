@@ -107,14 +107,24 @@ _ACP_KEEPALIVE_SECONDS = 20.0
 ACP_KEEPALIVE_META_KEY = "qwenpaw.keepalive"
 
 
-def _stop_reason_for_prompt_error(exc: BaseException) -> str:
-    """Return a normal ACP stop reason for an expected task failure."""
+def _prompt_failure_stop_reason(exc: BaseException) -> str | None:
+    """Return a stop reason only for confirmed task-level failures.
+
+    Unexpected exceptions must keep the original JSON-RPC error contract so
+    that internal bugs are not silently converted into a normal 0-score turn.
+    """
+    if isinstance(exc, (ConnectionError, BrokenPipeError)):
+        return f"end_turn"
+    from ...providers.retry_chat_model import StreamIdleTimeoutError
+
+    if isinstance(exc, StreamIdleTimeoutError):
+        return f"end_turn"
     if isinstance(exc, Exception):
         from ...providers.model_error_policy import classify_model_error
 
         if classify_model_error(exc).kind == f"content_safety":
             return f"refusal"
-    return f"end_turn"
+    return None
 
 
 PromptBlocks = list[
@@ -369,9 +379,7 @@ class QwenPawACPAgent(Agent):
         ):
             info[ACP_EPHEMERAL_META_KEY] = True
         if self._runtime_provider is not None:
-            info[
-                _ACP_RUNTIME_MODEL_SLOT_KEY
-            ] = self._runtime_provider.model_slot
+            info[_ACP_RUNTIME_MODEL_SLOT_KEY] = self._runtime_provider.model_slot
         return info
 
     async def _install_runtime_provider(self) -> None:
@@ -451,9 +459,7 @@ class QwenPawACPAgent(Agent):
 
         return WorkspaceBootstrapFactory.build_bootstrap_kwargs(
             app_services,
-            extra_command_specs=(
-                extra_command_specs if extra_command_specs else None
-            ),
+            extra_command_specs=(extra_command_specs if extra_command_specs else None),
         )
 
     async def _ensure_workspace(self) -> Any:
@@ -490,8 +496,7 @@ class QwenPawACPAgent(Agent):
             self._workspace = workspace
             self._workspace_ready = True
             logger.info(
-                "QwenPaw ACP Agent workspace started:"
-                " agent_id=%s workspace=%s",
+                "QwenPaw ACP Agent workspace started:" " agent_id=%s workspace=%s",
                 agent_id,
                 workspace_dir,
             )
@@ -709,9 +714,12 @@ class QwenPawACPAgent(Agent):
                 session_id,
             )
             await self._report_prompt_error(session_id, exc)
-            return PromptResponse(
-                stop_reason=_stop_reason_for_prompt_error(exc),
-            )
+            stop_reason = _prompt_failure_stop_reason(exc)
+            if stop_reason is None:
+                raise RequestError.internal_error(
+                    {"details": "QwenPaw runtime failed"},
+                ) from None
+            return PromptResponse(stop_reason=stop_reason)
         finally:
             await self._stop_approval_bridge(approval_bridge)
             self._cancel_events.pop(session_id, None)
@@ -885,11 +893,7 @@ class QwenPawACPAgent(Agent):
 
         prompt_task = self._prompt_tasks.get(session_id)
         current_task = asyncio.current_task()
-        if (
-            prompt_task is None
-            or prompt_task is current_task
-            or prompt_task.done()
-        ):
+        if prompt_task is None or prompt_task is current_task or prompt_task.done():
             return
 
         prompt_task.cancel()
@@ -1049,8 +1053,7 @@ class QwenPawACPAgent(Agent):
                         pending_future,
                     )
                     logger.info(
-                        "ACP approval request %s before client response: "
-                        "request=%s",
+                        "ACP approval request %s before client response: " "request=%s",
                         cancel_reason,
                         pending.request_id[:8],
                     )
@@ -1585,8 +1588,7 @@ class QwenPawACPAgent(Agent):
                 )
             if not provider.has_model(model_id):
                 raise ValueError(
-                    f"Model {model_id!r} not found in "
-                    f"provider {provider_id!r}",
+                    f"Model {model_id!r} not found in " f"provider {provider_id!r}",
                 )
         else:
             all_infos = await manager.list_provider_info()
