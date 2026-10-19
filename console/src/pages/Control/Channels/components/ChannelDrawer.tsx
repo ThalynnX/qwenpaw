@@ -151,7 +151,9 @@ interface ChannelDrawerProps {
   isBuiltin: boolean;
   channelSchema?: ChannelSchema;
   onClose: () => void;
-  onSubmit: (values: Record<string, unknown>) => void | Promise<void>;
+  onSubmit: (
+    values: Record<string, unknown>,
+  ) => void | boolean | Promise<void | boolean>;
 }
 
 export function ChannelDrawer({
@@ -1808,7 +1810,7 @@ export function ChannelDrawer({
 
   // ── Render ───────────────────────────────────────────────────────────────
 
-  const { schedule, flush } = useAutoSave(async () => {
+  const { schedule, flush, requestClose } = useAutoSave(async () => {
     // Only currently registered fields belong to this channel's payload.
     const values = form.getFieldsValue();
     try {
@@ -1817,11 +1819,10 @@ export function ChannelDrawer({
       return false;
     }
     if (activeKey !== "matrix") {
-      await onSubmit(values);
-      return;
+      return onSubmit(values);
     }
     const { auth_method, ...rest } = values;
-    await onSubmit(
+    return onSubmit(
       auth_method === "password"
         ? { ...rest, access_token: "" }
         : { ...rest, password: "", encryption: false },
@@ -1834,11 +1835,7 @@ export function ChannelDrawer({
       placement="right"
       title={drawerTitle}
       open={open}
-      onClose={() => {
-        void flush().then((saved) => {
-          if (saved) onClose();
-        });
-      }}
+      onClose={() => void requestClose(onClose)}
       destroyOnHidden
       footer={null}
       key={activeKey} // Force remount when switching channels

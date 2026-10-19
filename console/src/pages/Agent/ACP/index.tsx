@@ -388,6 +388,7 @@ function ACPPage() {
     setIsCreateMode(false);
     setActiveKey(key);
     setDrawerOpen(true);
+    form.resetFields();
     form.setFieldsValue({
       ...config,
       agentKey: key,

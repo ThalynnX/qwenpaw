@@ -33,7 +33,7 @@ const mocks = vi.hoisted(() => {
     channelDrawerProps: null as null | {
       open: boolean;
       initialValues?: Record<string, unknown>;
-      onSubmit: (values: Record<string, unknown>) => Promise<void>;
+      onSubmit: (values: Record<string, unknown>) => Promise<void | boolean>;
     },
     aclDrawerProps: null as null | {
       open: boolean;

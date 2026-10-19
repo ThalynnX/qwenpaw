@@ -146,7 +146,7 @@ function ChannelsPage() {
   const handleSubmit = async (values: Record<string, unknown>) => {
     if (!activeKey || !drawerAgentId || !canMutate(drawerAgentId)) {
       void fetchChannels();
-      return;
+      return false;
     }
     const ownerAgentId = drawerAgentId;
     const channelKey = activeKey;
@@ -211,27 +211,28 @@ function ChannelsPage() {
               });
               conflictModalDestroyRef.current = instance.destroy;
             });
-            if (!shouldSave || !ownsProposal()) return;
+            if (!shouldSave || !ownsProposal()) return false;
           }
         } catch (error) {
-          if (!ownsProposal()) return;
+          if (!ownsProposal()) return false;
           console.warn("Failed to check channel Bot conflicts:", error);
         }
       }
 
       if (!ownsProposal()) {
         void fetchChannels();
-        return;
+        return false;
       }
 
       await api.updateChannelConfig(channelKey, proposedConfig, ownerAgentId);
-      if (!ownsProposal()) return;
+      if (!ownsProposal()) return false;
       setChannels(ownerAgentId, (current) => ({
         ...current,
         [channelKey]: { ...current[channelKey], ...updatedChannel },
       }));
+      return true;
     } catch (error) {
-      if (!ownsProposal()) return;
+      if (!ownsProposal()) return false;
       console.error("Failed to update channel config:", error);
       throw error;
     } finally {
