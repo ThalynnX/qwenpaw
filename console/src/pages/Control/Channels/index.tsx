@@ -5,6 +5,7 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { Form } from "@agentscope-ai/design";
@@ -55,14 +56,28 @@ function ChannelsPage() {
   const [drawerAgentId, setDrawerAgentId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [aclDrawerOpen, setAclDrawerOpen] = useState(false);
+  const [aclDrawerAgentId, setAclDrawerAgentId] = useState<string | null>(null);
   const [pendingDrawerOpen, setPendingDrawerOpen] = useState(false);
+  const [pendingDrawerAgentId, setPendingDrawerAgentId] = useState<
+    string | null
+  >(null);
   const [pendingCount, setPendingCount] = useState(0);
+  const agentIdRef = useRef(agentId);
+  const pendingCountRequestIdRef = useRef(0);
+  agentIdRef.current = agentId;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [form] = Form.useForm<any>();
 
   const fetchPendingCount = useCallback(async () => {
+    const ownerAgentId = agentIdRef.current;
+    const requestId = ++pendingCountRequestIdRef.current;
     try {
       const data = await api.getAclAllPending();
+      if (
+        requestId !== pendingCountRequestIdRef.current ||
+        ownerAgentId !== agentIdRef.current
+      )
+        return;
       setPendingCount(data.length);
     } catch {
       // ignore
@@ -70,13 +85,19 @@ function ChannelsPage() {
   }, []);
 
   useEffect(() => {
-    fetchPendingCount();
-  }, [fetchPendingCount]);
+    void fetchPendingCount();
+  }, [agentId, fetchPendingCount]);
 
   useLayoutEffect(() => {
+    pendingCountRequestIdRef.current += 1;
     setDrawerOpen(false);
     setActiveKey(null);
     setDrawerAgentId(null);
+    setAclDrawerOpen(false);
+    setAclDrawerAgentId(null);
+    setPendingDrawerOpen(false);
+    setPendingDrawerAgentId(null);
+    setPendingCount(0);
     setSaving(false);
   }, [agentId]);
 
@@ -259,7 +280,10 @@ function ChannelsPage() {
               <Button
                 icon={<AuditOutlined size="1em" />}
                 disabled={!ready}
-                onClick={() => setPendingDrawerOpen(true)}
+                onClick={() => {
+                  setPendingDrawerAgentId(agentId);
+                  setPendingDrawerOpen(true);
+                }}
               >
                 {t("channels.pendingApprovals")}
               </Button>
@@ -267,7 +291,10 @@ function ChannelsPage() {
             <Button
               icon={<SafetyOutlined size="1em" />}
               disabled={!ready}
-              onClick={() => setAclDrawerOpen(true)}
+              onClick={() => {
+                setAclDrawerAgentId(agentId);
+                setAclDrawerOpen(true);
+              }}
             >
               {t("channels.manageAccessControl")}
             </Button>
@@ -372,14 +399,24 @@ function ChannelsPage() {
         onSubmit={handleSubmit}
       />
       <AccessControlDrawer
-        open={aclDrawerOpen}
-        onClose={() => setAclDrawerOpen(false)}
+        open={aclDrawerOpen && aclDrawerAgentId !== null}
+        ownerAgentId={aclDrawerAgentId}
+        canMutate={canMutate}
+        onStale={() => void fetchChannels()}
+        onClose={() => {
+          setAclDrawerOpen(false);
+          setAclDrawerAgentId(null);
+        }}
       />
       <PendingApprovalsDrawer
-        open={pendingDrawerOpen}
+        open={pendingDrawerOpen && pendingDrawerAgentId !== null}
+        ownerAgentId={pendingDrawerAgentId}
+        canMutate={canMutate}
+        onStale={() => void fetchChannels()}
         onClose={() => {
           setPendingDrawerOpen(false);
-          fetchPendingCount();
+          setPendingDrawerAgentId(null);
+          void fetchPendingCount();
         }}
       />
     </div>

@@ -1,5 +1,11 @@
 import { SettingsDrawer as Drawer } from "@/components/interaction/SettingsDrawer";
-import { useState, useEffect, useCallback } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useLayoutEffect,
+  useRef,
+} from "react";
 import {
   Tabs,
   Table,
@@ -24,6 +30,9 @@ import { getChannelLabel, type ChannelKey } from "./constants";
 
 interface AccessControlDrawerProps {
   open: boolean;
+  ownerAgentId: string | null;
+  canMutate: (ownerAgentId: string) => boolean;
+  onStale: () => void;
   onClose: () => void;
 }
 
@@ -40,6 +49,9 @@ function toEntries(
 
 export function AccessControlDrawer({
   open,
+  ownerAgentId,
+  canMutate,
+  onStale,
   onClose,
 }: AccessControlDrawerProps) {
   const { t } = useTranslation();
@@ -56,11 +68,36 @@ export function AccessControlDrawer({
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [batchLoading, setBatchLoading] = useState(false);
+  const loadVersionRef = useRef(0);
+
+  const ensureCanMutate = useCallback(() => {
+    if (ownerAgentId && canMutate(ownerAgentId)) return true;
+    onStale();
+    return false;
+  }, [canMutate, onStale, ownerAgentId]);
+
+  useLayoutEffect(() => {
+    loadVersionRef.current += 1;
+    setAllACLs({});
+    setSelectedChannel(null);
+    setSelectedRowKeys([]);
+    setNewUserId("");
+    setNewUsername("");
+    setNewRemark("");
+    setActiveTab("whitelist");
+    setAddModalOpen(false);
+    setLoading(false);
+    setBatchLoading(false);
+  }, [open, ownerAgentId]);
 
   const fetchACLs = useCallback(async () => {
+    if (!ownerAgentId || !canMutate(ownerAgentId)) return;
+    const loadVersion = ++loadVersionRef.current;
     setLoading(true);
     try {
       const data = await accessControlApi.getAclAll();
+      if (loadVersion !== loadVersionRef.current || !canMutate(ownerAgentId))
+        return;
       setAllACLs(data);
       const keys = Object.keys(data);
       if (keys.length === 0) {
@@ -71,9 +108,9 @@ export function AccessControlDrawer({
     } catch {
       // silent
     } finally {
-      setLoading(false);
+      if (loadVersion === loadVersionRef.current) setLoading(false);
     }
-  }, [selectedChannel]);
+  }, [canMutate, ownerAgentId, selectedChannel]);
 
   useEffect(() => {
     if (open) fetchACLs();
@@ -82,6 +119,7 @@ export function AccessControlDrawer({
   const channelKeys = Object.keys(allACLs);
   const currentACL = selectedChannel ? allACLs[selectedChannel] : null;
   const handleAdd = async () => {
+    if (!ensureCanMutate()) return;
     if (!selectedChannel || !newUserId.trim()) return;
     const addApi =
       activeTab === "whitelist"
@@ -96,17 +134,19 @@ export function AccessControlDrawer({
           username: newUsername.trim(),
         },
       ]);
+      if (!ensureCanMutate()) return;
       message.success(t("channels.userAdded"));
       setNewUserId("");
       setNewUsername("");
       setNewRemark("");
       await fetchACLs();
     } catch {
-      message.error(t("channels.operationFailed"));
+      if (ensureCanMutate()) message.error(t("channels.operationFailed"));
     }
   };
 
   const handleRemove = async (userId: string) => {
+    if (!ensureCanMutate()) return;
     if (!selectedChannel) return;
     const removeApi =
       activeTab === "whitelist"
@@ -114,17 +154,20 @@ export function AccessControlDrawer({
         : accessControlApi.removeAclBlacklist;
     try {
       await removeApi([{ channel: selectedChannel, user_id: userId }]);
+      if (!ensureCanMutate()) return;
       message.success(t("channels.userRemoved"));
       await fetchACLs();
     } catch {
-      message.error(t("channels.operationFailed"));
+      if (ensureCanMutate()) message.error(t("channels.operationFailed"));
     }
   };
 
   const handleRemarkSave = async (userId: string, remark: string) => {
+    if (!ensureCanMutate()) return;
     if (!selectedChannel) return;
     try {
       await accessControlApi.updateAclRemark(selectedChannel, userId, remark);
+      if (!ensureCanMutate()) return;
       setAllACLs((prev) => {
         const channelData = prev[selectedChannel];
         if (!channelData) return prev;
@@ -142,11 +185,12 @@ export function AccessControlDrawer({
         };
       });
     } catch {
-      message.error(t("channels.operationFailed"));
+      if (ensureCanMutate()) message.error(t("channels.operationFailed"));
     }
   };
 
   const handleBatchRemove = async () => {
+    if (!ensureCanMutate()) return;
     if (!selectedChannel || selectedRowKeys.length === 0) return;
     setBatchLoading(true);
     const removeApi =
@@ -160,13 +204,14 @@ export function AccessControlDrawer({
           user_id: userId as string,
         })),
       );
+      if (!ensureCanMutate()) return;
       message.success(
         t("channels.batchSuccess", { count: selectedRowKeys.length }),
       );
       setSelectedRowKeys([]);
       await fetchACLs();
     } catch {
-      message.error(t("channels.operationFailed"));
+      if (ensureCanMutate()) message.error(t("channels.operationFailed"));
     } finally {
       setBatchLoading(false);
     }
@@ -177,9 +222,11 @@ export function AccessControlDrawer({
     : [];
 
   const handleUsernameSave = async (userId: string, username: string) => {
+    if (!ensureCanMutate()) return;
     if (!selectedChannel) return;
     try {
       await accessControlApi.updateUsername(selectedChannel, userId, username);
+      if (!ensureCanMutate()) return;
       setAllACLs((prev) => {
         const channelData = prev[selectedChannel];
         if (!channelData) return prev;
@@ -197,7 +244,7 @@ export function AccessControlDrawer({
         };
       });
     } catch {
-      message.error(t("channels.operationFailed"));
+      if (ensureCanMutate()) message.error(t("channels.operationFailed"));
     }
   };
 

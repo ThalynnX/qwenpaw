@@ -10,6 +10,18 @@ const mocks = vi.hoisted(() => ({
   setChannels: vi.fn(),
   updateChannelConfig: vi.fn(),
   useChannels: vi.fn(),
+  aclDrawerProps: null as null | {
+    open: boolean;
+    ownerAgentId: string | null;
+    canMutate: (ownerAgentId: string) => boolean;
+    onStale: () => void;
+  },
+  pendingDrawerProps: null as null | {
+    open: boolean;
+    ownerAgentId: string | null;
+    canMutate: (ownerAgentId: string) => boolean;
+    onStale: () => void;
+  },
 }));
 
 vi.mock("react-i18next", () => ({
@@ -65,7 +77,10 @@ vi.mock("antd", () => ({
 }));
 
 vi.mock("./components", () => ({
-  AccessControlDrawer: () => null,
+  AccessControlDrawer: (props: NonNullable<typeof mocks.aclDrawerProps>) => {
+    mocks.aclDrawerProps = props;
+    return props.open ? <div data-testid="acl-drawer" /> : null;
+  },
   ChannelAvailableItem: ({
     channelKey,
     onClick,
@@ -82,7 +97,12 @@ vi.mock("./components", () => ({
   }) => <button onClick={onClick}>{`channel-${channelKey}`}</button>,
   ChannelDrawer: ({ open }: { open: boolean }) =>
     open ? <div data-testid="channel-drawer" /> : null,
-  PendingApprovalsDrawer: () => null,
+  PendingApprovalsDrawer: (
+    props: NonNullable<typeof mocks.pendingDrawerProps>,
+  ) => {
+    mocks.pendingDrawerProps = props;
+    return props.open ? <div data-testid="pending-drawer" /> : null;
+  },
   getChannelLabel: (key: string) => key,
   useChannels: () => mocks.useChannels(),
 }));
@@ -108,6 +128,8 @@ function channelsState(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.aclDrawerProps = null;
+  mocks.pendingDrawerProps = null;
   mocks.getAclAllPending.mockResolvedValue([]);
   mocks.useChannels.mockReturnValue(channelsState());
 });
@@ -165,5 +187,64 @@ describe("ChannelsPage load recovery", () => {
     expect(
       screen.queryByRole("button", { name: "channels.goEnableChannels" }),
     ).toBeNull();
+  });
+
+  it("closes agent-owned drawers on switch and reloads safely for stale callbacks", () => {
+    let currentAgent = "agent-a";
+    mocks.useChannels.mockReturnValue(
+      channelsState({
+        agentId: currentAgent,
+        canMutate: (ownerAgentId: string) => ownerAgentId === currentAgent,
+      }),
+    );
+    const view = renderWithProviders(<ChannelsPage />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "channels.manageAccessControl" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "channels.pendingApprovals" }),
+    );
+    expect(screen.getByTestId("acl-drawer")).toBeInTheDocument();
+    expect(screen.getByTestId("pending-drawer")).toBeInTheDocument();
+    const staleAcl = mocks.aclDrawerProps!;
+    const stalePending = mocks.pendingDrawerProps!;
+
+    currentAgent = "agent-b";
+    mocks.useChannels.mockReturnValue(
+      channelsState({
+        agentId: currentAgent,
+        loading: true,
+        ready: false,
+        canMutate: (ownerAgentId: string) => ownerAgentId === currentAgent,
+      }),
+    );
+    view.rerender(<ChannelsPage />);
+
+    expect(screen.queryByTestId("acl-drawer")).toBeNull();
+    expect(screen.queryByTestId("pending-drawer")).toBeNull();
+    expect(staleAcl.canMutate(staleAcl.ownerAgentId!)).toBe(false);
+    expect(stalePending.canMutate(stalePending.ownerAgentId!)).toBe(false);
+    staleAcl.onStale();
+    stalePending.onStale();
+    expect(mocks.fetchChannels).toHaveBeenCalledTimes(2);
+
+    mocks.useChannels.mockReturnValue(
+      channelsState({
+        agentId: currentAgent,
+        canMutate: (ownerAgentId: string) => ownerAgentId === currentAgent,
+      }),
+    );
+    view.rerender(<ChannelsPage />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "channels.manageAccessControl" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "channels.pendingApprovals" }),
+    );
+    expect(mocks.aclDrawerProps?.ownerAgentId).toBe("agent-b");
+    expect(mocks.pendingDrawerProps?.ownerAgentId).toBe("agent-b");
+    expect(screen.getByTestId("acl-drawer")).toBeInTheDocument();
+    expect(screen.getByTestId("pending-drawer")).toBeInTheDocument();
   });
 });

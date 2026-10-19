@@ -370,10 +370,25 @@ function makeAclAll() {
   };
 }
 
-function renderDrawer(open = true) {
+function renderDrawer(
+  open = true,
+  options: {
+    canMutate?: (ownerAgentId: string) => boolean;
+    onStale?: () => void;
+  } = {},
+) {
   const onClose = vi.fn();
-  render(<AccessControlDrawer open={open} onClose={onClose} />);
-  return { onClose };
+  const onStale = options.onStale ?? vi.fn();
+  render(
+    <AccessControlDrawer
+      open={open}
+      ownerAgentId="agent-a"
+      canMutate={options.canMutate ?? (() => true)}
+      onStale={onStale}
+      onClose={onClose}
+    />,
+  );
+  return { onClose, onStale };
 }
 
 describe("AccessControlDrawer", () => {
@@ -505,6 +520,38 @@ describe("AccessControlDrawer", () => {
     await waitFor(() =>
       expect(screen.queryByTestId("acl-modal")).not.toBeInTheDocument(),
     );
+  });
+
+  it("rejects captured add, remove, and edit callbacks after ownership changes", async () => {
+    let currentAgent = "agent-a";
+    const onStale = vi.fn();
+    renderDrawer(true, {
+      canMutate: (ownerAgentId) => currentAgent === ownerAgentId,
+      onStale,
+    });
+    await waitFor(() => expect(mocks.getAclAll).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByText("channels.addUser"));
+    fireEvent.change(
+      screen.getByPlaceholderText("channels.addUserPlaceholder"),
+      { target: { value: "u-stale" } },
+    );
+    const add = screen.getByTestId("acl-modal-ok");
+    const row = screen.getByText("alice").closest("[data-row-key]")!;
+    const remove = row.querySelector("[data-testid='popconfirm-wrap'] button")!;
+    const edit = row.querySelector(
+      "[data-col='remark'] [data-testid='editable-trigger']",
+    )!;
+
+    currentAgent = "agent-b";
+    fireEvent.click(add);
+    fireEvent.click(remove);
+    fireEvent.click(edit);
+
+    expect(mocks.addAclWhitelist).not.toHaveBeenCalled();
+    expect(mocks.removeAclWhitelist).not.toHaveBeenCalled();
+    expect(mocks.updateAclRemark).not.toHaveBeenCalled();
+    expect(onStale).toHaveBeenCalledTimes(3);
   });
 
   it("keeps the OK button disabled until a user id is typed", async () => {

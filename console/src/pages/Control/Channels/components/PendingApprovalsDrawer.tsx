@@ -1,5 +1,12 @@
 import { SettingsDrawer as Drawer } from "@/components/interaction/SettingsDrawer";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from "react";
 import {
   Table,
   Button,
@@ -44,11 +51,17 @@ const ACTION_SUCCESS_KEY: Record<PendingAction, string> = {
 
 interface PendingApprovalsDrawerProps {
   open: boolean;
+  ownerAgentId: string | null;
+  canMutate: (ownerAgentId: string) => boolean;
+  onStale: () => void;
   onClose: () => void;
 }
 
 export function PendingApprovalsDrawer({
   open,
+  ownerAgentId,
+  canMutate,
+  onStale,
   onClose,
 }: PendingApprovalsDrawerProps) {
   const { t } = useTranslation();
@@ -59,18 +72,39 @@ export function PendingApprovalsDrawer({
   const [batchLoading, setBatchLoading] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
+  const loadVersionRef = useRef(0);
+
+  const ensureCanMutate = useCallback(() => {
+    if (ownerAgentId && canMutate(ownerAgentId)) return true;
+    onStale();
+    return false;
+  }, [canMutate, onStale, ownerAgentId]);
+
+  useLayoutEffect(() => {
+    loadVersionRef.current += 1;
+    setPending([]);
+    setSelectedRowKeys([]);
+    setSelectedChannels([]);
+    setLoading(false);
+    setActionLoading(null);
+    setBatchLoading(false);
+  }, [open, ownerAgentId]);
 
   const fetchPending = useCallback(async () => {
+    if (!ownerAgentId || !canMutate(ownerAgentId)) return;
+    const loadVersion = ++loadVersionRef.current;
     setLoading(true);
     try {
       const data = await accessControlApi.getAclAllPending();
+      if (loadVersion !== loadVersionRef.current || !canMutate(ownerAgentId))
+        return;
       setPending(data);
     } catch {
       // silent
     } finally {
-      setLoading(false);
+      if (loadVersion === loadVersionRef.current) setLoading(false);
     }
-  }, []);
+  }, [canMutate, ownerAgentId]);
 
   useEffect(() => {
     if (open) {
@@ -99,12 +133,14 @@ export function PendingApprovalsDrawer({
   );
 
   const handleRemarkSave = async (entry: PendingEntry, remark: string) => {
+    if (!ensureCanMutate()) return;
     try {
       await accessControlApi.updatePendingRemark(
         entry.channel,
         entry.user_id,
         remark,
       );
+      if (!ensureCanMutate()) return;
       setPending((prev) =>
         prev.map((p) =>
           p.channel === entry.channel && p.user_id === entry.user_id
@@ -113,17 +149,19 @@ export function PendingApprovalsDrawer({
         ),
       );
     } catch {
-      message.error(t("channels.operationFailed"));
+      if (ensureCanMutate()) message.error(t("channels.operationFailed"));
     }
   };
 
   const handleUsernameSave = async (entry: PendingEntry, username: string) => {
+    if (!ensureCanMutate()) return;
     try {
       await accessControlApi.updateUsername(
         entry.channel,
         entry.user_id,
         username,
       );
+      if (!ensureCanMutate()) return;
       setPending((prev) =>
         prev.map((p) =>
           p.channel === entry.channel && p.user_id === entry.user_id
@@ -132,37 +170,41 @@ export function PendingApprovalsDrawer({
         ),
       );
     } catch {
-      message.error(t("channels.operationFailed"));
+      if (ensureCanMutate()) message.error(t("channels.operationFailed"));
     }
   };
 
   const handleAction = async (entry: PendingEntry, action: PendingAction) => {
+    if (!ensureCanMutate()) return;
     const key = `${entry.channel}:${entry.user_id}`;
     setActionLoading(key);
     try {
       await ACTION_API_MAP[action]([
         { channel: entry.channel, user_id: entry.user_id },
       ]);
+      if (!ensureCanMutate()) return;
       message.success(t(ACTION_SUCCESS_KEY[action]));
       await fetchPending();
     } catch {
-      message.error(t("channels.operationFailed"));
+      if (ensureCanMutate()) message.error(t("channels.operationFailed"));
     } finally {
       setActionLoading(null);
     }
   };
 
   const handleBatchAction = async (action: PendingAction) => {
+    if (!ensureCanMutate()) return;
     setBatchLoading(true);
     try {
       await ACTION_API_MAP[action](selectedEntries);
+      if (!ensureCanMutate()) return;
       message.success(
         t("channels.batchSuccess", { count: selectedEntries.length }),
       );
       setSelectedRowKeys([]);
       await fetchPending();
     } catch {
-      message.error(t("channels.operationFailed"));
+      if (ensureCanMutate()) message.error(t("channels.operationFailed"));
     } finally {
       setBatchLoading(false);
     }
