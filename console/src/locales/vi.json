@@ -1410,6 +1410,7 @@
   "acp": {
     "title": "Kết nối ACP",
     "loading": "Đang tải cấu hình ACP...",
+    "loadError": "Không thể tải cấu hình ACP.",
     "builtin": "Cấu hình sẵn",
     "custom": "Tùy chỉnh",
     "create": "Thêm kết nối ACP",

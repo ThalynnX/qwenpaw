@@ -4317,6 +4317,7 @@
   "acp": {
     "title": "ACP プロトコル連携",
     "loading": "ACP 設定を読み込み中...",
+    "loadError": "ACP 設定を読み込めませんでした。",
     "builtin": "プリセット",
     "custom": "カスタム",
     "create": "ACP 連携を追加",

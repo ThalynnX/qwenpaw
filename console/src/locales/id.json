@@ -3191,6 +3191,7 @@
   "acp": {
     "title": "Integrasi ACP",
     "loading": "Memuat konfigurasi ACP...",
+    "loadError": "Gagal memuat konfigurasi ACP.",
     "builtin": "Prasetel",
     "custom": "Kustom",
     "create": "Tambah integrasi ACP",

@@ -342,6 +342,7 @@
   "acp": {
     "title": "Integrações ACP",
     "loading": "Carregando configuracao ACP...",
+    "loadError": "Falha ao carregar a configuração ACP.",
     "builtin": "Predefinições",
     "custom": "Personalizadas",
     "create": "Adicionar integração ACP",

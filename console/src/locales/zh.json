@@ -1037,6 +1037,7 @@
   "acp": {
     "title": "ACP 协议接入",
     "loading": "加载 ACP 配置中...",
+    "loadError": "ACP 配置加载失败。",
     "builtin": "预设",
     "custom": "自定义",
     "create": "添加 ACP 接入",
