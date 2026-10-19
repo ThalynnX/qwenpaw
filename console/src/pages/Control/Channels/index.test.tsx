@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
   };
   return {
     fetchChannels: vi.fn(),
+    checkChannelConflict: vi.fn(),
     getAclAllPending: vi.fn(),
     setChannels: vi.fn(),
     updateChannelConfig: vi.fn(),
@@ -28,6 +29,7 @@ const mocks = vi.hoisted(() => {
     formReset,
     formSet,
     formApi,
+    modalConfirm: vi.fn(),
     channelDrawerProps: null as null | {
       open: boolean;
       onSubmit: (values: Record<string, unknown>) => Promise<void>;
@@ -53,7 +55,8 @@ vi.mock("react-i18next", () => ({
 
 vi.mock("../../../api", () => ({
   default: {
-    checkChannelConflict: vi.fn(() => Promise.resolve({ conflict: false })),
+    checkChannelConflict: (...args: unknown[]) =>
+      mocks.checkChannelConflict(...args),
     getAclAllPending: (...args: unknown[]) => mocks.getAclAllPending(...args),
     updateChannelConfig: (...args: unknown[]) =>
       mocks.updateChannelConfig(...args),
@@ -61,7 +64,7 @@ vi.mock("../../../api", () => ({
 }));
 
 vi.mock("../../../hooks/useAppMessage", () => ({
-  useAppMessage: () => ({ modal: { confirm: vi.fn() } }),
+  useAppMessage: () => ({ modal: { confirm: mocks.modalConfirm } }),
 }));
 
 vi.mock("@/components/PageHeader", () => ({
@@ -162,6 +165,8 @@ beforeEach(() => {
     delete mocks.formValues[key];
   }
   mocks.getAclAllPending.mockResolvedValue([]);
+  mocks.checkChannelConflict.mockResolvedValue({ conflict: false });
+  mocks.modalConfirm.mockReturnValue({ destroy: vi.fn(), update: vi.fn() });
   mocks.useChannels.mockReturnValue(channelsState());
 });
 
@@ -356,5 +361,105 @@ describe("ChannelsPage load recovery", () => {
       }),
       "agent-b",
     );
+  });
+
+  it.each(["agent-b", "agent-a"])(
+    "invalidates agent A's pending conflict proposal after switching through %s",
+    async (finalAgent) => {
+      let resolveConflict!: (value: {
+        conflict: boolean;
+        agents: Array<{ agent_id: string; agent_name: string }>;
+      }) => void;
+      const pendingConflict = new Promise<{
+        conflict: boolean;
+        agents: Array<{ agent_id: string; agent_name: string }>;
+      }>((resolve) => {
+        resolveConflict = resolve;
+      });
+      mocks.checkChannelConflict.mockReturnValueOnce(pendingConflict);
+
+      let currentAgent = "agent-a";
+      const stateFor = (agentId: string, ready = true) =>
+        channelsState({
+          agentId,
+          channels: ready
+            ? { dingtalk: { enabled: true, isBuiltin: true } }
+            : {},
+          orderedKeys: ready ? ["dingtalk"] : [],
+          loading: !ready,
+          ready,
+          canMutate: (ownerAgentId: string) => ownerAgentId === currentAgent,
+        });
+      mocks.useChannels.mockReturnValue(stateFor(currentAgent));
+      const view = renderWithProviders(<ChannelsPage />);
+      fireEvent.click(screen.getByRole("button", { name: "channel-dingtalk" }));
+      const staleSubmit = mocks.channelDrawerProps!.onSubmit({ enabled: true });
+
+      currentAgent = "agent-b";
+      mocks.useChannels.mockReturnValue(stateFor(currentAgent, false));
+      view.rerender(<ChannelsPage />);
+      if (finalAgent === "agent-a") {
+        currentAgent = "agent-a";
+        mocks.useChannels.mockReturnValue(stateFor(currentAgent));
+        view.rerender(<ChannelsPage />);
+      }
+
+      resolveConflict({
+        conflict: true,
+        agents: [{ agent_id: "other", agent_name: "Other" }],
+      });
+      await staleSubmit;
+
+      expect(mocks.modalConfirm).not.toHaveBeenCalled();
+      expect(mocks.updateChannelConfig).not.toHaveBeenCalled();
+      expect(mocks.setChannels).not.toHaveBeenCalled();
+    },
+  );
+
+  it("destroys an open conflict proposal when the agent changes", async () => {
+    let confirmProps!: {
+      onOk: () => void;
+      afterClose: () => void;
+    };
+    const destroy = vi.fn(() => confirmProps.afterClose());
+    mocks.checkChannelConflict.mockResolvedValue({
+      conflict: true,
+      agents: [{ agent_id: "other", agent_name: "Other" }],
+    });
+    mocks.modalConfirm.mockImplementation((props) => {
+      confirmProps = props;
+      return { destroy, update: vi.fn() };
+    });
+
+    let currentAgent = "agent-a";
+    mocks.useChannels.mockReturnValue(
+      channelsState({
+        agentId: currentAgent,
+        channels: { dingtalk: { enabled: true, isBuiltin: true } },
+        orderedKeys: ["dingtalk"],
+        canMutate: (ownerAgentId: string) => ownerAgentId === currentAgent,
+      }),
+    );
+    const view = renderWithProviders(<ChannelsPage />);
+    fireEvent.click(screen.getByRole("button", { name: "channel-dingtalk" }));
+    const staleSubmit = mocks.channelDrawerProps!.onSubmit({ enabled: true });
+    await vi.waitFor(() => expect(mocks.modalConfirm).toHaveBeenCalledOnce());
+
+    currentAgent = "agent-b";
+    mocks.useChannels.mockReturnValue(
+      channelsState({
+        agentId: currentAgent,
+        loading: true,
+        ready: false,
+        canMutate: (ownerAgentId: string) => ownerAgentId === currentAgent,
+      }),
+    );
+    view.rerender(<ChannelsPage />);
+    await staleSubmit;
+    confirmProps.onOk();
+
+    expect(destroy).toHaveBeenCalledOnce();
+    expect(mocks.updateChannelConfig).not.toHaveBeenCalled();
+    expect(mocks.setChannels).not.toHaveBeenCalled();
   });
 });

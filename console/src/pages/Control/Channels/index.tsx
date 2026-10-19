@@ -64,6 +64,8 @@ function ChannelsPage() {
   const [pendingCount, setPendingCount] = useState(0);
   const agentIdRef = useRef(agentId);
   const pendingCountRequestIdRef = useRef(0);
+  const proposalIdRef = useRef(0);
+  const conflictModalDestroyRef = useRef<(() => void) | null>(null);
   agentIdRef.current = agentId;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [form] = Form.useForm<any>();
@@ -90,6 +92,9 @@ function ChannelsPage() {
 
   useLayoutEffect(() => {
     pendingCountRequestIdRef.current += 1;
+    proposalIdRef.current += 1;
+    conflictModalDestroyRef.current?.();
+    conflictModalDestroyRef.current = null;
     form.resetFields();
     setDrawerOpen(false);
     setActiveKey(null);
@@ -100,7 +105,7 @@ function ChannelsPage() {
     setPendingDrawerAgentId(null);
     setPendingCount(0);
     setSaving(false);
-  }, [agentId]);
+  }, [agentId, form]);
 
   // Sort cards: enabled first, then disabled (preserve orderedKeys order within each group)
   const { enabledCards, disabledCards } = useMemo(() => {
@@ -171,10 +176,17 @@ function ChannelsPage() {
       return;
     }
     const ownerAgentId = drawerAgentId;
+    const channelKey = activeKey;
+    const proposalId = ++proposalIdRef.current;
+    conflictModalDestroyRef.current?.();
+    conflictModalDestroyRef.current = null;
+    const ownsProposal = () =>
+      proposalIdRef.current === proposalId && canMutate(ownerAgentId);
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { isBuiltin: _isBuiltin, ...savedConfig } = channels[activeKey] || {};
-    const updatedChannel = keepConsoleEnabled(activeKey, {
+    const { isBuiltin: _isBuiltin, ...savedConfig } =
+      channels[channelKey] || {};
+    const updatedChannel = keepConsoleEnabled(channelKey, {
       ...savedConfig,
       ...values,
     });
@@ -187,10 +199,11 @@ function ChannelsPage() {
       if (updatedChannel.enabled === true) {
         try {
           const result = await api.checkChannelConflict(
-            activeKey,
+            channelKey,
             proposedConfig,
             ownerAgentId,
           );
+          if (!ownsProposal()) return;
           if (result.conflict) {
             const agentNames = result.agents
               .map(({ agent_id, agent_name }) =>
@@ -204,10 +217,13 @@ function ChannelsPage() {
               const settle = (value: boolean) => {
                 if (settled) return;
                 settled = true;
-                resolve(value);
+                if (proposalIdRef.current === proposalId) {
+                  conflictModalDestroyRef.current = null;
+                }
+                resolve(value && ownsProposal());
               };
 
-              modal.confirm({
+              const instance = modal.confirm({
                 centered: true,
                 title: t("channels.botConflictTitle"),
                 content: t("channels.botConflictDescription", {
@@ -220,29 +236,33 @@ function ChannelsPage() {
                 onCancel: () => settle(false),
                 afterClose: () => settle(false),
               });
+              conflictModalDestroyRef.current = instance.destroy;
             });
-            if (!shouldSave) return;
+            if (!shouldSave || !ownsProposal()) return;
           }
         } catch (error) {
+          if (!ownsProposal()) return;
           console.warn("Failed to check channel Bot conflicts:", error);
         }
       }
 
-      if (!canMutate(ownerAgentId)) {
+      if (!ownsProposal()) {
         void fetchChannels();
         return;
       }
 
-      await api.updateChannelConfig(activeKey, proposedConfig, ownerAgentId);
+      await api.updateChannelConfig(channelKey, proposedConfig, ownerAgentId);
+      if (!ownsProposal()) return;
       setChannels(ownerAgentId, (current) => ({
         ...current,
-        [activeKey]: { ...current[activeKey], ...updatedChannel },
+        [channelKey]: { ...current[channelKey], ...updatedChannel },
       }));
     } catch (error) {
+      if (!ownsProposal()) return;
       console.error("Failed to update channel config:", error);
       throw error;
     } finally {
-      setSaving(false);
+      if (proposalIdRef.current === proposalId) setSaving(false);
     }
   };
 
