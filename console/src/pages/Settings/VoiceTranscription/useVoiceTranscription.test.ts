@@ -110,6 +110,7 @@ describe("useVoiceTranscription initial load", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { result } = renderHook(() => useVoiceTranscription());
     await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).toEqual(new Error("down"));
     expect(h.message.error).toHaveBeenCalledWith(
       "voiceTranscription.loadFailed",
     );
@@ -295,6 +296,7 @@ describe("useVoiceTranscription handleSave", () => {
     expect(Object.keys(result.current).sort()).toEqual([
       "audioMode",
       "availableProviders",
+      "error",
       "fetchSettings",
       "handleSave",
       "isLocalWhisper",

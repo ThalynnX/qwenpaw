@@ -1,7 +1,8 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import InlineHelp from "@/components/InlineHelp";
 import { useAutoSave } from "@/hooks/useAutoSave";
-import { Spin } from "antd";
+import { Button } from "@agentscope-ai/design";
+import { Alert, Spin } from "antd";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/PageHeader";
 import { useVoiceTranscription } from "./useVoiceTranscription";
@@ -17,6 +18,7 @@ function VoiceTranscriptionPage() {
   const reduced = useReducedMotion();
   const {
     loading,
+    error,
     audioMode,
     setAudioMode,
     providerType,
@@ -28,6 +30,7 @@ function VoiceTranscriptionPage() {
     showProviderSection,
     isLocalWhisper,
     isWhisperApi,
+    fetchSettings,
     handleSave,
   } = useVoiceTranscription();
 
@@ -38,6 +41,26 @@ function VoiceTranscriptionPage() {
       <div className={styles.page}>
         <div className={styles.centerState}>
           <Spin />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className={styles.voiceTranscriptionPage}>
+        <PageHeader current={t("voiceTranscription.title")} />
+        <div className={styles.loadError}>
+          <Alert
+            type="error"
+            showIcon
+            message={t("voiceTranscription.loadFailed")}
+            action={
+              <Button type="primary" onClick={() => void fetchSettings()}>
+                {t("common.retry")}
+              </Button>
+            }
+          />
         </div>
       </div>
     );

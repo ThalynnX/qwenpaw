@@ -25,6 +25,7 @@ export function useVoiceTranscription() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<unknown>(null);
   const [audioMode, setAudioMode] = useState("auto");
   const [providerType, setProviderType] = useState("disabled");
   const [providers, setProviders] = useState<TranscriptionProvider[]>([]);
@@ -46,8 +47,10 @@ export function useVoiceTranscription() {
       setProviders(provRes.providers ?? []);
       setSelectedProviderId(provRes.configured_provider_id ?? "");
       setLocalWhisperStatus(lwStatus);
+      setError(null);
     } catch (err) {
       console.error("Failed to load voice transcription settings:", err);
+      setError(err);
       message.error(t("voiceTranscription.loadFailed"));
     } finally {
       setLoading(false);
@@ -89,6 +92,7 @@ export function useVoiceTranscription() {
   return {
     loading,
     saving,
+    error,
     audioMode,
     setAudioMode,
     providerType,
