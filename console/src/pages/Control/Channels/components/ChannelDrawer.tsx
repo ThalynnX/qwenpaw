@@ -2004,6 +2004,7 @@ export function ChannelDrawer({
                         renderAccessControlFields()}
                       {activeKey !== "console" && (
                         <Form.Item
+                          className={styles.noTextDebounceItem}
                           name="no_text_debounce"
                           label={t("channels.noTextDebounce")}
                           valuePropName="checked"
