@@ -1595,9 +1595,9 @@ describe("ModelSelector", () => {
       name: "models.defaultDecisionModel",
     });
     await user.click(choice);
-    const popover = Array.from(document.querySelectorAll(".ant-popover")).at(
+    const popover = Array.from(document.querySelectorAll(".ant-popover")).slice(
       -1,
-    ) as HTMLElement;
+    )[0] as HTMLElement;
     await user.click(await within(popover).findByText("Decision V1"));
 
     await waitFor(
