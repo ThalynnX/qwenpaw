@@ -248,6 +248,40 @@ describe("ChannelDrawer builtin channel rendering", () => {
     ).toBe(false);
   });
 
+  it("preserves the unsaved LiveKit draft while SIP mode toggles", async () => {
+    const onSubmit = vi.fn();
+    const view = renderDrawer({
+      activeKey: "sip",
+      initialValues: {
+        sip_mode: "livekit",
+        livekit_url: "wss://draft.example.test",
+        livekit_api_key: "draft-key",
+        livekit_api_secret: "draft-secret",
+      },
+      onSubmit,
+    });
+
+    await waitFor(() =>
+      expect(view.form.getFieldValue("livekit_api_secret")).toBe(
+        "draft-secret",
+      ),
+    );
+    act(() => view.form.setFieldValue("sip_mode", "dev"));
+    await waitFor(() =>
+      expect(screen.queryByText("channels.livekitUrl")).toBeNull(),
+    );
+    expect(view.form.getFieldValue("livekit_api_secret")).toBe("draft-secret");
+
+    act(() => view.form.setFieldValue("sip_mode", "livekit"));
+    await screen.findByText("channels.livekitUrl");
+    expect(view.form.getFieldValue("livekit_url")).toBe(
+      "wss://draft.example.test",
+    );
+    expect(view.form.getFieldValue("livekit_api_key")).toBe("draft-key");
+    expect(view.form.getFieldValue("livekit_api_secret")).toBe("draft-secret");
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
   it("keeps MQTT defaults and explicit values in the submitted payload", async () => {
     const consoleError = vi
       .spyOn(console, "error")

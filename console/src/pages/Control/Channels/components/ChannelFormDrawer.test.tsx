@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import type { ComponentProps } from "react";
 import { createElement } from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import type { FormInstance } from "antd";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -61,6 +67,7 @@ vi.mock("./QrcodeAuthBlock", () => ({
 }));
 
 import { ChannelFormDrawer } from "./ChannelFormDrawer";
+import { normalizeChannelSubmitValues } from "./channelConfig";
 
 const schema = {
   label: "Custom",
@@ -89,6 +96,25 @@ beforeEach(() => {
 });
 
 describe("ChannelFormDrawer owner isolation", () => {
+  it.each([undefined, "legacy-mode"])(
+    "fails closed for SIP mode %s",
+    (sipMode) => {
+      const values = {
+        sip_mode: sipMode,
+        sip_transport: "TCP",
+        livekit_api_secret: "must-not-survive",
+      };
+
+      const normalized = normalizeChannelSubmitValues("sip", values);
+
+      expect(normalized).toEqual({
+        sip_mode: sipMode,
+        sip_transport: "TCP",
+      });
+      expect(values.livekit_api_secret).toBe("must-not-survive");
+    },
+  );
+
   it("remounts the real Ant form and excludes stale secrets from autosave", async () => {
     const agentA = drawerProps({
       enabled: true,
@@ -147,5 +173,57 @@ describe("ChannelFormDrawer owner isolation", () => {
         password: expect.anything(),
       }),
     );
+  });
+
+  it("removes hidden LiveKit values only when a dev SIP form submits", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ChannelFormDrawer
+        ownerKey="agent-b:sip"
+        open
+        activeKey="sip"
+        activeLabel="SIP"
+        saving={false}
+        initialValues={{
+          enabled: false,
+          sip_mode: "livekit",
+          sip_transport: "UDP",
+          livekit_url: "wss://draft.example.test",
+          livekit_api_key: "draft-key",
+          livekit_api_secret: "draft-secret",
+          livekit_sip_trunk_id: "draft-trunk",
+          livekit_room_name: "draft-room",
+          livekit_output_sample_rate: 16000,
+        }}
+        isBuiltin
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(formCapture.current?.getFieldValue("livekit_api_secret")).toBe(
+        "draft-secret",
+      ),
+    );
+    act(() => formCapture.current?.setFieldValue("sip_mode", "dev"));
+    fireEvent.change(document.querySelector("input#bot_prefix")!, {
+      target: { value: "adjacent-sentinel" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "common.close" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sip_mode: "dev",
+        sip_transport: "UDP",
+        bot_prefix: "adjacent-sentinel",
+      }),
+    );
+    expect(
+      Object.keys(onSubmit.mock.calls[0][0]).filter((key) =>
+        key.startsWith("livekit_"),
+      ),
+    ).toEqual([]);
   });
 });

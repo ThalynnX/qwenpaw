@@ -2,6 +2,7 @@ import { Form } from "@agentscope-ai/design";
 import { useLayoutEffect, useMemo } from "react";
 import type { ComponentProps } from "react";
 import { ChannelDrawer } from "./ChannelDrawer";
+import { normalizeChannelSubmitValues } from "./channelConfig";
 
 const SENSITIVE_FIELDS = [
   "client_secret",
@@ -54,6 +55,8 @@ export function ChannelFormDrawer({
   ownerKey,
   initialValues,
   open,
+  activeKey,
+  onSubmit,
   ...props
 }: Props) {
   const [form] = Form.useForm<Record<string, unknown>>();
@@ -71,8 +74,12 @@ export function ChannelFormDrawer({
     <ChannelDrawer
       {...props}
       open={open}
+      activeKey={activeKey}
       form={form}
       initialValues={normalizedValues}
+      onSubmit={(values) =>
+        onSubmit(normalizeChannelSubmitValues(activeKey, values))
+      }
     />
   );
 }

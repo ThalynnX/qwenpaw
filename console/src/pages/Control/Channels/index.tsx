@@ -28,7 +28,10 @@ import {
   type ChannelKey,
 } from "./components";
 import { PageHeader } from "@/components/PageHeader";
-import { keepConsoleEnabled } from "./components/channelConfig";
+import {
+  keepConsoleEnabled,
+  normalizeChannelSubmitValues,
+} from "./components/channelConfig";
 import styles from "./index.module.less";
 
 type FilterType = "all" | "builtin" | "custom";
@@ -159,10 +162,13 @@ function ChannelsPage() {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { isBuiltin: _isBuiltin, ...savedConfig } =
       channels[channelKey] || {};
-    const updatedChannel = keepConsoleEnabled(channelKey, {
-      ...savedConfig,
-      ...values,
-    });
+    const updatedChannel = normalizeChannelSubmitValues(
+      channelKey,
+      keepConsoleEnabled(channelKey, {
+        ...savedConfig,
+        ...values,
+      }),
+    );
     const proposedConfig = updatedChannel as unknown as Parameters<
       typeof api.updateChannelConfig
     >[1];
@@ -226,10 +232,16 @@ function ChannelsPage() {
 
       await api.updateChannelConfig(channelKey, proposedConfig, ownerAgentId);
       if (!ownsProposal()) return false;
-      setChannels(ownerAgentId, (current) => ({
-        ...current,
-        [channelKey]: { ...current[channelKey], ...updatedChannel },
-      }));
+      setChannels(ownerAgentId, (current) => {
+        const isBuiltin = current[channelKey]?.isBuiltin;
+        return {
+          ...current,
+          [channelKey]: {
+            ...updatedChannel,
+            ...(typeof isBuiltin === "boolean" ? { isBuiltin } : {}),
+          },
+        };
+      });
       return true;
     } catch (error) {
       if (!ownsProposal()) return false;
