@@ -18,6 +18,7 @@ function VoiceTranscriptionPage() {
   const reduced = useReducedMotion();
   const {
     loading,
+    ready,
     error,
     audioMode,
     setAudioMode,
@@ -61,6 +62,16 @@ function VoiceTranscriptionPage() {
               </Button>
             }
           />
+        </div>
+      </div>
+    );
+  }
+
+  if (!ready) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.centerState}>
+          <Spin />
         </div>
       </div>
     );
