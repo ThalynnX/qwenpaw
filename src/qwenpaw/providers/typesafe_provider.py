@@ -70,7 +70,9 @@ class TypeSafeProvider(Provider):
             )
             or timeout <= 0
         ):
-            raise ValueError("model, state, questions, and timeout are required")
+            raise ValueError(
+                "model, state, questions, and timeout are required",
+            )
         for name, question in questions.items():
             question_type = question.get("type")
             if not name or question_type not in {"noul", "choice", "score"}:
@@ -105,7 +107,9 @@ class TypeSafeProvider(Provider):
             not isinstance(payload.get("model"), str)
             or not isinstance(answers, dict)
             or not isinstance(payload.get("usage", {}), dict)
-            or any(not isinstance(answers.get(name), dict) for name in questions)
+            or any(
+                not isinstance(answers.get(name), dict) for name in questions
+            )
             or any(
                 answers[name].get("type") != question.get("type")
                 for name, question in questions.items()

@@ -20,8 +20,8 @@ from qwenpaw.security.decision_model import (
 from qwenpaw.security.tool_guard.execution_level import ToolExecutionLevel
 
 
-@pytest.fixture(autouse=True)
-def typesafe_provider(monkeypatch):
+@pytest.fixture(name="typesafe_provider", autouse=True)
+def configured_typesafe_provider(monkeypatch):
     provider = TypeSafeProvider(
         id="typesafe",
         name="TypeSafe",
@@ -159,7 +159,10 @@ async def test_declared_local_media_read_skips_decision_model(
 ):
     from qwenpaw.agents.tools.view_media import view_image
 
-    assert view_image._tool_descriptor.metadata["decision_model_local_read"] is True
+    assert (
+        view_image._tool_descriptor.metadata["decision_model_local_read"]
+        is True
+    )
 
     async def unexpected(*args):
         raise AssertionError("local media read should not call decision model")
@@ -176,7 +179,10 @@ async def test_declared_local_media_read_skips_decision_model(
 async def test_remote_media_read_still_reaches_decision_model(monkeypatch):
     from qwenpaw.agents.tools.view_media import view_image
 
-    assert view_image._tool_descriptor.metadata["decision_model_local_read"] is True
+    assert (
+        view_image._tool_descriptor.metadata["decision_model_local_read"]
+        is True
+    )
     seen = []
 
     async def evaluate(_provider, **request):
@@ -195,7 +201,9 @@ async def test_sips_existing_output_requires_approval_without_decision_model(
 ):
     output = tmp_path / "small.jpg"
     output.write_bytes(b"existing")
-    command = f"sips -Z 1600 -s format jpeg {tmp_path}/input.png --out {output}"
+    command = (
+        f"sips -Z 1600 -s format jpeg {tmp_path}/input.png --out {output}"
+    )
 
     async def unexpected(*args):
         raise AssertionError(
@@ -214,9 +222,10 @@ async def test_sips_existing_output_requires_approval_without_decision_model(
 
 @pytest.mark.asyncio
 async def test_sips_new_output_supplies_verified_fact(monkeypatch, tmp_path):
-
     output = tmp_path / "small.jpg"
-    command = f"sips -Z 1600 -s format jpeg {tmp_path}/input.png --out {output}"
+    command = (
+        f"sips -Z 1600 -s format jpeg {tmp_path}/input.png --out {output}"
+    )
     seen = []
 
     async def evaluate(_provider, **request):
@@ -244,8 +253,12 @@ def test_sips_preflight_rejects_shell_expansion_and_compound_commands(
         )
         is None
     )
-    assert _sips_output_exists("Bash", "sips input.png --out /tmp/$NAME") is None
-    assert _sips_output_exists("Bash", "sips input.png --out /tmp/*.jpg") is None
+    assert (
+        _sips_output_exists("Bash", "sips input.png --out /tmp/$NAME") is None
+    )
+    assert (
+        _sips_output_exists("Bash", "sips input.png --out /tmp/*.jpg") is None
+    )
 
 
 @pytest.mark.asyncio
@@ -269,9 +282,8 @@ async def test_shell_syntax_reaches_model_instead_of_immediate_approval(
     assert len(seen) == 1
     assert seen[0]["state"]["target"] == command
     assert "read_only" in seen[0]["questions"]["impact"]["criteria"]
-    assert (
-        "Listing filenames or file metadata alone does not count"
-        in (seen[0]["questions"]["secret_exposure"]["instructions"])
+    assert "Listing filenames or file metadata alone does not count" in (
+        seen[0]["questions"]["secret_exposure"]["instructions"]
     )
 
 
@@ -300,7 +312,7 @@ async def test_sensitive_target_never_reaches_service(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_unconfigured_effectful_call_requires_approval(
-    monkeypatch, typesafe_provider
+    monkeypatch,
 ):
     async def no_key(_provider):
         return None

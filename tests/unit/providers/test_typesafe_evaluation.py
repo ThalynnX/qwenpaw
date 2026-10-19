@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-"""TypeSafe evaluation uses provider configuration and validates its envelope."""
+"""TypeSafe evaluation uses provider settings and validates responses."""
+
+# pylint: disable=protected-access
 
 import json
 from types import SimpleNamespace
@@ -13,8 +15,8 @@ from qwenpaw.providers.typesafe_provider import (
 )
 
 
-@pytest.fixture
-def provider():
+@pytest.fixture(name="provider")
+def configured_provider():
     return TypeSafeProvider(
         id="typesafe",
         name="TypeSafe",
@@ -119,13 +121,19 @@ async def test_invalid_response_envelope_is_rejected(monkeypatch, provider):
             transport=httpx.MockTransport(
                 lambda _request: httpx.Response(
                     200,
-                    json={"model": "jev-2", "answers": {"q": {"type": "score"}}},
+                    json={
+                        "model": "jev-2",
+                        "answers": {"q": {"type": "score"}},
+                    },
                 ),
             ),
             **kwargs,
         ),
     )
-    with pytest.raises(TypeSafeEvaluationError, match="Invalid response envelope"):
+    with pytest.raises(
+        TypeSafeEvaluationError,
+        match="Invalid response envelope",
+    ):
         await provider.evaluate(
             state="x",
             questions={"q": {"type": "noul", "instructions": "x"}},
