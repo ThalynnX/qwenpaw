@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   setSelectedAgent: vi.fn(),
   refreshAgents: vi.fn().mockResolvedValue(undefined),
   language: "en",
+  renderActualSettingsPanel: false,
 }));
 
 vi.mock("react-i18next", () => ({
@@ -49,7 +50,11 @@ vi.mock("react-i18next", () => ({
 }));
 
 vi.mock("../contexts/ThemeContext", () => ({
-  useTheme: () => ({ isDark: false }),
+  useTheme: () => ({
+    isDark: false,
+    themeMode: "light",
+    setThemeMode: vi.fn(),
+  }),
 }));
 
 vi.mock("../stores/sidebarStore", () => ({
@@ -188,13 +193,23 @@ vi.mock("./SidebarSessionList", () => ({
   ),
 }));
 
-vi.mock("./SidebarSettingsPanel", () => ({
-  default: ({ onOpenAccount }: { onOpenAccount?: () => void }) => (
-    <div data-testid="settings-panel">
-      <button onClick={onOpenAccount}>account.title</button>
-    </div>
-  ),
-}));
+vi.mock("./SidebarSettingsPanel", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("./SidebarSettingsPanel")
+  >();
+  return {
+    default: (props: React.ComponentProps<typeof actual.default>) => {
+      if (mocks.renderActualSettingsPanel) {
+        return React.createElement(actual.default, props);
+      }
+      return (
+        <div data-testid="settings-panel">
+          <button onClick={props.onOpenAccount}>account.title</button>
+        </div>
+      );
+    },
+  };
+});
 
 const iconStubs = vi.hoisted(() => {
   const make = (name: string) => {
@@ -347,26 +362,38 @@ const modelsItem = {
 };
 
 describe("Sidebar", () => {
-  it("shows a local identity capsule when authentication is disabled", () => {
+  it("opens deferred quick settings without deprecated Tooltip props", async () => {
+    mocks.renderActualSettingsPanel = true;
     const consoleError = vi
       .spyOn(console, "error")
       .mockImplementation(() => {});
     try {
       renderWithProviders(<Sidebar selectedKey="core.chat" />);
-      const label = screen.getByText("sidebar.localWorkspace");
-      expect(label.closest("button")).toHaveAttribute("aria-haspopup", "menu");
-      expect(screen.getByText("sidebar.localMode")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Settings" }));
       expect(
-        consoleError.mock.calls.filter(([message]) =>
-          String(message).includes(
-            "[antd: Tooltip] `overlayClassName` is deprecated",
+        await screen.findByRole("button", { name: "Appearance" }),
+      ).toBeInTheDocument();
+      await waitFor(() => {
+        expect(
+          consoleError.mock.calls.filter(([message]) =>
+            String(message).includes(
+              "[antd: Tooltip] `overlayClassName` is deprecated",
+            ),
           ),
-        ),
-      ).toHaveLength(0);
+        ).toHaveLength(0);
+      });
     } finally {
       consoleError.mockRestore();
     }
   });
+
+  it("shows a local identity capsule when authentication is disabled", () => {
+    renderWithProviders(<Sidebar selectedKey="core.chat" />);
+    const label = screen.getByText("sidebar.localWorkspace");
+    expect(label.closest("button")).toHaveAttribute("aria-haspopup", "menu");
+    expect(screen.getByText("sidebar.localMode")).toBeInTheDocument();
+  });
+
   beforeEach(() => {
     mockMobileViewport(false);
     localStorage.removeItem("qwenpaw_sidebar_collapsed");
@@ -396,6 +423,7 @@ describe("Sidebar", () => {
     mocks.setSelectedAgent.mockClear();
     mocks.refreshAgents.mockClear().mockResolvedValue(undefined);
     mocks.language = "en";
+    mocks.renderActualSettingsPanel = false;
   });
 
   it("keeps plugin fills and navigation alive through floating and docking", async () => {
