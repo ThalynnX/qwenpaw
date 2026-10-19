@@ -1469,6 +1469,7 @@
   "voiceTranscription": {
     "title": "Phiên âm giọng nói",
     "description": "Cấu hình cách xử lý tin nhắn âm thanh đến.",
+    "loadFailed": "Không thể tải cài đặt phiên âm giọng nói",
     "saveSuccess": "Đã lưu chế độ âm thanh",
     "saveFailed": "Lưu chế độ âm thanh thất bại",
     "audioModeLabel": "Chế độ âm thanh",

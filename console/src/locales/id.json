@@ -3511,6 +3511,7 @@
   "voiceTranscription": {
     "title": "Transkripsi Suara",
     "description": "Konfigurasi cara pesan audio dan suara yang masuk ditangani.",
+    "loadFailed": "Gagal memuat pengaturan transkripsi suara",
     "saveSuccess": "Mode audio tersimpan",
     "saveFailed": "Gagal menyimpan mode audio",
     "audioModeLabel": "Mode Audio",

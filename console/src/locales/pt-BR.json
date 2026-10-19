@@ -413,6 +413,7 @@
   "voiceTranscription": {
     "title": "Transcricao de Voz",
     "description": "Configure como mensagens de audio e voz recebidas sao processadas.",
+    "loadFailed": "Falha ao carregar as configuracoes de transcricao de voz",
     "saveSuccess": "Modo de audio salvo",
     "saveFailed": "Falha ao salvar modo de audio",
     "audioModeLabel": "Modo de Audio",
