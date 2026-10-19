@@ -24,6 +24,7 @@
   border-bottom: 1px solid var(--env-border);
 }
 .content {
+  container-type: inline-size;
   width: min(1180px, calc(100% - 40px));
   margin: 0 auto;
   padding: 28px 0 56px;
@@ -267,26 +268,34 @@
   .searchBox {
     width: auto;
   }
+}
+
+@container (max-width: 760px) {
   .row {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 10px 14px;
   }
+
   .identity {
     grid-column: 1 / -1;
   }
+
   .actions {
     grid-column: 1 / -1;
     justify-content: flex-end;
     padding-top: 6px;
     border-top: 1px solid var(--env-border);
   }
+
   .locked {
     justify-content: flex-end;
   }
+
   .helpButton {
     min-width: 44px;
     min-height: 44px;
   }
+
   :global(.dark-mode) .actions {
     border-top-color: var(--env-border);
   }
