@@ -29,7 +29,13 @@ vi.mock("@/components/interaction/SettingsDrawer", () => ({
  * renders and action handlers execute under test.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, fireEvent, waitFor, render } from "@testing-library/react";
+import {
+  act,
+  screen,
+  fireEvent,
+  waitFor,
+  render,
+} from "@testing-library/react";
 import React from "react";
 
 const mocks = vi.hoisted(() => ({
@@ -552,6 +558,63 @@ describe("AccessControlDrawer", () => {
     expect(mocks.removeAclWhitelist).not.toHaveBeenCalled();
     expect(mocks.updateAclRemark).not.toHaveBeenCalled();
     expect(onStale).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not let agent A removal clear agent B removal loading", async () => {
+    let resolveAgentA!: () => void;
+    let resolveAgentB!: () => void;
+    const agentARemoval = new Promise<void>((resolve) => {
+      resolveAgentA = resolve;
+    });
+    const agentBRemoval = new Promise<void>((resolve) => {
+      resolveAgentB = resolve;
+    });
+    mocks.removeAclWhitelist
+      .mockReturnValueOnce(agentARemoval)
+      .mockReturnValueOnce(agentBRemoval);
+
+    let currentAgent = "agent-a";
+    const drawer = (ownerAgentId: string) => (
+      <AccessControlDrawer
+        open
+        ownerAgentId={ownerAgentId}
+        canMutate={(owner) => owner === currentAgent}
+        onStale={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+    const view = render(drawer("agent-a"));
+    await screen.findByText("alice");
+    const agentARow = screen.getByText("alice").closest("[data-row-key]")!;
+    fireEvent.click(
+      agentARow.querySelector("[data-testid='popconfirm-wrap'] button")!,
+    );
+    expect(mocks.removeAclWhitelist).toHaveBeenCalledTimes(1);
+
+    currentAgent = "agent-b";
+    view.rerender(drawer("agent-b"));
+    await screen.findByText("alice");
+    const agentBRow = screen.getByText("alice").closest("[data-row-key]")!;
+    const agentBRemove = agentBRow.querySelector(
+      "[data-testid='popconfirm-wrap'] button",
+    )!;
+    fireEvent.click(agentBRemove);
+    expect(mocks.removeAclWhitelist).toHaveBeenCalledTimes(2);
+    expect(agentBRemove).toBeDisabled();
+    fireEvent.click(agentBRemove);
+    expect(mocks.removeAclWhitelist).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      resolveAgentA();
+      await agentARemoval;
+    });
+    expect(agentBRemove).toBeDisabled();
+
+    await act(async () => {
+      resolveAgentB();
+      await agentBRemoval;
+    });
+    await waitFor(() => expect(agentBRemove).toBeEnabled());
   });
 
   it("keeps the OK button disabled until a user id is typed", async () => {

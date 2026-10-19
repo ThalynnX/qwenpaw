@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "antd";
 
@@ -88,5 +94,62 @@ describe("PendingApprovalsDrawer owner guard", () => {
     expect(mocks.deny).not.toHaveBeenCalled();
     expect(mocks.dismiss).not.toHaveBeenCalled();
     expect(onStale).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not let agent A completion clear agent B action loading", async () => {
+    let resolveAgentA!: () => void;
+    let resolveAgentB!: () => void;
+    const agentAAction = new Promise<void>((resolve) => {
+      resolveAgentA = resolve;
+    });
+    const agentBAction = new Promise<void>((resolve) => {
+      resolveAgentB = resolve;
+    });
+    mocks.approve
+      .mockReturnValueOnce(agentAAction)
+      .mockReturnValueOnce(agentBAction);
+
+    let currentAgent = "agent-a";
+    const drawer = (ownerAgentId: string) => (
+      <App>
+        <PendingApprovalsDrawer
+          open
+          ownerAgentId={ownerAgentId}
+          canMutate={(owner) => owner === currentAgent}
+          onStale={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </App>
+    );
+    const view = render(drawer("agent-a"));
+    await screen.findByText("Alice");
+    fireEvent.click(screen.getByRole("button", { name: "channels.approve" }));
+    expect(mocks.approve).toHaveBeenCalledTimes(1);
+
+    currentAgent = "agent-b";
+    view.rerender(drawer("agent-b"));
+    await screen.findByText("Alice");
+    const agentBApprove = screen.getByRole("button", {
+      name: "channels.approve",
+    });
+    fireEvent.click(agentBApprove);
+    expect(mocks.approve).toHaveBeenCalledTimes(2);
+    expect(agentBApprove).toHaveClass("ant-btn-loading");
+    fireEvent.click(agentBApprove);
+    expect(mocks.approve).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      resolveAgentA();
+      await agentAAction;
+    });
+    expect(agentBApprove).toHaveClass("ant-btn-loading");
+
+    await act(async () => {
+      resolveAgentB();
+      await agentBAction;
+    });
+    await waitFor(() =>
+      expect(agentBApprove).not.toHaveClass("ant-btn-loading"),
+    );
   });
 });

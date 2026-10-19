@@ -68,7 +68,12 @@ export function AccessControlDrawer({
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [batchLoading, setBatchLoading] = useState(false);
+  const [removingUserIds, setRemovingUserIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const loadVersionRef = useRef(0);
+  const removeSequenceRef = useRef(0);
+  const removeTokensRef = useRef(new Map<string, number>());
 
   const ensureCanMutate = useCallback(() => {
     if (ownerAgentId && canMutate(ownerAgentId)) return true;
@@ -78,6 +83,7 @@ export function AccessControlDrawer({
 
   useLayoutEffect(() => {
     loadVersionRef.current += 1;
+    removeTokensRef.current.clear();
     setAllACLs({});
     setSelectedChannel(null);
     setSelectedRowKeys([]);
@@ -88,7 +94,35 @@ export function AccessControlDrawer({
     setAddModalOpen(false);
     setLoading(false);
     setBatchLoading(false);
+    setRemovingUserIds(new Set());
   }, [open, ownerAgentId]);
+
+  const beginRemove = (key: string) => {
+    if (!ensureCanMutate() || removeTokensRef.current.has(key)) return null;
+    const token = ++removeSequenceRef.current;
+    removeTokensRef.current.set(key, token);
+    return { key, token, ownerAgentId };
+  };
+
+  const ownsRemove = (remove: {
+    key: string;
+    token: number;
+    ownerAgentId: string | null;
+  }) =>
+    remove.ownerAgentId !== null &&
+    remove.ownerAgentId === ownerAgentId &&
+    removeTokensRef.current.get(remove.key) === remove.token &&
+    canMutate(remove.ownerAgentId);
+
+  const finishRemove = (remove: {
+    key: string;
+    token: number;
+    ownerAgentId: string | null;
+  }) => {
+    if (!ownsRemove(remove)) return false;
+    removeTokensRef.current.delete(remove.key);
+    return true;
+  };
 
   const fetchACLs = useCallback(async () => {
     if (!ownerAgentId || !canMutate(ownerAgentId)) return;
@@ -146,19 +180,32 @@ export function AccessControlDrawer({
   };
 
   const handleRemove = async (userId: string) => {
-    if (!ensureCanMutate()) return;
     if (!selectedChannel) return;
+    const removeKey = `${selectedChannel}:${userId}`;
+    const removeOwner = beginRemove(removeKey);
+    if (!removeOwner) return;
+    setRemovingUserIds((current) => new Set(current).add(removeKey));
     const removeApi =
       activeTab === "whitelist"
         ? accessControlApi.removeAclWhitelist
         : accessControlApi.removeAclBlacklist;
     try {
       await removeApi([{ channel: selectedChannel, user_id: userId }]);
-      if (!ensureCanMutate()) return;
+      if (!ownsRemove(removeOwner)) return;
       message.success(t("channels.userRemoved"));
       await fetchACLs();
     } catch {
-      if (ensureCanMutate()) message.error(t("channels.operationFailed"));
+      if (ownsRemove(removeOwner)) {
+        message.error(t("channels.operationFailed"));
+      }
+    } finally {
+      if (finishRemove(removeOwner)) {
+        setRemovingUserIds((current) => {
+          const next = new Set(current);
+          next.delete(removeKey);
+          return next;
+        });
+      }
     }
   };
 
@@ -190,8 +237,9 @@ export function AccessControlDrawer({
   };
 
   const handleBatchRemove = async () => {
-    if (!ensureCanMutate()) return;
     if (!selectedChannel || selectedRowKeys.length === 0) return;
+    const removeOwner = beginRemove(`batch:${selectedChannel}:${activeTab}`);
+    if (!removeOwner) return;
     setBatchLoading(true);
     const removeApi =
       activeTab === "whitelist"
@@ -204,16 +252,18 @@ export function AccessControlDrawer({
           user_id: userId as string,
         })),
       );
-      if (!ensureCanMutate()) return;
+      if (!ownsRemove(removeOwner)) return;
       message.success(
         t("channels.batchSuccess", { count: selectedRowKeys.length }),
       );
       setSelectedRowKeys([]);
       await fetchACLs();
     } catch {
-      if (ensureCanMutate()) message.error(t("channels.operationFailed"));
+      if (ownsRemove(removeOwner)) {
+        message.error(t("channels.operationFailed"));
+      }
     } finally {
-      setBatchLoading(false);
+      if (finishRemove(removeOwner)) setBatchLoading(false);
     }
   };
 
@@ -307,7 +357,12 @@ export function AccessControlDrawer({
           title={`Remove ${record.userId}?`}
           onConfirm={() => handleRemove(record.userId)}
         >
-          <Button type="text" danger size="small">
+          <Button
+            type="text"
+            danger
+            size="small"
+            loading={removingUserIds.has(`${selectedChannel}:${record.userId}`)}
+          >
             {t("channels.batchRemove")}
           </Button>
         </Popconfirm>

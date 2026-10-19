@@ -73,6 +73,8 @@ export function PendingApprovalsDrawer({
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const loadVersionRef = useRef(0);
+  const actionSequenceRef = useRef(0);
+  const actionTokensRef = useRef(new Map<string, number>());
 
   const ensureCanMutate = useCallback(() => {
     if (ownerAgentId && canMutate(ownerAgentId)) return true;
@@ -82,6 +84,7 @@ export function PendingApprovalsDrawer({
 
   useLayoutEffect(() => {
     loadVersionRef.current += 1;
+    actionTokensRef.current.clear();
     setPending([]);
     setSelectedRowKeys([]);
     setSelectedChannels([]);
@@ -89,6 +92,33 @@ export function PendingApprovalsDrawer({
     setActionLoading(null);
     setBatchLoading(false);
   }, [open, ownerAgentId]);
+
+  const beginAction = (key: string) => {
+    if (!ensureCanMutate() || actionTokensRef.current.has(key)) return null;
+    const token = ++actionSequenceRef.current;
+    actionTokensRef.current.set(key, token);
+    return { key, token, ownerAgentId };
+  };
+
+  const ownsAction = (action: {
+    key: string;
+    token: number;
+    ownerAgentId: string | null;
+  }) =>
+    action.ownerAgentId !== null &&
+    action.ownerAgentId === ownerAgentId &&
+    actionTokensRef.current.get(action.key) === action.token &&
+    canMutate(action.ownerAgentId);
+
+  const finishAction = (action: {
+    key: string;
+    token: number;
+    ownerAgentId: string | null;
+  }) => {
+    if (!ownsAction(action)) return false;
+    actionTokensRef.current.delete(action.key);
+    return true;
+  };
 
   const fetchPending = useCallback(async () => {
     if (!ownerAgentId || !canMutate(ownerAgentId)) return;
@@ -175,38 +205,44 @@ export function PendingApprovalsDrawer({
   };
 
   const handleAction = async (entry: PendingEntry, action: PendingAction) => {
-    if (!ensureCanMutate()) return;
     const key = `${entry.channel}:${entry.user_id}`;
+    const actionOwner = beginAction(key);
+    if (!actionOwner) return;
     setActionLoading(key);
     try {
       await ACTION_API_MAP[action]([
         { channel: entry.channel, user_id: entry.user_id },
       ]);
-      if (!ensureCanMutate()) return;
+      if (!ownsAction(actionOwner)) return;
       message.success(t(ACTION_SUCCESS_KEY[action]));
       await fetchPending();
     } catch {
-      if (ensureCanMutate()) message.error(t("channels.operationFailed"));
+      if (ownsAction(actionOwner)) {
+        message.error(t("channels.operationFailed"));
+      }
     } finally {
-      setActionLoading(null);
+      if (finishAction(actionOwner)) setActionLoading(null);
     }
   };
 
   const handleBatchAction = async (action: PendingAction) => {
-    if (!ensureCanMutate()) return;
+    const actionOwner = beginAction("batch");
+    if (!actionOwner) return;
     setBatchLoading(true);
     try {
       await ACTION_API_MAP[action](selectedEntries);
-      if (!ensureCanMutate()) return;
+      if (!ownsAction(actionOwner)) return;
       message.success(
         t("channels.batchSuccess", { count: selectedEntries.length }),
       );
       setSelectedRowKeys([]);
       await fetchPending();
     } catch {
-      if (ensureCanMutate()) message.error(t("channels.operationFailed"));
+      if (ownsAction(actionOwner)) {
+        message.error(t("channels.operationFailed"));
+      }
     } finally {
-      setBatchLoading(false);
+      if (finishAction(actionOwner)) setBatchLoading(false);
     }
   };
 
