@@ -29,6 +29,8 @@ class _FaultWorkspace:
             )
         if _SCENARIO == "idle":
             raise StreamIdleTimeoutError("policy", 600.0)
+        if _SCENARIO == "internal":
+            raise RuntimeError("internal secret-token")
         if _SCENARIO == "disconnect":
             await asyncio.sleep(30)
         yield SimpleNamespace(

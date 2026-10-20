@@ -26,7 +26,7 @@ import time
 from types import SimpleNamespace
 
 import pytest
-from acp import PROTOCOL_VERSION, text_block
+from acp import PROTOCOL_VERSION, RequestError, text_block
 from acp.stdio import spawn_agent_process
 
 import qwenpaw
@@ -281,12 +281,16 @@ async def _prompt_via_subprocess(scenario: str, tmp_path):
         "scenario": scenario,
         "stop_reason": None,
         "prompt_error": None,
+        "error_code": None,
+        "error_data": None,
+        "client_updates": [],
         "exit_code": None,
     }
     env = _driver_env(scenario, tmp_path)
+    client = _SubprocessClient()
 
     async with spawn_agent_process(
-        _SubprocessClient(),
+        client,
         sys.executable,
         str(DRIVER),
         env=env,
@@ -300,9 +304,14 @@ async def _prompt_via_subprocess(scenario: str, tmp_path):
                 session_id=session.session_id,
             )
             observed["stop_reason"] = response.stop_reason
+        except RequestError as exc:
+            observed["prompt_error"] = f"{type(exc).__name__}: {exc}"
+            observed["error_code"] = exc.code
+            observed["error_data"] = exc.data
         except Exception as exc:  # noqa: BLE001 - recorded for the A/B run
             observed["prompt_error"] = f"{type(exc).__name__}: {exc}"
 
+    observed["client_updates"] = [str(update) for update in client.updates]
     # The transport closes stdin and waits for a graceful exit; the
     # return code is only final after the context manager unwinds.
     observed["exit_code"] = process.returncode
@@ -387,4 +396,27 @@ async def test_subprocess_normal_prompt_exits_zero(tmp_path):
 
     assert observed["prompt_error"] is None, observed
     assert observed["stop_reason"] == "end_turn", observed
+    assert observed["exit_code"] == 0, observed
+
+
+@pytest.mark.integration
+async def test_subprocess_internal_error_keeps_request_error(tmp_path):
+    """Internal bugs must reach the client as -32603, not as a normal turn.
+
+    A RequestError is handled by the JSON-RPC layer, so the process can still
+    exit 0 after the transport closes. The error response itself is the
+    evidence that the failure was not converted to ``end_turn``.
+    """
+
+    observed = await _prompt_via_subprocess("internal", tmp_path)
+
+    assert observed["stop_reason"] is None, observed
+    assert observed["error_code"] == -32603, observed
+    assert observed["error_data"] == {
+        "details": "QwenPaw runtime failed",
+    }, observed
+    assert "secret-token" not in str(observed["client_updates"]), observed
+    assert "secret-token" not in str(observed["error_data"]), observed
+    # RequestError is returned at the JSON-RPC layer; exit 0 is expected and
+    # is not the evidence that the internal error was preserved.
     assert observed["exit_code"] == 0, observed
