@@ -149,7 +149,7 @@ export function AgentModelCard() {
             expanded
             autoSave
             surface="settings"
-            key={`${agent.id}:${agent.active_model?.provider_id}:${agent.active_model?.model}`}
+            key={agent.id}
             agentId={agent.id}
             providers={eligibleProviders}
             decisionProviders={decisionProviders}

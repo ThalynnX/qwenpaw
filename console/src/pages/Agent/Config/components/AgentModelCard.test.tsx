@@ -51,6 +51,7 @@ vi.mock("@/pages/Chat/ModelSelector/AgentModelSettings", () => ({
       }
     >
       {agentId}
+      <input aria-label="routing draft" defaultValue="" />
     </div>
   ),
 }));
@@ -132,6 +133,36 @@ describe("AgentModelCard", () => {
       expect(
         screen.queryByRole("region", { name: "models.agentDefaults" }),
       ).not.toBeInTheDocument(),
+    );
+  });
+
+  it("keeps routing drafts mounted when the primary model changes", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AgentModelCard />);
+
+    const draft = await screen.findByRole("textbox", {
+      name: "routing draft",
+    });
+    await user.type(draft, "pending change");
+
+    act(() =>
+      useAgentStore.setState({
+        agents: [
+          {
+            id: "default",
+            name: "Default",
+            description: "",
+            workspace_dir: "default",
+            enabled: true,
+            backend: "qwenpaw",
+            active_model: { provider_id: "openai", model: "gpt-5" },
+          },
+        ],
+      }),
+    );
+
+    expect(screen.getByRole("textbox", { name: "routing draft" })).toHaveValue(
+      "pending change",
     );
   });
 
