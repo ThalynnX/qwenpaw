@@ -1,3 +1,21 @@
+> [!IMPORTANT]
+> **本项目基于 [QwenPaw](https://github.com/agentscope-ai/QwenPaw) 开源项目（[Apache-2.0](LICENSE)）二次开发**，完整同步官方 [agentscope-ai/QwenPaw](https://github.com/agentscope-ai/QwenPaw) 开源代码，并保留官方多语言文档（README_zh / README_ja / README_ru / README_vi）。本仓库仅做托管、分发与二次开发标注，版权归 QwenPaw 原项目所有。
+
+<div align="center">
+
+# ⬇️ 下载与直接拉取
+
+| 方式 | 链接 |
+| :--- | :--- |
+| **完整源码包（ZIP）** | https://github.com/ThalynnX/qwenpaw/archive/refs/heads/main.zip |
+| **版本发布包（Releases）** | https://github.com/ThalynnX/qwenpaw/releases |
+| **直接克隆** | `git clone https://github.com/ThalynnX/qwenpaw.git` |
+
+</div>
+
+---
+
+<!-- ===== 以下为 QwenPaw 官方 README 原文（保持原样，含徽章与介绍） ===== -->
 <div align="center">
 
 # QwenPaw
@@ -539,5 +557,3 @@ All thanks to our contributors:
 <a href="https://github.com/agentscope-ai/QwenPaw/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=agentscope-ai/QwenPaw" alt="Contributors" />
 </a>
- 
- 
