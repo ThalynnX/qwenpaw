@@ -16,7 +16,10 @@ from qwenpaw.agents.acp.runtime_provider import (
     RUNTIME_OPENAI_PROVIDER_ID,
     OpenAIRuntimeProviderConfig,
 )
-from qwenpaw.agents.acp.server import QwenPawACPAgent
+from qwenpaw.agents.acp.server import (
+    ACP_KEEPALIVE_META_KEY,
+    QwenPawACPAgent,
+)
 from qwenpaw.config.config import ModelSlotConfig
 
 
@@ -313,6 +316,8 @@ async def test_runtime_provider_rejects_other_model():
 
 
 async def test_runtime_failure_is_an_acp_request_error(monkeypatch):
+    """Unexpected internal errors keep the JSON-RPC error contract."""
+
     async def _raise_runtime_error():
         raise RuntimeError("upstream returned secret-token")
 
@@ -345,6 +350,82 @@ async def test_runtime_failure_is_an_acp_request_error(monkeypatch):
         "details": "QwenPaw runtime failed",
     }
     assert "secret-token" not in str(conn.updates)
+
+
+@pytest.mark.parametrize(
+    "message",
+    ("content_policy_violation", "moderation rejected"),
+)
+async def test_prompt_content_safety_is_refusal(monkeypatch, message):
+    """Shared content-safety classification drives ACP refusal semantics."""
+
+    class _RejectingWorkspace:
+        async def stream_query(self, request):  # noqa: ANN001
+            del request
+            if message:
+                raise RuntimeError(message)
+            yield None
+
+    agent = QwenPawACPAgent(
+        agent_id="default",
+        runtime_provider=_config(),
+    )
+    conn = _FakeConn()
+    agent.on_connect(conn)
+
+    async def _fake_workspace():
+        return _RejectingWorkspace()
+
+    monkeypatch.setattr(agent, "_ensure_workspace", _fake_workspace)
+    response = await agent.new_session(cwd="/task")
+
+    prompt_response = await agent.prompt(
+        prompt=[text_block("hello")],
+        session_id=response.session_id,
+    )
+
+    assert prompt_response.stop_reason == "refusal"
+
+
+async def test_prompt_keepalive_covers_unmapped_events(monkeypatch):
+    """Tool progress events must not starve ACP transport keepalives."""
+
+    from qwenpaw.agents.acp import server as acp_server
+
+    monkeypatch.setattr(acp_server, "_ACP_KEEPALIVE_SECONDS", 0.0)
+
+    class _ProgressWorkspace:
+        async def stream_query(self, request):  # noqa: ANN001
+            del request
+            yield SimpleNamespace(
+                object="content",
+                type="data",
+                data={"call_id": "call-1", "output": "progress"},
+            )
+
+    agent = QwenPawACPAgent(
+        agent_id="default",
+        runtime_provider=_config(),
+    )
+    conn = _FakeConn()
+    agent.on_connect(conn)
+
+    async def _fake_workspace():
+        return _ProgressWorkspace()
+
+    monkeypatch.setattr(agent, "_ensure_workspace", _fake_workspace)
+    response = await agent.new_session(cwd="/task")
+
+    prompt_response = await agent.prompt(
+        prompt=[text_block("hello")],
+        session_id=response.session_id,
+    )
+
+    assert prompt_response.stop_reason == "end_turn"
+    assert any(
+        getattr(update, "field_meta", {}).get(ACP_KEEPALIVE_META_KEY)
+        for _, update in conn.updates
+    )
 
 
 async def test_cancel_stops_active_prompt(monkeypatch):

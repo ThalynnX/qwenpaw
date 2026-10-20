@@ -103,6 +103,40 @@ _ACP_RUNTIME_MODEL_SLOT_KEY = "qwenpaw.runtime_model_slot"
 _GENERIC_PROMPT_ERROR = (
     "QwenPaw failed to process the request. Check server logs for details."
 )
+_ACP_KEEPALIVE_SECONDS = 20.0
+ACP_KEEPALIVE_META_KEY = "qwenpaw.keepalive"
+
+
+def _is_client_disconnect(exc: BaseException) -> bool:
+    """Return whether *exc* is an ACP transport disconnect."""
+    if isinstance(exc, BrokenPipeError):
+        return True
+    if isinstance(exc, ConnectionError):
+        message = str(exc).lower()
+        return (
+            f"connection closed" in message or f"transport closed" in message
+        )
+    return False
+
+
+def _prompt_failure_stop_reason(exc: BaseException) -> str | None:
+    """Return a stop reason only for confirmed task-level failures.
+
+    Unexpected exceptions must keep the original JSON-RPC error contract so
+    that internal bugs are not silently converted into a normal 0-score turn.
+    """
+    if _is_client_disconnect(exc):
+        return f"end_turn"
+    from ...providers.retry_chat_model import StreamIdleTimeoutError
+
+    if isinstance(exc, StreamIdleTimeoutError):
+        return f"end_turn"
+    if isinstance(exc, Exception):
+        from ...providers.model_error_policy import classify_model_error
+
+        if classify_model_error(exc).kind == f"content_safety":
+            return f"refusal"
+    return None
 
 
 PromptBlocks = list[
@@ -143,6 +177,7 @@ class _EnvelopeTracker:
     def __init__(self) -> None:
         self._reasoning_msg_ids: set[str] = set()
         self._streamed_text_msg_ids: set[str] = set()
+        self._active_tool_calls: dict[str, str] = {}
 
     @staticmethod
     def _tool_raw_input(data: dict[str, Any]) -> Any:
@@ -206,16 +241,26 @@ class _EnvelopeTracker:
                     self._reasoning_msg_ids.add(msg_id)
                 return []
 
+            if msg_type == f"heartbeat":
+                return [
+                    update_tool_call(call_id, status=f"in_progress")
+                    for call_id in self._active_tool_calls
+                ]
+
             if msg_type == MessageType.PLUGIN_CALL.value:
                 if status == RunStatus.Completed:
                     for c in getattr(event, "content", []) or []:
                         data = getattr(c, "data", None)
                         if isinstance(data, dict):
+                            call_id = str(
+                                data.get("call_id") or uuid4().hex[:8],
+                            )
+                            self._active_tool_calls[call_id] = str(
+                                data.get("name") or "tool",
+                            )
                             return [
                                 start_tool_call(
-                                    str(
-                                        data.get("call_id") or uuid4().hex[:8],
-                                    ),
+                                    call_id,
                                     str(data.get("name") or "tool"),
                                     status="in_progress",
                                     raw_input=self._tool_raw_input(data),
@@ -228,11 +273,13 @@ class _EnvelopeTracker:
                     for c in getattr(event, "content", []) or []:
                         data = getattr(c, "data", None)
                         if isinstance(data, dict):
+                            call_id = str(
+                                data.get("call_id") or uuid4().hex[:8],
+                            )
+                            self._active_tool_calls.pop(call_id, None)
                             return [
                                 update_tool_call(
-                                    str(
-                                        data.get("call_id") or uuid4().hex[:8],
-                                    ),
+                                    call_id,
                                     status=self._tool_result_status(data),
                                     content=[
                                         tool_content(
@@ -645,6 +692,8 @@ class QwenPawACPAgent(Agent):
 
         tracker = _EnvelopeTracker()
         was_cancelled = False
+        loop = asyncio.get_running_loop()
+        last_emit = loop.time()
 
         try:
             async for event in workspace.stream_query(request):
@@ -662,8 +711,14 @@ class QwenPawACPAgent(Agent):
                         session_id=session_id,
                         update=upd,
                     )
+                    last_emit = loop.time()
 
-                await self._emit_usage_if_available(session_id)
+                if await self._emit_usage_if_available(session_id):
+                    last_emit = loop.time()
+
+                if loop.time() - last_emit >= _ACP_KEEPALIVE_SECONDS:
+                    await self._emit_keepalive(session_id)
+                    last_emit = loop.time()
         except asyncio.CancelledError:
             was_cancelled = True
             logger.info(
@@ -676,9 +731,12 @@ class QwenPawACPAgent(Agent):
                 session_id,
             )
             await self._report_prompt_error(session_id, exc)
-            raise RequestError.internal_error(
-                {"details": "QwenPaw runtime failed"},
-            ) from None
+            stop_reason = _prompt_failure_stop_reason(exc)
+            if stop_reason is None:
+                raise RequestError.internal_error(
+                    {"details": "QwenPaw runtime failed"},
+                ) from None
+            return PromptResponse(stop_reason=stop_reason)
         finally:
             await self._stop_approval_bridge(approval_bridge)
             self._cancel_events.pop(session_id, None)
@@ -1214,7 +1272,7 @@ class QwenPawACPAgent(Agent):
     async def _emit_usage_if_available(
         self,
         session_id: str,
-    ) -> None:
+    ) -> bool:
         """Send a usage chunk if new usage data is available."""
         usage_meta = self._pop_session_usage(session_id)
         if usage_meta:
@@ -1255,6 +1313,19 @@ class QwenPawACPAgent(Agent):
                     field_meta=field_meta,
                 ),
             )
+            return True
+        return False
+
+    async def _emit_keepalive(self, session_id: str) -> None:
+        """Send a transport-only frame when events did not map to ACP."""
+        await self._conn.session_update(
+            session_id=session_id,
+            update=AgentMessageChunk(
+                sessionUpdate="agent_message_chunk",
+                content=text_block(""),
+                field_meta={ACP_KEEPALIVE_META_KEY: True},
+            ),
+        )
 
     @staticmethod
     def _pop_session_usage(
@@ -1425,7 +1496,13 @@ class QwenPawACPAgent(Agent):
                     field_meta={ACP_ERROR_META_KEY: True},
                 ),
             )
-        except Exception:
+        except Exception as report_exc:
+            if _is_client_disconnect(report_exc):
+                logger.info(
+                    "ACP client disconnected before error report: session=%s",
+                    session_id,
+                )
+                return
             logger.exception(
                 "ACP: failed to report prompt error to client (session=%s)",
                 session_id,
@@ -1583,6 +1660,11 @@ async def run_qwenpaw_agent(
     try:
         # pylint: disable=protected-access
         await agent._install_runtime_provider()
-        await run_agent(agent, use_unstable_protocol=True)
+        try:
+            await run_agent(agent, use_unstable_protocol=True)
+        except ConnectionError as exc:
+            if not _is_client_disconnect(exc):
+                raise
+            logger.info("ACP client disconnected; shutting down cleanly")
     finally:
         await agent._shutdown_workspace()  # pylint: disable=protected-access

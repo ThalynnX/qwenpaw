@@ -1,0 +1,422 @@
+# -*- coding: utf-8 -*-
+"""Fault-injection tests for ACP liveness and task-level exit semantics.
+
+The tests drive the real ``QwenPawACPAgent.prompt`` loop with a fake
+workspace.  They reproduce the two failure classes seen in the
+benchmark:
+
+* events that never map to an ACP frame starve the transport, and
+* expected task failures escape ``prompt`` as ``RequestError`` so the
+  agent process can end nonzero.
+
+All timings use the production keepalive threshold.  The subprocess
+tests additionally assert the real process exit code, which is what the
+benchmark harness classifies as ``NonZeroAgentExitCodeError``.
+"""
+
+# pylint: disable=unreachable,unused-argument
+
+from __future__ import annotations
+
+import asyncio
+import os
+import pathlib
+import sys
+import time
+from types import SimpleNamespace
+
+import pytest
+from acp import PROTOCOL_VERSION, RequestError, text_block
+from acp.stdio import spawn_agent_process
+
+import qwenpaw
+from qwenpaw.agents.acp import server as acp_server
+from qwenpaw.agents.acp.server import QwenPawACPAgent
+from qwenpaw.providers.retry_chat_model import StreamIdleTimeoutError
+from qwenpaw.schemas import MessageType, RunStatus
+
+# The baseline revision does not define these constants; keeping the
+# lookups lazy lets the same file run as the A/B control.
+KEEPALIVE_META_KEY = getattr(
+    acp_server,
+    "ACP_KEEPALIVE_META_KEY",
+    "qwenpaw.keepalive",
+)
+HEARTBEAT_TYPE = "heartbeat"
+UNMAPPED_EVENT_TYPE = "tool_result_text_delta"
+
+DRIVER = pathlib.Path(__file__).with_name("_acp_fault_driver.py")
+SRC_DIR = pathlib.Path(qwenpaw.__file__).resolve().parents[1]
+
+
+class _RecordingConn:
+    """Record every ACP notification with a monotonic timestamp."""
+
+    def __init__(self) -> None:
+        self.updates: list[tuple[str, object]] = []
+        self.times: list[float] = []
+
+    async def session_update(self, session_id, update) -> None:
+        self.updates.append((session_id, update))
+        self.times.append(time.monotonic())
+
+
+class _FakeWorkspace:
+    def __init__(self, stream) -> None:
+        self._stream = stream
+
+    async def stream_query(self, request):
+        del request
+        async for event in self._stream():
+            yield event
+
+
+def _tool_start_event(call_id: str = "call-1"):
+    data = {"call_id": call_id, "name": "Bash", "arguments": "{}"}
+    return SimpleNamespace(
+        object="message",
+        type=MessageType.PLUGIN_CALL.value,
+        status=RunStatus.Completed,
+        content=[SimpleNamespace(data=data)],
+    )
+
+
+def _tool_output_event(call_id: str = "call-1"):
+    data = {"call_id": call_id, "output": "done", "state": "success"}
+    return SimpleNamespace(
+        object="message",
+        type=MessageType.PLUGIN_CALL_OUTPUT.value,
+        status=RunStatus.Completed,
+        content=[SimpleNamespace(data=data)],
+    )
+
+
+def _unmapped_event():
+    return SimpleNamespace(
+        object="message",
+        type=UNMAPPED_EVENT_TYPE,
+        status=RunStatus.Completed,
+        content=[],
+    )
+
+
+def _heartbeat_event():
+    return SimpleNamespace(object="message", type=HEARTBEAT_TYPE)
+
+
+async def _agent_with_stream(monkeypatch, stream):
+    agent = QwenPawACPAgent(agent_id="default")
+    conn = _RecordingConn()
+    agent.on_connect(conn)
+
+    async def _fake_workspace():
+        return _FakeWorkspace(stream)
+
+    monkeypatch.setattr(agent, "_ensure_workspace", _fake_workspace)
+    session = await agent.new_session(cwd="/task")
+    return agent, conn, session.session_id
+
+
+@pytest.mark.integration
+async def test_unmapped_deltas_emit_keepalive_at_production_threshold(
+    monkeypatch,
+):
+    """A stream of unmapped deltas must still produce ACP frames."""
+
+    threshold = getattr(acp_server, "_ACP_KEEPALIVE_SECONDS", 20.0)
+    run_for = threshold + 3.0
+
+    async def _stream():
+        deadline = time.monotonic() + run_for
+        while time.monotonic() < deadline:
+            await asyncio.sleep(0.5)
+            yield _unmapped_event()
+
+    agent, conn, session_id = await _agent_with_stream(
+        monkeypatch,
+        _stream,
+    )
+
+    started = time.monotonic()
+    response = await agent.prompt(
+        prompt=[text_block("hello")],
+        session_id=session_id,
+    )
+    elapsed = time.monotonic() - started
+
+    keepalives = [
+        ts
+        for (_, update), ts in zip(conn.updates, conn.times)
+        if (getattr(update, "field_meta", None) or {}).get(
+            KEEPALIVE_META_KEY,
+        )
+    ]
+
+    assert response.stop_reason == "end_turn"
+    assert keepalives, (
+        f"no keepalive frame in {elapsed:.1f}s; "
+        f"updates={len(conn.updates)}"
+    )
+    first_delay = keepalives[0] - started
+    assert threshold - 1.0 <= first_delay <= threshold + 3.0, (
+        f"first keepalive after {first_delay:.1f}s; "
+        f"expected about {threshold:.1f}s"
+    )
+
+
+@pytest.mark.integration
+async def test_silent_tool_heartbeats_keep_transport_alive(monkeypatch):
+    """Runtime heartbeats for an active tool must become ACP frames.
+
+    A silent tool emits no events except the runtime heartbeat.  The
+    baseline tracker drops those heartbeats, leaving a gap as long as
+    the tool call itself.
+    """
+
+    heartbeat_interval = 25.0
+    beats = 2
+
+    async def _stream():
+        yield _tool_start_event()
+        for _ in range(beats):
+            await asyncio.sleep(heartbeat_interval)
+            yield _heartbeat_event()
+        yield _tool_output_event()
+
+    agent, conn, session_id = await _agent_with_stream(
+        monkeypatch,
+        _stream,
+    )
+
+    response = await agent.prompt(
+        prompt=[text_block("hello")],
+        session_id=session_id,
+    )
+    finished = time.monotonic()
+
+    assert response.stop_reason == "end_turn"
+    assert len(conn.updates) >= 1 + beats, (
+        "expected tool start plus one frame per heartbeat; "
+        f"got {len(conn.updates)}"
+    )
+    heartbeat_updates = [
+        update
+        for _, update in conn.updates
+        if getattr(update, "session_update", "") == "tool_call_update"
+        and getattr(update, "status", "") == "in_progress"
+    ]
+    assert len(heartbeat_updates) >= beats
+
+    max_gap = max(
+        later - earlier for earlier, later in zip(conn.times, conn.times[1:])
+    )
+    tail_gap = finished - conn.times[-1]
+    assert max_gap <= 30.0, f"frame gap {max_gap:.1f}s exceeds 30s"
+    assert tail_gap <= 30.0, f"tail gap {tail_gap:.1f}s exceeds 30s"
+
+
+@pytest.mark.integration
+async def test_content_moderation_returns_refusal(monkeypatch):
+    """Aliyun moderation errors must end as an ACP refusal, not an error."""
+
+    async def _stream():
+        raise RuntimeError(
+            "400 data_inspection_failed: inappropriate content",
+        )
+        yield  # pragma: no cover
+
+    agent, conn, session_id = await _agent_with_stream(
+        monkeypatch,
+        _stream,
+    )
+
+    response = await agent.prompt(
+        prompt=[text_block("hello")],
+        session_id=session_id,
+    )
+
+    assert response.stop_reason == "refusal"
+    assert "data_inspection_failed" not in str(conn.updates)
+
+
+@pytest.mark.integration
+async def test_stream_idle_timeout_returns_end_turn(monkeypatch):
+    """An idle model stream must end the turn normally."""
+
+    async def _stream():
+        raise StreamIdleTimeoutError("policy", 600.0)
+        yield  # pragma: no cover
+
+    agent, _conn, session_id = await _agent_with_stream(
+        monkeypatch,
+        _stream,
+    )
+
+    response = await agent.prompt(
+        prompt=[text_block("hello")],
+        session_id=session_id,
+    )
+
+    assert response.stop_reason == "end_turn"
+
+
+def _driver_env(scenario: str, tmp_dir: pathlib.Path) -> dict[str, str]:
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(
+        part
+        for part in (
+            str(SRC_DIR),
+            env.get("PYTHONPATH", ""),
+        )
+        if part
+    )
+    env["QWENPAW_FAULT_SCENARIO"] = scenario
+    env["QWENPAW_WORKING_DIR"] = str(tmp_dir / "qwenpaw-state")
+    env["QWENPAW_SECRET_DIR"] = str(tmp_dir / "qwenpaw-secrets")
+    return env
+
+
+async def _prompt_via_subprocess(scenario: str, tmp_path):
+    observed: dict[str, object] = {
+        "scenario": scenario,
+        "stop_reason": None,
+        "prompt_error": None,
+        "error_code": None,
+        "error_data": None,
+        "client_updates": [],
+        "exit_code": None,
+    }
+    env = _driver_env(scenario, tmp_path)
+    client = _SubprocessClient()
+
+    async with spawn_agent_process(
+        client,
+        sys.executable,
+        str(DRIVER),
+        env=env,
+        cwd=str(pathlib.Path(__file__).resolve().parents[2]),
+    ) as (conn, process):
+        try:
+            await conn.initialize(protocol_version=PROTOCOL_VERSION)
+            session = await conn.new_session(cwd=str(tmp_path))
+            response = await conn.prompt(
+                prompt=[text_block("hello")],
+                session_id=session.session_id,
+            )
+            observed["stop_reason"] = response.stop_reason
+        except RequestError as exc:
+            observed["prompt_error"] = f"{type(exc).__name__}: {exc}"
+            observed["error_code"] = exc.code
+            observed["error_data"] = exc.data
+        except Exception as exc:  # noqa: BLE001 - recorded for the A/B run
+            observed["prompt_error"] = f"{type(exc).__name__}: {exc}"
+
+    observed["client_updates"] = [str(update) for update in client.updates]
+    # The transport closes stdin and waits for a graceful exit; the
+    # return code is only final after the context manager unwinds.
+    observed["exit_code"] = process.returncode
+    return observed
+
+
+class _SubprocessClient:
+    def __init__(self) -> None:
+        self.updates: list[object] = []
+
+    async def session_update(self, session_id, update, **kwargs) -> None:
+        self.updates.append(update)
+
+    async def request_permission(
+        self,
+        options,
+        session_id,
+        tool_call,
+        **kwargs,
+    ):
+        raise AssertionError("fake workspace never requests permission")
+
+
+@pytest.mark.integration
+async def test_run_agent_swallows_client_disconnect(monkeypatch):
+    """A dropped transport must not escape the agent entry point."""
+
+    calls: list[str] = []
+
+    async def _install(self):
+        calls.append("install")
+
+    async def _shutdown(self):
+        calls.append("shutdown")
+
+    async def _disconnect(agent, use_unstable_protocol=True):
+        del agent, use_unstable_protocol
+        raise ConnectionError("transport closed")
+
+    monkeypatch.setattr(
+        acp_server.QwenPawACPAgent,
+        "_install_runtime_provider",
+        _install,
+    )
+    monkeypatch.setattr(
+        acp_server.QwenPawACPAgent,
+        "_shutdown_workspace",
+        _shutdown,
+    )
+    monkeypatch.setattr(acp_server, "run_agent", _disconnect)
+
+    await acp_server.run_qwenpaw_agent()
+
+    assert calls == ["install", "shutdown"]
+
+
+@pytest.mark.integration
+async def test_subprocess_moderation_prompt_returns_refusal_and_exit_zero(
+    tmp_path,
+):
+    observed = await _prompt_via_subprocess("moderation", tmp_path)
+
+    assert observed["prompt_error"] is None, observed
+    assert observed["stop_reason"] == "refusal", observed
+    assert observed["exit_code"] == 0, observed
+
+
+@pytest.mark.integration
+async def test_subprocess_idle_prompt_returns_end_turn_and_exit_zero(
+    tmp_path,
+):
+    observed = await _prompt_via_subprocess("idle", tmp_path)
+
+    assert observed["prompt_error"] is None, observed
+    assert observed["stop_reason"] == "end_turn", observed
+    assert observed["exit_code"] == 0, observed
+
+
+@pytest.mark.integration
+async def test_subprocess_normal_prompt_exits_zero(tmp_path):
+    observed = await _prompt_via_subprocess("ok", tmp_path)
+
+    assert observed["prompt_error"] is None, observed
+    assert observed["stop_reason"] == "end_turn", observed
+    assert observed["exit_code"] == 0, observed
+
+
+@pytest.mark.integration
+async def test_subprocess_internal_error_keeps_request_error(tmp_path):
+    """Internal bugs must reach the client as -32603, not as a normal turn.
+
+    A RequestError is handled by the JSON-RPC layer, so the process can still
+    exit 0 after the transport closes. The error response itself is the
+    evidence that the failure was not converted to ``end_turn``.
+    """
+
+    observed = await _prompt_via_subprocess("internal", tmp_path)
+
+    assert observed["stop_reason"] is None, observed
+    assert observed["error_code"] == -32603, observed
+    assert observed["error_data"] == {
+        "details": "QwenPaw runtime failed",
+    }, observed
+    assert "secret-token" not in str(observed["client_updates"]), observed
+    assert "secret-token" not in str(observed["error_data"]), observed
+    # RequestError is returned at the JSON-RPC layer; exit 0 is expected and
+    # is not the evidence that the internal error was preserved.
+    assert observed["exit_code"] == 0, observed
