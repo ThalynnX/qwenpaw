@@ -136,7 +136,9 @@ def test_runtime_provider_applies_model_info():
     assert model.max_input_length_configured is True
     assert model.generate_kwargs["max_tokens"] == 4096
     assert provider.get_context_size("policy") == 32768
-    assert provider.get_effective_generate_kwargs("policy")["max_tokens"] == 4096
+    assert (
+        provider.get_effective_generate_kwargs("policy")["max_tokens"] == 4096
+    )
 
 
 @pytest.mark.parametrize(

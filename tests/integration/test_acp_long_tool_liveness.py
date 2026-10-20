@@ -14,6 +14,8 @@ tests additionally assert the real process exit code, which is what the
 benchmark harness classifies as ``NonZeroAgentExitCodeError``.
 """
 
+# pylint: disable=unreachable,unused-argument
+
 from __future__ import annotations
 
 import asyncio
@@ -152,11 +154,13 @@ async def test_unmapped_deltas_emit_keepalive_at_production_threshold(
 
     assert response.stop_reason == "end_turn"
     assert keepalives, (
-        f"no keepalive frame in {elapsed:.1f}s; " f"updates={len(conn.updates)}"
+        f"no keepalive frame in {elapsed:.1f}s; "
+        f"updates={len(conn.updates)}"
     )
     first_delay = keepalives[0] - started
     assert threshold - 1.0 <= first_delay <= threshold + 3.0, (
-        f"first keepalive after {first_delay:.1f}s; " f"expected about {threshold:.1f}s"
+        f"first keepalive after {first_delay:.1f}s; "
+        f"expected about {threshold:.1f}s"
     )
 
 
@@ -192,7 +196,8 @@ async def test_silent_tool_heartbeats_keep_transport_alive(monkeypatch):
 
     assert response.stop_reason == "end_turn"
     assert len(conn.updates) >= 1 + beats, (
-        "expected tool start plus one frame per heartbeat; " f"got {len(conn.updates)}"
+        "expected tool start plus one frame per heartbeat; "
+        f"got {len(conn.updates)}"
     )
     heartbeat_updates = [
         update
@@ -202,7 +207,9 @@ async def test_silent_tool_heartbeats_keep_transport_alive(monkeypatch):
     ]
     assert len(heartbeat_updates) >= beats
 
-    max_gap = max(later - earlier for earlier, later in zip(conn.times, conn.times[1:]))
+    max_gap = max(
+        later - earlier for earlier, later in zip(conn.times, conn.times[1:])
+    )
     tail_gap = finished - conn.times[-1]
     assert max_gap <= 30.0, f"frame gap {max_gap:.1f}s exceeds 30s"
     assert tail_gap <= 30.0, f"tail gap {tail_gap:.1f}s exceeds 30s"
@@ -240,7 +247,7 @@ async def test_stream_idle_timeout_returns_end_turn(monkeypatch):
         raise StreamIdleTimeoutError("policy", 600.0)
         yield  # pragma: no cover
 
-    agent, conn, session_id = await _agent_with_stream(
+    agent, _conn, session_id = await _agent_with_stream(
         monkeypatch,
         _stream,
     )
@@ -309,15 +316,15 @@ class _SubprocessClient:
     async def session_update(self, session_id, update, **kwargs) -> None:
         self.updates.append(update)
 
-    async def request_permission(self, options, session_id, tool_call, **kwargs):
+    async def request_permission(
+        self, options, session_id, tool_call, **kwargs
+    ):
         raise AssertionError("fake workspace never requests permission")
 
 
 @pytest.mark.integration
 async def test_run_agent_swallows_client_disconnect(monkeypatch):
     """A dropped transport must not escape the agent entry point."""
-
-    from qwenpaw.agents.acp import server as server_module
 
     calls: list[str] = []
 
@@ -332,18 +339,18 @@ async def test_run_agent_swallows_client_disconnect(monkeypatch):
         raise ConnectionError("transport closed")
 
     monkeypatch.setattr(
-        server_module.QwenPawACPAgent,
+        acp_server.QwenPawACPAgent,
         "_install_runtime_provider",
         _install,
     )
     monkeypatch.setattr(
-        server_module.QwenPawACPAgent,
+        acp_server.QwenPawACPAgent,
         "_shutdown_workspace",
         _shutdown,
     )
-    monkeypatch.setattr(server_module, "run_agent", _disconnect)
+    monkeypatch.setattr(acp_server, "run_agent", _disconnect)
 
-    await server_module.run_qwenpaw_agent()
+    await acp_server.run_qwenpaw_agent()
 
     assert calls == ["install", "shutdown"]
 

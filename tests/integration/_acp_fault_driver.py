@@ -6,6 +6,8 @@ patches only the workspace boundary so the real ACP server, prompt loop
 and process shutdown path are exercised.
 """
 
+# pylint: disable=protected-access,unused-argument
+
 from __future__ import annotations
 
 import asyncio
