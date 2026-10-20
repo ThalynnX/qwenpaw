@@ -14,14 +14,22 @@ import { invalidateSkillCache } from "../../../api/modules/skill";
 import type {
   BuiltinImportSpec,
   BuiltinUpdateNotice,
+  PoolDownloadJob,
+  PoolDownloadState,
   PoolSkillDetail,
   PoolSkillSpec,
   SkillAutomationResponse,
   SkillAutomationUpdate,
+  SkillPoolDownloadRequest,
   WorkspaceSkillSummary,
 } from "../../../api/types";
+import type { SecurityScanErrorResponse } from "../../../api/modules/security";
 import { parseErrorDetail } from "../../../utils/error";
-import { handleScanError, checkScanWarnings } from "../../../utils/scanError";
+import {
+  handleScanError,
+  checkScanWarnings,
+  showScanErrorModal,
+} from "../../../utils/scanError";
 import { getAgentDisplayName } from "../../../utils/agentDisplayName";
 import { isSkillBuiltin } from "../../../utils/skill";
 import {
@@ -30,6 +38,10 @@ import {
 } from "../../Agent/Skills/components";
 import { useSkillFilter } from "../../Agent/Skills/useSkillFilter";
 import { useUploadLimitStore } from "../../../stores/uploadLimitStore";
+import {
+  startPoolDownloadJob,
+  type PoolDownloadHandle,
+} from "../../../utils/skillPoolDownloadJob";
 
 export type PoolMode = "broadcast" | "create" | "edit";
 
@@ -133,6 +145,13 @@ function writeBuiltinNoticeAcknowledgement(fingerprint: string): void {
 
 export function useSkillPool() {
   const { t, i18n } = useTranslation();
+  const [downloadState, setDownloadState] = useState<PoolDownloadState | null>(
+    null,
+  );
+  const downloadHandleRef = useRef<PoolDownloadHandle | null>(null);
+  // A batch is several jobs in a row. Cancelling between them leaves no
+  // handle to cancel, so the flag is what stops the next job from starting.
+  const downloadBatchCancelledRef = useRef(false);
   const [skills, setSkills] = useState<PoolSkillSpec[]>([]);
   const [workspaces, setWorkspaces] = useState<WorkspaceSkillSummary[]>([]);
   const [builtinNotice, setBuiltinNotice] =
@@ -483,10 +502,63 @@ export function useSkillPool() {
     [drawerContent, t],
   );
 
+  const runPoolDownload = async (
+    payload: SkillPoolDownloadRequest,
+  ): Promise<PoolDownloadJob> => {
+    const handle = startPoolDownloadJob(payload, {
+      onState: setDownloadState,
+    });
+    downloadHandleRef.current = handle;
+    try {
+      return await handle.done;
+    } finally {
+      downloadHandleRef.current = null;
+      setDownloadState(null);
+    }
+  };
+
+  const cancelDownload = useCallback(() => {
+    // Set this first: the batch may be between two jobs, in which case there
+    // is no handle but the loop still has to stop before starting the next.
+    downloadBatchCancelledRef.current = true;
+    const handle = downloadHandleRef.current;
+    if (!handle) return;
+    void handle.cancel().catch((error) => {
+      message.error(
+        error instanceof Error ? error.message : t("skillPool.cancelFailed"),
+      );
+    });
+  }, [message, t]);
+
+  const finishCancelledBatch = async () => {
+    closeModal();
+    invalidateSkillCache({ pool: true, workspaces: true });
+    await loadData(true);
+    message.warning(t("skills.importCancelled"));
+  };
+
+  const handleDownloadStopped = async (job: PoolDownloadJob) => {
+    closeModal();
+    invalidateSkillCache({ pool: true, workspaces: true });
+    await loadData(true);
+    if (job.state === "cancelled") {
+      message.warning(t("skills.importCancelled"));
+      return;
+    }
+    // A rejected install keeps its scanner findings in `result`; show the
+    // same modal the blocking endpoint's 422 produces.
+    if (job.result?.type === "security_scan_failed") {
+      showScanErrorModal(job.result as unknown as SecurityScanErrorResponse, t);
+      return;
+    }
+    message.error(job.error || t("skillPool.broadcastFailed"));
+  };
+
   const handleBroadcast = async (
     broadcastSkillNames: string[],
     targetWorkspaceIds: string[],
   ) => {
+    downloadBatchCancelledRef.current = false;
     try {
       const conflicts: BroadcastConflict[] = [];
       for (const skillName of broadcastSkillNames) {
@@ -604,6 +676,12 @@ export function useSkillPool() {
         if (!confirmed) return;
       }
       for (const skillName of broadcastSkillNames) {
+        // A cancel that landed after the previous job finished has no handle
+        // left to stop; it must still prevent this one from starting.
+        if (downloadBatchCancelledRef.current) {
+          await finishCancelledBatch();
+          return;
+        }
         const overwriteTargetIds = new Set(
           conflicts
             .filter((conflict) => conflict.skill_name === skillName)
@@ -617,22 +695,45 @@ export function useSkillPool() {
         );
 
         if (cleanTargetIds.length > 0) {
-          await api.downloadSkillPoolSkill({
+          const job = await runPoolDownload({
             skill_name: skillName,
             targets: cleanTargetIds.map((workspace_id) => ({
               workspace_id,
             })),
           });
+          if (job.state !== "completed") {
+            // Skills installed before the stop stay installed: only the
+            // jobs that had not started yet are skipped, so a cancelled
+            // batch never undoes completed work.
+            await handleDownloadStopped(job);
+            return;
+          }
+          // The job won a very late cancel: keep its result, stop the batch.
+          if (downloadBatchCancelledRef.current) {
+            await finishCancelledBatch();
+            return;
+          }
         }
 
         if (overwriteTargetIds.size > 0) {
-          await api.downloadSkillPoolSkill({
+          const job = await runPoolDownload({
             skill_name: skillName,
             targets: Array.from(overwriteTargetIds).map((workspace_id) => ({
               workspace_id,
             })),
             overwrite: true,
           });
+          if (job.state !== "completed") {
+            // Skills installed before the stop stay installed: only the
+            // jobs that had not started yet are skipped, so a cancelled
+            // batch never undoes completed work.
+            await handleDownloadStopped(job);
+            return;
+          }
+          if (downloadBatchCancelledRef.current) {
+            await finishCancelledBatch();
+            return;
+          }
         }
       }
       message.success(t("skillPool.broadcastSuccess"));
@@ -1258,6 +1359,7 @@ export function useSkillPool() {
     importBuiltinLoading,
     importModalOpen,
     importing,
+    downloadState,
     selectedPoolSkills,
     batchModeEnabled,
     viewMode,
@@ -1295,6 +1397,7 @@ export function useSkillPool() {
     handleDrawerContentChange,
     validateFrontmatter,
     handleBroadcast,
+    cancelDownload,
     handleImportBuiltins,
     handleBuiltinLanguageSwitch,
     handleAutomationQuickAction,
