@@ -18,16 +18,39 @@ export default function ApprovalQueueOverlay<T extends ApprovalQueueItem>({
 }: ApprovalQueueOverlayProps<T>) {
   const { t } = useTranslation();
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
+  // Last confirmed position of the active card. When that card resolves and
+  // leaves the queue, keep the position (clamped to the new tail) instead of
+  // rewinding to the first card, so resolving card N surfaces card N+1.
+  const [positionIndex, setPositionIndex] = useState(0);
   const requestedIndex = items.findIndex(
     (item) => item.requestId === activeRequestId,
   );
-  const activeIndex = requestedIndex >= 0 ? requestedIndex : 0;
+  const activeIndex =
+    requestedIndex >= 0
+      ? requestedIndex
+      : Math.min(positionIndex, Math.max(items.length - 1, 0));
   const activeItem = items[activeIndex];
 
   useEffect(() => {
-    if (!activeItem || activeItem.requestId === activeRequestId) return;
-    setActiveRequestId(activeItem.requestId);
-  }, [activeItem, activeRequestId]);
+    if (items.length === 0) {
+      setPositionIndex(0);
+      setActiveRequestId(null);
+      return;
+    }
+    if (!activeItem) return;
+    if (requestedIndex >= 0 && requestedIndex !== positionIndex) {
+      setPositionIndex(requestedIndex);
+    }
+    if (activeItem.requestId !== activeRequestId) {
+      setActiveRequestId(activeItem.requestId);
+    }
+  }, [
+    activeItem,
+    activeRequestId,
+    items.length,
+    positionIndex,
+    requestedIndex,
+  ]);
 
   if (!activeItem) return null;
 

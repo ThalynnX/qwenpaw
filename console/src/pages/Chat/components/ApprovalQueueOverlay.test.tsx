@@ -70,6 +70,56 @@ describe("ApprovalQueueOverlay", () => {
     ).toBeNull();
   });
 
+  it("keeps the queue position when a middle approval resolves", async () => {
+    const user = userEvent.setup();
+    const triple = [
+      { requestId: "first", label: "First approval" },
+      { requestId: "second", label: "Second approval" },
+      { requestId: "third", label: "Third approval" },
+    ];
+
+    function Harness() {
+      const [items, setItems] = useState(triple);
+      return (
+        <ApprovalQueueOverlay
+          items={items}
+          renderItem={(item) => (
+            <button
+              type="button"
+              onClick={() =>
+                setItems((current) =>
+                  current.filter(
+                    (candidate) => candidate.requestId !== item.requestId,
+                  ),
+                )
+              }
+            >
+              Resolve {item.label}
+            </button>
+          )}
+        />
+      );
+    }
+
+    render(<Harness />);
+    await user.click(screen.getByRole("button", { name: "Next approval" }));
+    expect(screen.getByText("2 / 3")).toBeTruthy();
+
+    await user.click(
+      screen.getByRole("button", { name: "Resolve Second approval" }),
+    );
+
+    // Position 2 of the remaining two cards is the third approval, not a
+    // rewind to the first one.
+    expect(screen.getByText("2 / 2")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Resolve Third approval" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Resolve First approval" }),
+    ).toBeNull();
+  });
+
   it("advances after resolving the current approval without activating the next", async () => {
     const user = userEvent.setup();
     const resolved = vi.fn();
