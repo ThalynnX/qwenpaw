@@ -5,6 +5,9 @@
  * Heavy children are stubbed so the page's orchestration logic executes
  * under test.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import less from "less";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, fireEvent, waitFor } from "@testing-library/react";
 import React from "react";
@@ -250,6 +253,34 @@ vi.mock("antd", async () => {
 import InboxPage from "./index";
 import type { PushMessage } from "./types";
 
+const stylesSource = readFileSync(
+  join(process.cwd(), "src/pages/Inbox/index.module.less"),
+  "utf8",
+);
+
+function getActiveCss(css: string, width: number) {
+  const source = document.createElement("style");
+  source.textContent = css;
+  document.head.appendChild(source);
+
+  const activeRules = Array.from(source.sheet?.cssRules ?? []).flatMap(
+    (rule) => {
+      if (rule.type !== CSSRule.MEDIA_RULE) {
+        return rule.cssText;
+      }
+
+      const mediaRule = rule as CSSMediaRule;
+      const maxWidth = mediaRule.conditionText.match(/max-width:\s*(\d+)px/);
+      if (!maxWidth || width > Number(maxWidth[1])) {
+        return [];
+      }
+      return Array.from(mediaRule.cssRules, (nestedRule) => nestedRule.cssText);
+    },
+  );
+  source.remove();
+  return activeRules.join("\n");
+}
+
 // ---- Fixtures --------------------------------------------------------------
 
 function pushMsg(
@@ -285,12 +316,17 @@ function makeInboxData(messages: PushMessage[], summaryUnread = 0) {
     deleteMessages: vi.fn().mockResolvedValue(0),
     triggerHarvest: vi.fn(),
     refreshPushMessages: vi.fn(),
+    pushMessagesLoading: false,
+    pushMessagesError: null,
   };
   return mocks.inboxData as {
+    pushMessagesLoading: boolean;
+    pushMessagesError: Error | null;
     markMessageAsRead: ReturnType<typeof vi.fn>;
     markAllMessagesAsRead: ReturnType<typeof vi.fn>;
     deleteMessage: ReturnType<typeof vi.fn>;
     deleteMessages: ReturnType<typeof vi.fn>;
+    refreshPushMessages: ReturnType<typeof vi.fn>;
   };
 }
 
@@ -304,6 +340,36 @@ beforeEach(() => {
 // ---- Tests -----------------------------------------------------------------
 
 describe("InboxPage", () => {
+  it.each([
+    { width: 1280, direction: "row", wrap: "nowrap" },
+    { width: 820, direction: "row", wrap: "wrap" },
+    { width: 390, direction: "column", wrap: "wrap" },
+  ])(
+    "keeps toolbar actions reachable at $width px",
+    async ({ width, direction, wrap }) => {
+      const { css } = await less.render(stylesSource, {
+        filename: join(process.cwd(), "src/pages/Inbox/index.module.less"),
+      });
+      const activeStyles = document.createElement("style");
+      activeStyles.textContent = getActiveCss(css, width);
+      document.head.appendChild(activeStyles);
+
+      const toolbar = document.createElement("div");
+      toolbar.className = "messagesToolbar";
+      toolbar.innerHTML = `
+        <div class="messagesSelectionTools filters"></div>
+        <div class="messagesSelectionTools actions"></div>
+      `;
+      document.body.appendChild(toolbar);
+
+      expect(getComputedStyle(toolbar).flexDirection).toBe(direction);
+      expect(getComputedStyle(toolbar).flexWrap).toBe(wrap);
+
+      toolbar.remove();
+      activeStyles.remove();
+    },
+  );
+
   it("renders the messages tab with push cards", async () => {
     makeInboxData([pushMsg("m1"), pushMsg("m2")]);
     renderWithProviders(<InboxPage />);
@@ -319,6 +385,46 @@ describe("InboxPage", () => {
     await waitFor(() => {
       expect(screen.getByTestId("inbox-empty")).toBeTruthy();
     });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows loading instead of an empty result during the initial fetch", () => {
+    const data = makeInboxData([]);
+    data.pushMessagesLoading = true;
+    renderWithProviders(<InboxPage />);
+
+    expect(screen.getByRole("status")).toHaveTextContent("common.loading");
+    expect(screen.queryByTestId("inbox-empty")).toBeNull();
+  });
+
+  it("retries an empty-cache failure and renders the recovered message", async () => {
+    const data = makeInboxData([]);
+    data.pushMessagesError = new Error("offline");
+    const { rerender } = renderWithProviders(<InboxPage />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("inbox.loadFailed");
+    expect(screen.queryByTestId("inbox-empty")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "common.retry" }));
+    expect(data.refreshPushMessages).toHaveBeenCalledTimes(1);
+
+    makeInboxData([pushMsg("recovered")]);
+    rerender(<InboxPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId("push-card-recovered")).toBeTruthy();
+    });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("keeps stale rows visible with a non-destructive retry affordance", () => {
+    const data = makeInboxData([pushMsg("stale")]);
+    data.pushMessagesError = new Error("offline");
+    renderWithProviders(<InboxPage />);
+
+    expect(screen.getByTestId("push-card-stale")).toBeTruthy();
+    expect(screen.getByRole("alert")).toHaveTextContent("inbox.loadFailed");
+    expect(screen.queryByTestId("inbox-empty")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "common.retry" }));
+    expect(data.refreshPushMessages).toHaveBeenCalledTimes(1);
   });
 
   it("persists the active tab to localStorage and restores it", async () => {

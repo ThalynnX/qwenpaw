@@ -108,6 +108,27 @@
   color: var(--app-text-tertiary);
 }
 
+.loadError {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 180px;
+  padding: 24px;
+  color: var(--app-error-text);
+
+  > span {
+    max-width: 440px;
+  }
+}
+
+@media (max-width: 600px) {
+  .loadError {
+    flex-direction: column;
+    text-align: center;
+  }
+}
+
 .channelsGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(346px, 1fr));
@@ -620,6 +641,23 @@
   .channelDisclosure {
     border: 0;
     margin-top: 8px;
+  }
+
+  .noTextDebounceItem:has(button[role="switch"]) {
+    > :global(.qwenpaw-form-item-row) {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      width: 100%;
+      min-width: 0;
+      gap: 16px;
+    }
+    :global(.qwenpaw-form-item-label) {
+      min-width: 0;
+    }
+    :global(.qwenpaw-form-item-control) {
+      width: auto !important;
+      min-width: 0;
+    }
   }
 }
 

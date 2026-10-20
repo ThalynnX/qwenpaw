@@ -633,7 +633,7 @@ function ModelsPage() {
               })}
               footer={null}
               onCancel={() => setVariantSelectGroup(null)}
-              destroyOnClose
+              destroyOnHidden
             >
               <div className={styles.variantList}>
                 {variantSelectGroup?.providers.map((p) => (

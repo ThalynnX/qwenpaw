@@ -96,7 +96,7 @@
   /* Navigation and selection share the current brand accent. */
   --app-nav-selected-bg: var(--app-accent-soft);
   --app-nav-selected-bg-hover: var(--app-accent-soft-hover);
-  --app-nav-selected-text: var(--app-accent-text);
+  --app-nav-selected-text: color-mix(in srgb, var(--app-accent) 65%, black);
 
   /* Selection follows the active theme in both color schemes. */
   --app-selected-bg: var(--app-accent-soft);

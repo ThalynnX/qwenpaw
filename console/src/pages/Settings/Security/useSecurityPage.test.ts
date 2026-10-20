@@ -141,6 +141,16 @@ describe("useSecurityPage", () => {
     hoisted.savedSandboxEnabled = false;
   });
 
+  it("exposes each protected tool option exactly once", () => {
+    const { result } = renderHook(() => useSecurityPage());
+    const values = result.current.toolOptions.map((option) => option.value);
+    const labels = result.current.toolOptions.map((option) => option.label);
+
+    expect(new Set(values).size).toBe(values.length);
+    expect(new Set(labels).size).toBe(labels.length);
+    expect(values.filter((value) => value === "browser")).toHaveLength(1);
+  });
+
   it("handleSave calls api.updateToolGuard with guarded_tools array and message.success", async () => {
     mockFormValidateFields.mockResolvedValue({
       enabled: true,

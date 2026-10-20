@@ -254,11 +254,20 @@ export const useInboxData = () => {
     },
   });
   const [pushMessages, setPushMessages] = useState<PushMessage[]>([]);
+  const [pushMessagesLoading, setPushMessagesLoading] = useState(true);
+  const [pushMessagesError, setPushMessagesError] = useState<Error | null>(
+    null,
+  );
+  const pushMessagesRequestIdRef = useRef(0);
   const pushMessagesRef = useRef(pushMessages);
   pushMessagesRef.current = pushMessages;
   const [harvests] = useState<HarvestInstance[]>(MOCK_HARVESTS);
 
   const loadPushMessages = useCallback(async () => {
+    const requestId = ++pushMessagesRequestIdRef.current;
+    const isLatestRequest = () =>
+      pushMessagesRequestIdRef.current === requestId;
+    setPushMessagesLoading(true);
     try {
       const res = await api.getInboxEvents({
         limit: INBOX_EVENT_QUERY_LIMIT,
@@ -276,6 +285,7 @@ export const useInboxData = () => {
       const nextItems: PushMessage[] = events.map((event) =>
         mapEventToPushMessage(event, resolveAgentNameRef.current, tRef.current),
       );
+      if (!isLatestRequest()) return;
       setPushMessages(nextItems);
       setSummary((prev) => ({
         ...prev,
@@ -284,8 +294,17 @@ export const useInboxData = () => {
           unread: res?.unread_count ?? nextItems.filter((m) => !m.read).length,
         },
       }));
+      setPushMessagesError(null);
     } catch (error) {
+      if (!isLatestRequest()) return;
       console.error("Failed to fetch push inbox data", error);
+      setPushMessagesError(
+        error instanceof Error
+          ? error
+          : new Error("Failed to fetch push inbox data"),
+      );
+    } finally {
+      if (isLatestRequest()) setPushMessagesLoading(false);
     }
   }, []);
 
@@ -411,6 +430,8 @@ export const useInboxData = () => {
   return {
     summary,
     pushMessages,
+    pushMessagesLoading,
+    pushMessagesError,
     harvests,
     markMessageAsRead,
     markAllMessagesAsRead,
