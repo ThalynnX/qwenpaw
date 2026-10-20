@@ -90,6 +90,7 @@ class WorkspaceBootstrapFactory:
                 CheckpointAutoSnapshotHook,
                 CheckpointQueryGateHook,
             )
+            from ...steer.hook import SteerInjectionHook
 
             hook_clses: list[type] = [
                 CronContextHook,
@@ -108,6 +109,7 @@ class WorkspaceBootstrapFactory:
                 CheckpointQueryGateHook,
                 CheckpointAutoSnapshotHook,
                 MailF1CleanupHook,
+                SteerInjectionHook,
             ]
             if extra_hook_clses:
                 hook_clses.extend(extra_hook_clses)
