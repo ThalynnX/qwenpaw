@@ -317,7 +317,11 @@ class _SubprocessClient:
         self.updates.append(update)
 
     async def request_permission(
-        self, options, session_id, tool_call, **kwargs
+        self,
+        options,
+        session_id,
+        tool_call,
+        **kwargs,
     ):
         raise AssertionError("fake workspace never requests permission")
 
