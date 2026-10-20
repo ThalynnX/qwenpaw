@@ -1,4 +1,7 @@
 {
+  "accessibility": {
+    "skipToContent": "跳到主要内容"
+  },
   "terminal": {
     "authRequired": "使用终端前，请设置 QWENPAW_AUTH_ENABLED=true，重启服务并登录。",
     "dependencyMissing": "终端不可用：请在后端 Python 环境安装 pywinpty 并重启服务。",
@@ -41,6 +44,7 @@
     "view": "查看",
     "content": "内容",
     "loading": "加载中...",
+    "loadMore": "加载更多",
     "saving": "保存中...",
     "copy": "复制",
     "copied": "已复制到剪贴板",
@@ -2114,6 +2118,7 @@
     "title": "会话",
     "description": "查看和管理活动聊天会话",
     "loading": "正在加载会话...",
+    "selectSession": "选择 {{name}}",
     "loadFailed": "加载会话失败，请重试。",
     "confirmDelete": "确认删除",
     "deleteConfirm": "确定要删除此会话吗？",

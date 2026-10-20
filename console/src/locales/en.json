@@ -1,4 +1,7 @@
 {
+  "accessibility": {
+    "skipToContent": "Skip to content"
+  },
   "terminal": {
     "authRequired": "To use the terminal, set QWENPAW_AUTH_ENABLED=true, restart the service, and sign in.",
     "dependencyMissing": "Terminal unavailable: install pywinpty in the backend Python environment and restart the service.",
@@ -41,6 +44,7 @@
     "view": "View",
     "content": "Content",
     "loading": "Loading...",
+    "loadMore": "Load more",
     "saving": "Saving...",
     "copy": "Copy",
     "copied": "Copied to clipboard",
@@ -2255,6 +2259,7 @@
     "title": "Sessions",
     "description": "View and manage active chat sessions",
     "loading": "Loading sessions...",
+    "selectSession": "Select {{name}}",
     "loadFailed": "Failed to load sessions. Try again.",
     "confirmDelete": "Confirm Delete",
     "deleteConfirm": "Are you sure you want to delete this session?",

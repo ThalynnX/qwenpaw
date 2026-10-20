@@ -1,4 +1,7 @@
 {
+  "accessibility": {
+    "skipToContent": "メインコンテンツへスキップ"
+  },
   "common": {
     "save": "保存",
     "reset": "リセット",
@@ -22,6 +25,7 @@
     "view": "閲覧",
     "content": "内容",
     "loading": "読み込み中...",
+    "loadMore": "さらに読み込む",
     "saving": "保存中...",
     "copy": "コピー",
     "copied": "クリップボードにコピーしました",
@@ -1675,6 +1679,7 @@
     "title": "セッション",
     "description": "アクティブなチャットセッションの表示と管理",
     "loading": "セッションを読み込み中...",
+    "selectSession": "{{name}} を選択",
     "loadFailed": "セッションの読み込みに失敗しました。再試行してください。",
     "confirmDelete": "削除の確認",
     "deleteConfirm": "このセッションを削除してもよろしいですか？",

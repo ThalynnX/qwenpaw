@@ -1,4 +1,7 @@
 {
+  "accessibility": {
+    "skipToContent": "Chuyển đến nội dung chính"
+  },
   "common": {
     "save": "Lưu",
     "reset": "Đặt lại",
@@ -22,6 +25,7 @@
     "view": "Xem",
     "content": "Nội dung",
     "loading": "Đang tải...",
+    "loadMore": "Tải thêm",
     "saving": "Đang lưu...",
     "copy": "Sao chép",
     "copied": "Đã sao chép",
@@ -4029,6 +4033,7 @@
     "title": "Phiên làm việc",
     "description": "Xem và quản lý các phiên chat đang hoạt động",
     "loading": "Đang tải phiên...",
+    "selectSession": "Chọn {{name}}",
     "loadFailed": "Không thể tải phiên. Vui lòng thử lại.",
     "confirmDelete": "Xác nhận xóa",
     "deleteConfirm": "Bạn có chắc muốn xóa phiên này không?",
