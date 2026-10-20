@@ -117,7 +117,7 @@ export function ModelConfigEditor({
     thinkingBudgetMaximum,
   ]);
   const previewThinkingControl =
-    thinkingDeclaration === undefined || thinkingDeclaration === null
+    thinkingDeclaration === undefined
       ? inheritedThinkingControl
       : thinkingDeclaration;
 
@@ -169,7 +169,12 @@ export function ModelConfigEditor({
     (next: ThinkingControlSpec | null) => {
       setThinkingDeclaration(next);
       setDirty(true);
-      if (!next) return;
+      if (!next) {
+        setThinkingEnabled(null);
+        setThinkingBudget(null);
+        setReasoningEffort(null);
+        return;
+      }
 
       if (next.kind === "unsupported" || next.kind === "unknown") {
         setThinkingEnabled(null);

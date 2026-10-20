@@ -243,6 +243,48 @@ describe("ModelConfigEditor thinking capability linkage", () => {
     );
   });
 
+  it("clears stale thinking settings when restoring automatic capability", async () => {
+    vi.mocked(api.configureModel).mockResolvedValue(provider);
+    const user = userEvent.setup();
+    renderEditor(
+      createModel({
+        thinking_control: {
+          kind: "budget",
+          efforts: [],
+          supports_off: true,
+          budget_min: 1,
+          budget_max: 8192,
+        },
+        thinking_enabled: true,
+        thinking_budget: 4096,
+      }),
+    );
+
+    await user.click(screen.getByText("common.advancedSettings"));
+    await user.click(screen.getByText("thinkingControl.declaration"));
+    await user.click(
+      screen.getByRole("combobox", { name: "thinkingControl.controlType" }),
+    );
+    await user.click(screen.getByText("thinkingControl.type.unknown"));
+
+    expect(
+      screen.queryByRole("slider", { name: "thinkingControl.title" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Save/i }));
+    await waitFor(() => expect(api.configureModel).toHaveBeenCalledOnce());
+    expect(api.configureModel).toHaveBeenCalledWith(
+      "openai",
+      "test-model",
+      expect.objectContaining({
+        thinking_control: null,
+        thinking_enabled: null,
+        thinking_budget: null,
+        reasoning_effort: null,
+      }),
+    );
+  });
+
   it("applies edited budget bounds to the thinking slider", async () => {
     const user = userEvent.setup();
     renderEditor(
