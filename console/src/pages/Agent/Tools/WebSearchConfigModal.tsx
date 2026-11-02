@@ -62,16 +62,16 @@ export function WebSearchConfigModal({
       .then((config) => {
         if (gen !== fetchGen.current) return;
         const provider =
-          (typeof config?.provider === "string" && config.provider) || "tavily";
+          (typeof config?.provider === "string" && config.provider) ||
+          "anysearch";
         form.setFieldsValue({ ...(config || {}), provider });
         setLoadState({ status: "ready", provider });
       })
       .catch(() => {
         if (gen !== fetchGen.current) return;
-        // Do not force provider to "tavily" here — that would make Retry
-        // load the tavily slot and let auto-save overwrite a saved
-        // anysearch (or other) selection. Leave the form provider alone
-        // until a successful load recovers the saved config.
+        // Do not force a default provider here — that would make Retry
+        // load its slot and let auto-save overwrite a saved selection.
+        // Leave the form provider alone until a successful load recovers it.
         form.setFieldValue("api_key", undefined);
         setLoadState({ status: "error", provider: null });
       });
@@ -142,8 +142,8 @@ export function WebSearchConfigModal({
     if (canSubmit && form.isFieldsTouched()) schedule();
   }, [canSubmit, form, schedule]);
 
-  const isAnysearch = providerValue === "anysearch";
-  const isTavily = providerValue === "tavily" || !providerValue;
+  const isAnysearch = providerValue === "anysearch" || !providerValue;
+  const isTavily = providerValue === "tavily";
   const isLoading = loadState.status === "loading";
   const isError = loadState.status === "error";
 
@@ -172,7 +172,7 @@ export function WebSearchConfigModal({
           <Form.Item
             name="provider"
             label={t("tools.webSearchProviderLabel")}
-            initialValue="tavily"
+            initialValue="anysearch"
           >
             <Select
               suffixIcon={<ChevronDown size={16} aria-hidden />}
@@ -180,6 +180,7 @@ export function WebSearchConfigModal({
             >
               <Select.Option value="tavily">tavily</Select.Option>
               <Select.Option value="anysearch">anysearch</Select.Option>
+              <Select.Option value="firecrawl">firecrawl</Select.Option>
             </Select>
           </Form.Item>
           <Form.Item name="api_key" label={t("tools.webSearchApiKeyLabel")}>
