@@ -32,8 +32,8 @@ jobs:
             exit 0
           fi
           git merge upstream/main --no-edit
-          # 丢弃上游对 .github/workflows 的变更，保留本仓库自己的 workflow 文件
-          git restore --source=HEAD --staged --worktree .github/workflows 2>/dev/null || true
+          # 丢弃上游对 .github/workflows 的变更，恢复到合并前的本地 workflow 文件
+          git restore --source=HEAD^ --staged --worktree .github/workflows 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "workflow 目录无上游变更，无需追加提交"
           else
