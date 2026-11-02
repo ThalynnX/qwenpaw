@@ -1,0 +1,45 @@
+name: Sync upstream QwenPaw
+
+on:
+  schedule:
+    # 每日 02:00 UTC (10:00 北京时间) 自动拉取上游更新
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add upstream and fetch
+        run: |
+          git remote add upstream https://github.com/agentscope-ai/QwenPaw.git
+          git fetch upstream main
+
+      - name: Merge upstream main
+        run: |
+          git config user.name "ThalynnX"
+          git config user.email "thalynnx@users.noreply.github.com"
+          if git diff --quiet upstream/main origin/main; then
+            echo "已是最新，无需同步"
+            exit 0
+          fi
+          git merge upstream/main --no-edit
+          echo "上游更新已合并"
+
+      - name: Push
+        if: success()
+        run: |
+          if git log HEAD --not origin/main --oneline | grep -q .; then
+            git push origin main
+            echo "已推送更新到 main"
+          else
+            echo "无新提交，跳过推送"
+          fi
