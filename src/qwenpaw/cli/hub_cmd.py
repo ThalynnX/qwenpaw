@@ -22,7 +22,7 @@ from .app_cmd import configure_server_process
 )
 @click.option(
     "--port",
-    default=8088,
+    default=19091,
     type=int,
     show_default=True,
     help="Bind port",

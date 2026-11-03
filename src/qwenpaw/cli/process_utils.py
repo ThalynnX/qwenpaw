@@ -195,7 +195,7 @@ def _is_qwenpaw_wrapper_process(name: str, command: str) -> bool:
     )
 
 
-def _extract_port_from_command(command: str, default: int = 8088) -> int:
+def _extract_port_from_command(command: str, default: int = 19091) -> int:
     """Extract `--port` from a command line when present."""
     match = _PORT_ARG_PATTERN.search(command)
     return int(match.group(1)) if match else default
