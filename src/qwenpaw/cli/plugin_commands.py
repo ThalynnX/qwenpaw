@@ -36,7 +36,7 @@ def _get_api_base() -> Optional[str]:
     """Return the base URL of the running QwenPaw API, or None.
 
     Returns:
-        Base URL string such as ``http://127.0.0.1:8088/api`` if the
+        Base URL string such as ``http://127.0.0.1:19091/api`` if the
         app is running, otherwise ``None``.
     """
     api_info = read_runtime_api()

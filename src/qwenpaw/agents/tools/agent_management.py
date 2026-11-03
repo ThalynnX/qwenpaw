@@ -32,7 +32,7 @@ from ...utils.timeout import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_AGENT_API_BASE_URL = "http://127.0.0.1:8088"
+DEFAULT_AGENT_API_BASE_URL = "http://127.0.0.1:19091"
 DEFAULT_AGENT_API_TIMEOUT = 30.0
 AGENT_CHAT_STOP_TIMEOUT = 3.0
 MAX_SPAWN_BATCH_SIZE = 10

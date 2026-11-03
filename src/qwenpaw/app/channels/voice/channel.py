@@ -130,7 +130,7 @@ class VoiceChannel(BaseChannel):
 
         self.tunnel_mgr = CloudflareTunnelDriver()
         api_info = read_last_api()
-        local_port = api_info[1] if api_info else 8088
+        local_port = api_info[1] if api_info else 19091
 
         try:
             tunnel_info = await self.tunnel_mgr.start(local_port)

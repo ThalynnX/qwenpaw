@@ -1297,7 +1297,7 @@ def api_target_mismatch_note(cfg: Config, cli_base: str) -> str | None:
     if host is None and port is None:
         return None
     eff_host = host or "127.0.0.1"
-    eff_port = 8088 if port is None else port
+    eff_port = 19091 if port is None else port
     expected = f"http://{eff_host}:{eff_port}".rstrip("/")
     got = cli_base.rstrip("/")
     if got == expected:

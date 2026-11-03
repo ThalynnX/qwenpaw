@@ -205,7 +205,7 @@ def _effective_cli_api_host_port(
         if last:
             host = host or last[0]
             port = port or last[1]
-    return host or "127.0.0.1", port or 8088
+    return host or "127.0.0.1", port or 19091
 
 
 def _write_meta(

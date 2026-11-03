@@ -224,7 +224,7 @@ class DockerRuntimeProvisioner(RuntimeProvisioner):
             init=True,
             labels=labels,
             name=self._container_name(record.runtime_id),
-            ports={"8088/tcp": ("127.0.0.1", None)},
+            ports={"19091/tcp": ("127.0.0.1", None)},
             restart_policy={"Name": "no"},
             security_opt=["no-new-privileges:true"],
             volumes={
@@ -579,7 +579,7 @@ class DockerRuntimeProvisioner(RuntimeProvisioner):
                     "Ports",
                     {},
                 )
-                .get("8088/tcp")
+                .get("19091/tcp")
             )
             if bindings:
                 host_ip = str(bindings[0].get("HostIp") or "")
