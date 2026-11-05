@@ -34,7 +34,6 @@ jobs:
             echo "main 已是最新，无需同步"
           else
             git merge upstream/main --no-edit
-            # 丢弃上游对 .github/workflows 的变更，保留本地 workflow 文件
             git restore --source=HEAD^ --staged --worktree .github/workflows 2>/dev/null || true
             if ! git diff --cached --quiet; then
               git commit -m "chore: keep local workflows after upstream sync"
@@ -48,7 +47,6 @@ jobs:
           git config user.name "ThalynnX"
           git config user.email "thalynnx@users.noreply.github.com"
           
-          # 检查上游是否有 stable 分支
           if git ls-remote --heads upstream stable | grep -q stable; then
             git fetch upstream stable:stable-local 2>/dev/null || true
             git checkout -B stable
@@ -57,7 +55,6 @@ jobs:
               echo "stable 已是最新，无需同步"
             else
               git merge stable-local --no-edit
-              # 丢弃上游对 .github/workflows 的变更
               git restore --source=HEAD^ --staged --worktree .github/workflows 2>/dev/null || true
               if ! git diff --cached --quiet; then
                 git commit -m "chore: keep local workflows after upstream stable sync"
@@ -68,3 +65,20 @@ jobs:
           else
             echo "上游无 stable 分支，跳过"
           fi
+
+      - name: Trigger fpk build
+        if: success()
+        env:
+          PAT: ${{ secrets.PAT }}
+        run: |
+          if [ -z "$PAT" ]; then
+            echo "未配置 PAT secret，跳过触发 fpk 编译"
+            exit 0
+          fi
+          curl -s -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $PAT" \
+            https://api.github.com/repos/ThalynnX/qwenpaw-fpk/dispatches \
+            -d '{"event_type":"upstream-synced"}' \
+            -w "\nHTTP %{http_code}\n"
+          echo "已触发 qwenpaw-fpk 编译"
