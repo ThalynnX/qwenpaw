@@ -1679,7 +1679,7 @@
     "fieldWebSocketHost": "WebSocketホスト",
     "fieldWebSocketPort": "WebSocketポート",
     "matrixUserHelp": "完全なMXID（例：@bot:matrix.org）またはローカル名（例：bot）を入力できます。",
-    "matrixEncryptionHelp": "有効化後、Matrixクライアント（Elementなど）でデバイスを検証し、pip install matrix-nio[e2e] を実行してください。",
+    "matrixEncryptionHelp": "有効化後、Matrixクライアント（Elementなど）でデバイスを検証してください。",
     "matrixDeviceHelp": "Matrixクライアントの固定デバイス名。空欄の場合は qwenpaw-worker。",
     "messageTypeHelp": "markdown：通常のメッセージ、card：AI対話カード。",
     "scheduledMessageTypeHelp": "定期タスクの送信形式。チャットの形式とは独立しています。",
@@ -1804,6 +1804,7 @@
       "internal": "QwenPaw が内部で管理します。"
     },
     "variableDescriptions": {
+      "QWENPAW_SHELL_MEMORY_LIMIT_MB": "シェルのプロセスツリーのメモリ保護：0 で無効、auto で利用可能なメモリの半分（最大 4096 MiB）を使用します。MiB 単位の上限を正の整数で指定することもできます。指定した上限も利用可能なメモリの半分を超えません。変更は次回のシェル呼び出しから適用され、実行中のコマンドは開始時の上限を維持します。定期的な監視による保護は、OS が強制する厳密なメモリ制限ではありません。",
       "QWENPAW_LLM_STREAM_FIRST_CONTENT_TIMEOUT": "最初の有効なストリーム内容を待つ最大時間です。0 で監視を無効化します。",
       "QWENPAW_LLM_STREAM_IDLE_TIMEOUT": "有効なストリームチャンク間の最大待機時間です。0 で監視を無効化します。"
     },

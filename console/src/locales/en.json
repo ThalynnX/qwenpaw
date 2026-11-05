@@ -2346,7 +2346,7 @@
     "fieldWebSocketHost": "WebSocket Host",
     "fieldWebSocketPort": "WebSocket Port",
     "matrixUserHelp": "Accepts a full MXID (e.g. @bot:matrix.org) or just the localpart (e.g. bot).",
-    "matrixEncryptionHelp": "After enabling, you must verify the device in a Matrix client (e.g. Element). E2EE requires manually installing matrix-nio[e2e] (pip install matrix-nio[e2e]).",
+    "matrixEncryptionHelp": "After enabling, you must verify the device in a Matrix client (e.g. Element).",
     "matrixDeviceHelp": "A stable device identity for the Matrix client. Defaults to 'qwenpaw-worker' if left empty.",
     "messageTypeHelp": "markdown: regular messages; card: AI interactive card",
     "scheduledMessageTypeHelp": "Message type for cron/scheduled task sends. Independent from the chat message type above.",
@@ -2474,6 +2474,7 @@
       "internal": "Managed internally by QwenPaw."
     },
     "variableDescriptions": {
+      "QWENPAW_SHELL_MEMORY_LIMIT_MB": "Shell process-tree memory protection: 0 disables it, auto uses half of available memory (up to 4096 MiB), or enter a positive MiB limit. Explicit limits are also capped at half of available memory. Changes apply to the next shell invocation; running commands keep their initial limit. Polling protection is not a hard OS memory limit.",
       "QWENPAW_LLM_STREAM_FIRST_CONTENT_TIMEOUT": "Maximum wait for the first meaningful stream content; zero disables the watchdog.",
       "QWENPAW_LLM_STREAM_IDLE_TIMEOUT": "Maximum wait between meaningful stream chunks; zero disables the watchdog."
     },
