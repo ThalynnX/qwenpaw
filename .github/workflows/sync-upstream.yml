@@ -2,8 +2,8 @@ name: Sync upstream QwenPaw
 
 on:
   schedule:
-    # 每5天 02:00 UTC (10:00 北京时间) 自动拉取上游更新
-    - cron: '0 2 */5 * *'
+    # 每日 02:00 UTC (10:00 北京时间) 自动拉取上游更新
+    - cron: '0 2 * * *'
   workflow_dispatch:
 
 permissions:
