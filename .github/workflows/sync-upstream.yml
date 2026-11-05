@@ -2,8 +2,8 @@ name: Sync upstream QwenPaw
 
 on:
   schedule:
-    # 每日 02:00 UTC (10:00 北京时间) 自动拉取上游更新
-    - cron: '0 2 * * *'
+    # 每5天 02:00 UTC (10:00 北京时间) 自动拉取上游更新
+    - cron: '0 2 */5 * *'
   workflow_dispatch:
 
 permissions:
@@ -21,32 +21,50 @@ jobs:
       - name: Add upstream and fetch
         run: |
           git remote add upstream https://github.com/agentscope-ai/QwenPaw.git
-          git fetch upstream main
+          git fetch upstream
 
-      - name: Merge upstream main (keep local workflows)
+      - name: Sync main branch
         run: |
           git config user.name "ThalynnX"
           git config user.email "thalynnx@users.noreply.github.com"
+          
+          git checkout main
+          
           if git diff --quiet upstream/main origin/main; then
-            echo "已是最新，无需同步"
-            exit 0
-          fi
-          git merge upstream/main --no-edit
-          # 丢弃上游对 .github/workflows 的变更，恢复到合并前的本地 workflow 文件
-          git restore --source=HEAD^ --staged --worktree .github/workflows 2>/dev/null || true
-          if git diff --cached --quiet; then
-            echo "workflow 目录无上游变更，无需追加提交"
+            echo "main 已是最新，无需同步"
           else
-            git commit -m "chore: keep local workflows after upstream sync"
-            echo "已保留本地 workflow 文件"
+            git merge upstream/main --no-edit
+            # 丢弃上游对 .github/workflows 的变更，保留本地 workflow 文件
+            git restore --source=HEAD^ --staged --worktree .github/workflows 2>/dev/null || true
+            if ! git diff --cached --quiet; then
+              git commit -m "chore: keep local workflows after upstream sync"
+            fi
+            git push origin main
+            echo "main 已同步并推送"
           fi
 
-      - name: Push
-        if: success()
+      - name: Sync stable branch
         run: |
-          if git log HEAD --not origin/main --oneline | grep -q .; then
-            git push origin main
-            echo "已推送更新到 main"
+          git config user.name "ThalynnX"
+          git config user.email "thalynnx@users.noreply.github.com"
+          
+          # 检查上游是否有 stable 分支
+          if git ls-remote --heads upstream stable | grep -q stable; then
+            git fetch upstream stable:stable-local 2>/dev/null || true
+            git checkout -B stable
+            
+            if git diff --quiet stable-local origin/stable; then
+              echo "stable 已是最新，无需同步"
+            else
+              git merge stable-local --no-edit
+              # 丢弃上游对 .github/workflows 的变更
+              git restore --source=HEAD^ --staged --worktree .github/workflows 2>/dev/null || true
+              if ! git diff --cached --quiet; then
+                git commit -m "chore: keep local workflows after upstream stable sync"
+              fi
+              git push origin stable --force-with-lease
+              echo "stable 已同步并推送"
+            fi
           else
-            echo "无新提交，跳过推送"
+            echo "上游无 stable 分支，跳过"
           fi
