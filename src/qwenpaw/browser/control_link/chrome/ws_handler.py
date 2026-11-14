@@ -24,7 +24,7 @@ from .state import get_nm_bridge_route_state
 ws_router = APIRouter(prefix="/ws", tags=["browser"])
 
 DEFAULT_CONFIG_PATH = Path.home() / ".qwenpaw" / "nm-bridge.json"
-DEFAULT_WS_URL = "ws://127.0.0.1:8088/api/ws/chrome"
+DEFAULT_WS_URL = "ws://127.0.0.1:19091/api/ws/chrome"
 BRIDGE_DISCONNECTED = "bridge_disconnected"
 logger = logging.getLogger(__name__)
 

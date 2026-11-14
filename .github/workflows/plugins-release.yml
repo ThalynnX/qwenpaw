@@ -64,11 +64,6 @@ jobs:
             fi
           done
 
-      - name: Build OpenUI plugin
-        run: |
-          npm --prefix plugins/bundle/qwenpaw-openui/frontend ci
-          npm --prefix plugins/bundle/qwenpaw-openui/frontend test
-
       - name: Build memory plugin frontends
         shell: bash
         run: |
@@ -78,9 +73,6 @@ jobs:
             npm --prefix "$frontend_dir" ci
             npm --prefix "$frontend_dir" run build
           done
-
-      - name: Install channel contract preflight dependencies
-        run: python -m pip install -r scripts/pack/channel-contract-requirements.txt
 
       - name: Pack plugins and build index
         # qwenpaw-creator and qwenpaw-data are released through their own
@@ -152,11 +144,7 @@ jobs:
             --new dist/plugins/index.json \
             --old existing-index.json \
             --out dist/plugins/index.json \
-            --retire-plugin-id computer-use-tool \
-            --retire-plugin-id qwenpaw-hub \
-            --retire-plugin-id clawhub-hub \
-            --retire-plugin-id modelscope-hub \
-            --retire-plugin-id aliyun-hub
+            --retire-plugin-id computer-use-tool
 
       - name: Upload plugins index (short-cache)
         run: |
