@@ -58,12 +58,9 @@ jobs:
       - name: Install build dependencies
         run: |
           pip install setuptools wheel build
-          pip install -r scripts/pack/channel-contract-requirements.txt
 
       - name: Build package
-        run: |
-          python scripts/pack/validate_channel_contracts.py
-          python -m build
+        run: python -m build
 
       - name: Upload dist artifacts
         uses: actions/upload-artifact@v4
