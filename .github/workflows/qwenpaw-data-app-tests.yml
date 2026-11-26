@@ -74,7 +74,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version-file: .nvmrc
+          node-version: "20"
           cache: npm
           cache-dependency-path: plugins/apps/qwenpaw-data/ui/package-lock.json
 

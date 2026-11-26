@@ -1,0 +1,111 @@
+name: Sync upstream QwenPaw
+
+on:
+  schedule:
+    # 每日 02:00 UTC (10:00 北京时间) 自动拉取上游更新
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # 自定义端口：把上游默认 8088 替换为飞牛包使用的 19091
+  LOCAL_PORT: '19091'
+  UPSTREAM_PORT: '8088'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add upstream and fetch
+        run: |
+          git remote add upstream https://github.com/agentscope-ai/QwenPaw.git || true
+          git fetch upstream --tags
+
+      - name: Sync main branch
+        run: |
+          git config user.name "ThalynnX"
+          git config user.email "thalynnx@users.noreply.github.com"
+
+          git checkout -q -B main origin/main
+
+          if git diff --quiet upstream/main origin/main; then
+            echo "main 已是最新，无需同步"
+          else
+            if git merge upstream/main --no-edit; then
+              echo "main 合并完成"
+            else
+              echo "merge 冲突，改用强制对齐上游 main"
+              git merge --abort || true
+              cp -r .github/workflows /tmp/wf-main
+              git reset --hard upstream/main
+              rm -rf .github/workflows && cp -r /tmp/wf-main .github/workflows
+            fi
+            git add -A
+            git diff --cached --quiet || git commit -q -m "chore: sync main with upstream + keep local workflows"
+            git push origin main --force-with-lease
+            echo "main 已同步并推送"
+          fi
+
+      - name: Sync stable branch to latest official release tag
+        run: |
+          git config user.name "ThalynnX"
+          git config user.email "thalynnx@users.noreply.github.com"
+
+          # 找上游最新"正式版" tag（排除 beta / rc / alpha / dev）
+          LATEST_TAG=$(git ls-remote --tags upstream \
+            | awk '{print $2}' | sed 's#refs/tags/##' | grep -v '^{}' \
+            | grep -Ev 'beta|rc|alpha|dev' | sort -V | tail -1)
+          echo "上游最新正式版 tag: ${LATEST_TAG}"
+          if [ -z "${LATEST_TAG}" ]; then
+            echo "未找到正式 tag，跳过 stable 同步"
+            exit 0
+          fi
+
+          CUR_VER=$(git show origin/stable:src/qwenpaw/__version__.py 2>/dev/null \
+            | grep -oE '__version__[[:space:]]*=[[:space:]]*"[^"]+"' | sed -E 's/.*"([^"]+)".*/\1/' || echo none)
+          echo "当前 stable 版本: ${CUR_VER}"
+
+          git checkout -q -B stable origin/stable
+          cp -r .github/workflows /tmp/wf-stable
+          git reset --hard "${LATEST_TAG}"
+          rm -rf .github/workflows && cp -r /tmp/wf-stable .github/workflows
+
+          VER=$(grep -oE '__version__[[:space:]]*=[[:space:]]*"[^"]+"' src/qwenpaw/__version__.py | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "目标版本: ${VER}"
+
+          if [ "${CUR_VER}" = "${VER}" ] && git diff --quiet origin/stable; then
+            echo "stable 已是 ${VER}，无需更新"
+            exit 0
+          fi
+
+          # 应用自定义端口替换
+          find src -name '*.py' -type f -print0 | xargs -0 sed -i "s/${UPSTREAM_PORT}/${LOCAL_PORT}/g"
+
+          git add -A
+          git diff --cached --quiet || git commit -q -m "stable: 上游 ${LATEST_TAG} 正式版 + 端口 ${LOCAL_PORT}"
+          git push origin stable --force-with-lease
+          echo "stable 已更新到 ${VER} 并推送"
+
+      - name: Trigger fpk build
+        if: success()
+        env:
+          PAT: ${{ secrets.PAT }}
+        run: |
+          if [ -z "$PAT" ]; then
+            echo "未配置 PAT secret，跳过触发 fpk 编译"
+            exit 0
+          fi
+          curl -s -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $PAT" \
+            https://api.github.com/repos/ThalynnX/qwenpaw-fpk/dispatches \
+            -d '{"event_type":"upstream-synced"}' \
+            -w "\nHTTP %{http_code}\n"
+          echo "已触发 qwenpaw-fpk 编译"

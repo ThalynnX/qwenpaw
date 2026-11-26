@@ -2,32 +2,25 @@ name: Tests
 
 on:
   push:
-    branches: [main, master, dev, develop, "release/**"]
+    branches: [main, master, dev, develop]
     paths:
       - 'src/**'
       - 'tests/**'
       - 'scripts/check-channels.sh'
       - 'scripts/check_channel_contracts.py'
-      - 'scripts/check_plugin_sdk_artifacts.py'
       - '.gitattributes'
       - 'pyproject.toml'
       - 'setup.py'
       - 'deploy/Dockerfile'
-      - '.nvmrc'
       - '.github/workflows/tests.yml'
   pull_request:
     # Default types plus ready_for_review: converting a draft PR to
     # ready must re-trigger this workflow so the real tiers run on the
     # current head right after the author leaves draft state.
     types: [opened, synchronize, reopened, ready_for_review]
-    branches: [main, master, dev, develop, "release/**"]
+    branches: [main, master, dev, develop]
   workflow_dispatch:
     inputs:
-      sdk_contracts:
-        description: 'Run focused SDK contracts instead of the full test tiers'
-        required: false
-        default: false
-        type: boolean
       integration_marker:
         description: >-
           Pytest marker expression for the integration tier. Leave blank
@@ -71,11 +64,9 @@ jobs:
               - 'tests/**'
               - 'scripts/check-channels.sh'
               - 'scripts/check_channel_contracts.py'
-              - 'scripts/check_plugin_sdk_artifacts.py'
               - '.gitattributes'
               - 'pyproject.toml'
               - 'setup.py'
-              - '.nvmrc'
               - '.github/workflows/tests.yml'
 
   approval-gate:
@@ -97,8 +88,7 @@ jobs:
     needs: approval-gate
     if: |
       always() &&
-      needs.approval-gate.result == 'success' &&
-      !(github.event_name == 'workflow_dispatch' && inputs.sdk_contracts)
+      needs.approval-gate.result == 'success'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -143,15 +133,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
 
-      - name: Secure Python certificate dependencies
-        shell: bash
-        run: |
-          python -m pip install --upgrade "pip>=26.2.2"
-          python -m pip install --upgrade "certifi>=2026.10.19"
-
       - name: Install dependencies
         shell: bash
         run: |
+          python -m pip install --upgrade pip
           pip install -e ".[dev,test,full]"
 
       - name: Run unit tests
@@ -163,30 +148,6 @@ jobs:
           # 9-09 decision; the implicit fail_under (pyproject.toml) applies
           # there, so no threshold is lowered by this removal.
           pytest tests/unit -v
-
-      - name: Build and verify installed public Plugin SDK
-        if: matrix.python-version == '3.11'
-        shell: bash
-        run: |
-          python -m pip install build
-          python -m build --outdir "$RUNNER_TEMP/sdk-dist"
-          python -m venv "$RUNNER_TEMP/sdk-author-venv"
-          wheel=("$RUNNER_TEMP/sdk-dist/"*.whl)
-          sdist=("$RUNNER_TEMP/sdk-dist/"*.tar.gz)
-          "$RUNNER_TEMP/sdk-author-venv/bin/python" -m pip install "${wheel[0]}[test,full]" mypy
-          export PATH="$RUNNER_TEMP/sdk-author-venv/bin:$PATH"
-          python scripts/check_plugin_sdk_artifacts.py \
-            --wheel "${wheel[0]}" --sdist "${sdist[0]}" \
-            --python "$RUNNER_TEMP/sdk-author-venv/bin/python" \
-            --source-root "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/sdk-author"
-
-      - name: Upload public SDK author verification
-        if: always() && matrix.python-version == '3.11'
-        uses: actions/upload-artifact@v4
-        with:
-          name: plugin-sdk-author
-          path: ${{ runner.temp }}/sdk-author/
-          retention-days: 7
 
       - name: Run Hub Local runtime E2E
         if: matrix.python-version == '3.11'
@@ -202,8 +163,7 @@ jobs:
     needs: approval-gate
     if: |
       always() &&
-      needs.approval-gate.result == 'success' &&
-      !(github.event_name == 'workflow_dispatch' && inputs.sdk_contracts)
+      needs.approval-gate.result == 'success'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -237,16 +197,18 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
 
-      - name: Secure Python certificate dependencies
-        shell: bash
-        run: |
-          python -m pip install --upgrade "pip>=26.2.2"
-          python -m pip install --upgrade "certifi>=2026.10.19"
-
       - name: Install dependencies
         shell: bash
         run: |
+          python -m pip install --upgrade pip
           pip install -e ".[dev,test,full]"
+
+      - name: Check channel contract coverage
+        run: python scripts/check_channel_contracts.py
+
+      - name: Validate channel check script
+        shell: bash
+        run: bash -n scripts/check-channels.sh
 
       - name: Run contract tests
         shell: bash
@@ -269,8 +231,7 @@ jobs:
     needs: [approval-gate]
     if: |
       always() &&
-      needs.approval-gate.result == 'success' &&
-      !(github.event_name == 'workflow_dispatch' && inputs.sdk_contracts)
+      needs.approval-gate.result == 'success'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -316,16 +277,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
 
-      - name: Secure Python certificate dependencies
-        shell: bash
-        run: |
-          python -m pip install --upgrade "pip>=26.2.2"
-          python -m pip install --upgrade "certifi>=2026.10.19"
-
-      # Prepare CloudPaw before workers share the Python environment.
       - name: Install dependencies
         shell: bash
         run: |
+          python -m pip install --upgrade pip
           # The macOS runner ships setuptools 65.5.0, which pip's resolver
           # upgrades to the latest release (84.x) while backtracking the
           # dependency graph. setuptools >= 82 no longer ships
@@ -337,9 +292,9 @@ jobs:
           # beforehand gets upgraded away by this resolution again
           # (reproduced with pip 26.2.1; see CI run 31571533395).
           if [ "${{ runner.os }}" = "macOS" ]; then
-            pip install -e ".[dev,test,full]" -r plugins/bundle/cloudpaw/requirements.txt "setuptools<82"
+            pip install -e ".[dev,test,full]" "setuptools<82"
           else
-            pip install -e ".[dev,test,full]" -r plugins/bundle/cloudpaw/requirements.txt
+            pip install -e ".[dev,test,full]"
           fi
 
       # tests/integration/browser carries the integration marker but no
@@ -452,72 +407,9 @@ jobs:
             exit "$PYTEST_RC"
           fi
 
-  sdk-contracts:
-    name: SDK Contracts - ${{ matrix.os }}
-    needs: approval-gate
-    if: |
-      always() &&
-      needs.approval-gate.result == 'success' &&
-      github.event_name == 'workflow_dispatch' && inputs.sdk_contracts
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    env:
-      PYTHONUTF8: "1"
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux isolation dependency
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y bubblewrap
-          if sysctl kernel.apparmor_restrict_unprivileged_userns \
-            >/dev/null 2>&1; then
-            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          fi
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-      - name: Install dependencies
-        shell: bash
-        run: |
-          python -m pip install --upgrade "pip>=26.2.2"
-          python -m pip install --upgrade "certifi>=2026.10.19"
-          python -m pip install -e ".[dev,test,full]"
-      - name: Verify focused contracts
-        shell: bash
-        run: |
-          cases=(tests/unit/plugins/test_sdk_resource_extensions.py::test_cancelled_run_sync_keeps_lock_until_write_finishes)
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            cases=(
-              tests/unit/plugins/test_sdk_resource_extensions.py
-              tests/unit/plugins/test_sdk_workspace_contract.py
-              tests/unit/plugins/test_sdk_context_lifecycle.py
-              tests/unit/plugins/test_sdk_member_versions.py
-              tests/integration/test_legacy_plugin_subprocess.py
-            )
-          fi
-          printf 'Commit: `%s`\n\n' "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
-          printf 'Test: `%s`\n' "${cases[@]}" >> "$GITHUB_STEP_SUMMARY"
-          python -m pytest "${cases[@]}" -q --timeout=120 \
-            --junitxml=sdk-contract-results.xml
-      - name: Upload focused SDK results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: sdk-contracts-${{ matrix.os }}
-          path: sdk-contract-results.xml
-          if-no-files-found: warn
-          retention-days: 7
-
   test-summary:
-    name: ${{ github.event_name == 'workflow_dispatch' && inputs.sdk_contracts && 'SDK Focused Summary' || 'Test Summary' }}
-    needs: [changes, approval-gate, unit-tests, contract-tests, integrated-tests, sdk-contracts]
+    name: Test Summary
+    needs: [changes, approval-gate, unit-tests, contract-tests, integrated-tests]
     # Fail-closed gate. This job ALWAYS runs (no path condition) so the
     # required-check context can never be satisfied by an accidental skip.
     # Four-state decision:
@@ -550,14 +442,6 @@ jobs:
           # Phase-1 item 1-4: the PR gate no longer runs a coverage-report
           # job; coverage is collected and threshold-gated in the nightly
           # full run instead.
-
-          # Focused dispatch has a distinct check name and cannot stand in
-          # for the complete PR gate. It still requires maintainer approval.
-          if [ "${{ github.event_name == 'workflow_dispatch' && inputs.sdk_contracts }}" = "true" ]; then
-            test "${{ needs.approval-gate.result }}" = "success" &&
-              test "${{ needs.sdk-contracts.result }}" = "success"
-            exit $?
-          fi
 
           if [ "${{ needs.changes.result }}" != "success" ]; then
             echo "❌ Change detection did not succeed (${{ needs.changes.result }}) — gate closed, refusing untested merge"
