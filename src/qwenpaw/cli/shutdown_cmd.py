@@ -32,7 +32,7 @@ def _backend_port(ctx: click.Context, port: Optional[int]) -> int:
     """Resolve backend port from explicit option or global CLI context."""
     if port is not None:
         return port
-    return int((ctx.obj or {}).get("port", 8088))
+    return int((ctx.obj or {}).get("port", 19091))
 
 
 def _listening_pids_for_port(port: int) -> set[int]:

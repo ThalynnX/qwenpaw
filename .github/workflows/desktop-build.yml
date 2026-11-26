@@ -186,7 +186,7 @@ jobs:
           path: |
             ${{ runner.temp }}/qwenpaw-desktop-stdout.log
             ${{ runner.temp }}/qwenpaw-desktop-stderr.log
-            ${{ runner.temp }}/qwenpaw-desktop-logs/
+            ~/AppData/Local/com.qwenpaw.desktop/logs/
           if-no-files-found: ignore
           retention-days: 7
 
@@ -220,7 +220,7 @@ jobs:
 
   build-tauri-macos:
     runs-on: macos-15
-    timeout-minutes: 90
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4

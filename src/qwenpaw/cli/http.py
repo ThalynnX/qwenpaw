@@ -10,7 +10,7 @@ import httpx
 from ..utils.runtime_api import api_client
 
 
-DEFAULT_BASE_URL = "http://127.0.0.1:8088"
+DEFAULT_BASE_URL = "http://127.0.0.1:19091"
 
 
 def client(base_url: str) -> httpx.Client:
@@ -41,5 +41,5 @@ def resolve_base_url(ctx: click.Context, base_url: Optional[str]) -> str:
     if base_url:
         return base_url.rstrip("/")
     host = (ctx.obj or {}).get("host", "127.0.0.1")
-    port = (ctx.obj or {}).get("port", 8088)
+    port = (ctx.obj or {}).get("port", 19091)
     return f"http://{host}:{port}"
